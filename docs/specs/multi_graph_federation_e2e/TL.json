@@ -1,0 +1,6 @@
+{
+  "featureId": "F002",
+  "score": 0.95,
+  "openPoints": [],
+  "architectureTip": "Consider exposing an optional CLI flag in the unified E2E runner for JUnit XML report generation to simplify CI pipeline artifact ingestion."
+}

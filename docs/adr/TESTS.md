@@ -20,7 +20,8 @@ Multi-tier test protocol combining pure C unit tests under Address and Undefined
 | Foundation Unit | `make -f Makefile.cbm test-foundation` | Executes foundational C unit tests with ASan and UBSan |
 | Federation Unit | `make -f Makefile.cbm test` | Builds and runs all C test suites including federation and admission |
 | Thread Sanitizer | `make -f Makefile.cbm test-tsan` | Runs C test suite under ThreadSanitizer (TSan) for race detection |
-| Federation E2E | `pytest tests/test_multi_graph_federation.py` | Runs Python end-to-end multi-graph federation regression tests |
+| Federation Python | `python -m unittest tests/test_multi_graph_federation.py` | Runs Python multi-graph federation unit and regression tests |
+| Full E2E Suite | `make -f Makefile.cbm test-e2e` (or `python tests/e2e/run_e2e.py`) | Runs complete black-box MCP stdio JSON-RPC E2E test suite |
 | Standalone C | `./build/test_kway_merge` | Runs standalone compiled C test binary with verbose output |
 
 ## MINIMUM COVERAGE
@@ -56,3 +57,4 @@ FORBIDDEN: Suppressing sanitizer errors or ignoring memory leaks in C test suite
 
 - [**ARCHITECTURE.md**](./ARCHITECTURE.md): System architecture, layers, and pattern definitions.
 - [**multi_graph_federation.md**](../feature/multi_graph_federation.md): Multi-graph federation implementation, tests, and source routing.
+- [**multi_graph_federation_e2e.md**](../feature/multi_graph_federation_e2e.md): End-to-end testing suite for multi-graph federation over MCP stdio.

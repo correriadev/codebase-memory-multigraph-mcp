@@ -781,7 +781,7 @@ PP_OBJ_TSAN = $(BUILD_DIR)/tsan_preprocessor.o
 
 # ── Targets ──────────────────────────────────────────────────────
 
-.PHONY: test test-par test-repro test-foundation test-tsan test-daemon-smoke cbm cbm-with-ui frontend embed clean-c lint lint-tidy lint-tidy-diff lint-cppcheck lint-format security
+.PHONY: test test-e2e test-par test-repro test-foundation test-tsan test-daemon-smoke cbm cbm-with-ui frontend embed clean-c lint lint-tidy lint-tidy-diff lint-cppcheck lint-format security
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -1029,6 +1029,10 @@ test-tsan: $(BUILD_DIR)/test-runner-tsan
 # silently skipping an occupied one. Deterministic C tests cover Windows IPC.
 test-daemon-smoke: $(BUILD_DIR)/codebase-memory-mcp
 	cd $(CURDIR) && CBM_DAEMON_SMOKE_REQUIRE_RUN=1 python3 tests/test_daemon_smoke.py $(BUILD_DIR)/codebase-memory-mcp
+
+# Full End-to-End test suite for multi-graph federation over real stdio MCP JSON-RPC
+test-e2e:
+	python tests/e2e/run_e2e.py || python3 tests/e2e/run_e2e.py
 
 # ── Production binary ────────────────────────────────────────────
 
