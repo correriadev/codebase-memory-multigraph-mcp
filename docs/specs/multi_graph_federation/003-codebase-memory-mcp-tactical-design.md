@@ -78,16 +78,151 @@
 
 ---
 
-## 6. Ordered Implementation Tasks
+## 6. Ordered Development Tasks
 
-Tarefas estritamente ordenadas por dependência para execução via TDD:
-
-1. **Task 1 — CBM-URI Parser & Interning Library:** Implementar parser determinístico para `cbm://<repo>/<path>#<symbol>` com cálculo de hash FNV-1a e zero-allocation slicing.
-2. **Task 2 — Horizon SQLite Schema & Connection Pool (LRU):** Criar DDL de migração e pool com teto estrito de conexões (máx. 16 FDs) para `horizons/<id>.db` com índices em `cbm_uri`.
-3. **Task 3 — Horizon Reaper Daemon Worker:** Implementar verificação de liveness de PID no Windows (`OpenProcess`) e POSIX (`kill 0`) com expurgo seguro de arquivos órfãos após TTL.
-4. **Task 4 — Symbolic Node & Dangling Reference CRUD:** Implementar inserção e consulta de nós com suporte à flag `is_dangling` e `status: proposed` prevenindo ciclos via `VisitedSet`.
-5. **Task 5 — Streaming K-Way Merge Iterator:** Implementar a estrutura de mesclagem ordenada via Min-Heap em C com limites de RAM $O(K)$ para paginação `LIMIT`/`SKIP`.
-6. **Task 6 — MCP Parameter Extension (`active_horizons[]`):** Adicionar parsing do parâmetro opcional nas tools `query_graph`, `search_graph` e `trace_path` em `src/mcp/mcp.c`.
-7. **Task 7 — Two-Tier Anchor Checker:** Implementar fast-path por byte offset com fallback para busca de símbolo e hash de assinatura na AST do Tree-sitter.
-8. **Task 8 — Admission Gate (`promote_horizon` Tool):** Criar a tool MCP de promoção que valida âncoras Two-Tier contra o disco e orquestra a transição atômica.
-9. **Task 9 — Acyclic BFS Reverse Recall Engine:** Implementar cálculo de fechamento de dependências reversas ($deps^{-1}$) com poda de ciclos para propagação de status `CONTESTED`.
+```json
+[
+  {
+    "id": "01",
+    "title": "Implement CBM-URI Parser & Interning Library",
+    "description": "Deterministic parser for cbm://<repo>/<path>#<symbol> with FNV-1a hash calculation and zero-allocation slicing.",
+    "scope": [
+      "src/core/cbm_uri.h",
+      "src/core/cbm_uri.c",
+      "tests/test_cbm_uri.c"
+    ],
+    "acceptance": [
+      "Parses valid cbm URIs into components",
+      "Rejects malformed URIs without symbol fragment",
+      "Computes deterministic FNV-1a 64-bit hash"
+    ],
+    "depends_on": null
+  },
+  {
+    "id": "02",
+    "title": "Implement Horizon SQLite Schema & Connection Pool (LRU)",
+    "description": "Migration DDL and connection pool with strict ceiling of 16 active connections for horizons/<id>.db with indexes on cbm_uri.",
+    "scope": [
+      "src/core/horizon_pool.h",
+      "src/core/horizon_pool.c",
+      "src/db/horizon_schema.sql"
+    ],
+    "acceptance": [
+      "Initializes isolated SQLite horizon DB",
+      "Enforces LRU eviction at 16 active DB handles",
+      "Transparently reopens evicted horizon on query"
+    ],
+    "depends_on": "01"
+  },
+  {
+    "id": "03",
+    "title": "Implement Horizon Reaper Daemon Worker",
+    "description": "Client PID liveness verification on Windows (OpenProcess) and POSIX (kill 0) with safe unlinking of orphan horizon files after TTL.",
+    "scope": [
+      "src/daemon/horizon_reaper.h",
+      "src/daemon/horizon_reaper.c",
+      "tests/test_horizon_reaper.c"
+    ],
+    "acceptance": [
+      "Reaps horizon files when client PID is dead and TTL > 1h",
+      "Retains active horizons with living PID"
+    ],
+    "depends_on": "02"
+  },
+  {
+    "id": "04",
+    "title": "Implement Symbolic Node & Dangling Reference CRUD",
+    "description": "Node insertion and querying supporting is_dangling flag and status: proposed, preventing cycles via VisitedSet.",
+    "scope": [
+      "src/core/symbolic_node.h",
+      "src/core/symbolic_node.c",
+      "src/core/visited_set.h"
+    ],
+    "acceptance": [
+      "Stores and queries proposed symbolic nodes",
+      "Handles dangling references without base node present",
+      "Prunes circular traversals using VisitedSet"
+    ],
+    "depends_on": "02"
+  },
+  {
+    "id": "05",
+    "title": "Implement Streaming K-Way Merge Iterator",
+    "description": "Sorted merge iterator using Min-Heap in C with O(K) RAM bounds for LIMIT and SKIP pagination.",
+    "scope": [
+      "src/query/kway_merge.h",
+      "src/query/kway_merge.c",
+      "tests/test_kway_merge.c"
+    ],
+    "acceptance": [
+      "Streams merged ordered rows from base and horizons",
+      "Maintains O(K) memory footprint",
+      "Respects LIMIT and SKIP offsets correctly"
+    ],
+    "depends_on": "04"
+  },
+  {
+    "id": "06",
+    "title": "Extend MCP Tools with active_horizons Parameter",
+    "description": "Add optional active_horizons[] parameter parsing in query_graph, search_graph, and trace_path tools.",
+    "scope": [
+      "src/mcp/mcp.c",
+      "src/mcp/handlers.c",
+      "tests/test_mcp_federation.c"
+    ],
+    "acceptance": [
+      "Parses active_horizons parameter in MCP calls",
+      "Integrates with K-Way merge engine without breaking legacy calls"
+    ],
+    "depends_on": "05"
+  },
+  {
+    "id": "07",
+    "title": "Implement Two-Tier Anchor Checker",
+    "description": "Fast-path byte offset verification with fallback to Tree-sitter AST symbol signature hash comparison.",
+    "scope": [
+      "src/admission/anchor_checker.h",
+      "src/admission/anchor_checker.c",
+      "tests/test_anchor_checker.c"
+    ],
+    "acceptance": [
+      "Fast path matches unchanged byte offsets",
+      "Tier 2 AST hash matches when comments shift offsets",
+      "Detects actual drift when symbol body diverges"
+    ],
+    "depends_on": "01"
+  },
+  {
+    "id": "08",
+    "title": "Implement Admission Gate promote_horizon Tool",
+    "description": "MCP promotion tool validating Two-Tier anchors against disk and executing atomic transition to base.",
+    "scope": [
+      "src/admission/admission_gate.h",
+      "src/admission/admission_gate.c",
+      "src/mcp/promote_handler.c"
+    ],
+    "acceptance": [
+      "Validates anchors before admitting horizon",
+      "Rejects promotion on anchor drift",
+      "Transitions horizon to PROMOTED"
+    ],
+    "depends_on": "07"
+  },
+  {
+    "id": "09",
+    "title": "Implement Acyclic BFS Reverse Recall Engine",
+    "description": "Reverse dependency closure (deps^-1) calculation with cycle pruning to propagate CONTESTED status.",
+    "scope": [
+      "src/admission/recall_engine.h",
+      "src/admission/recall_engine.c",
+      "tests/test_recall_engine.c"
+    ],
+    "acceptance": [
+      "Traverses reverse dependencies up to depth limit",
+      "Avoids infinite loops on cyclic graphs",
+      "Emits contestation reports accurately"
+    ],
+    "depends_on": "08"
+  }
+]
+```

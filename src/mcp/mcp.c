@@ -1692,6 +1692,8 @@ struct cbm_mcp_server {
     int64_t active_request_id;       /* JSON-RPC id of the in-progress tool call */
     char *active_request_id_str;     /* string JSON-RPC id of the in-progress tool call */
     cbm_mcp_tool_profile_t tool_profile;
+    HorizonConnectionPool horizon_pool;
+    AdmissionGate admission_gate;
 };
 
 cbm_mcp_server_t *cbm_mcp_server_new(const char *store_path) {
@@ -1713,6 +1715,11 @@ cbm_mcp_server_t *cbm_mcp_server_new(const char *store_path) {
     srv->owns_store = true;
     srv->tool_profile = CBM_MCP_TOOL_PROFILE_ALL;
     srv->background_tasks = true;
+    cbm_horizon_pool_init(&srv->horizon_pool, cbm_resolve_cache_dir());
+    cbm_admission_gate_init(&srv->admission_gate, "default", 1);
+    if (srv->store) {
+        cbm_admission_gate_set_base_db(&srv->admission_gate, (sqlite3 *)cbm_store_get_db(srv->store));
+    }
 
     return srv;
 }
@@ -1733,6 +1740,9 @@ void cbm_mcp_server_set_project(cbm_mcp_server_t *srv, const char *project) {
     }
     free(srv->current_project);
     srv->current_project = project ? heap_strdup(project) : NULL;
+    if (srv->store) {
+        cbm_admission_gate_set_base_db(&srv->admission_gate, (sqlite3 *)cbm_store_get_db(srv->store));
+    }
 }
 
 void cbm_mcp_server_set_watcher(cbm_mcp_server_t *srv, struct cbm_watcher *w) {
@@ -1871,6 +1881,7 @@ void cbm_mcp_server_free(cbm_mcp_server_t *srv) {
     if (srv->owns_store && srv->store) {
         cbm_store_close(srv->store);
     }
+    cbm_horizon_pool_close_all(&srv->horizon_pool);
     free(srv->current_project);
     free(srv->allowed_root);
     free(srv->active_request_id_str);
@@ -5012,7 +5023,7 @@ static char *sg_budget_floor(bool json_format, int total, int offset,
     return json;
 }
 
-static char *handle_search_graph(cbm_mcp_server_t *srv, const char *args) {
+char *handle_search_graph(cbm_mcp_server_t *srv, const char *args) {
     /* Inner phase split: every tool leaks the same ~4 MB per request, so the
      * retainer is in what the handlers share -- store resolution or the query
      * itself. These marks separate the two. */
@@ -5751,7 +5762,7 @@ static char *query_graph_budget_floor_text(const cbm_cypher_result_t *result, in
     return cbm_sb_finish(&sb);
 }
 
-static char *handle_query_graph(cbm_mcp_server_t *srv, const char *args) {
+char *handle_query_graph(cbm_mcp_server_t *srv, const char *args) {
     char *query = cbm_mcp_get_string_arg(args, "query");
     char *project = get_project_arg(args);
     cbm_store_t *store = resolve_store(srv, project);
@@ -8972,7 +8983,7 @@ static int clamp_mcp_depth(int depth, const char *tool) {
     return depth;
 }
 
-static char *handle_trace_call_path(cbm_mcp_server_t *srv, const char *args) {
+char *handle_trace_call_path(cbm_mcp_server_t *srv, const char *args) {
     char *func_name = cbm_mcp_get_string_arg(args, "function_name");
     char *project = get_project_arg(args);
     cbm_store_t *store = resolve_store(srv, project);
@@ -17271,10 +17282,10 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
         return handle_compare_graphs(srv, args_json);
     }
     if (strcmp(tool_name, "search_graph") == 0) {
-        return handle_search_graph(srv, args_json);
+        return cbm_mcp_handle_federated_search_graph(srv, args_json, &srv->horizon_pool);
     }
     if (strcmp(tool_name, "query_graph") == 0) {
-        return handle_query_graph(srv, args_json);
+        return cbm_mcp_handle_federated_query_graph(srv, args_json, &srv->horizon_pool);
     }
     if (strcmp(tool_name, "index_status") == 0) {
         return handle_index_status(srv, args_json);
@@ -17286,7 +17297,7 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
         return handle_delete_project(srv, args_json);
     }
     if (strcmp(tool_name, "trace_path") == 0 || strcmp(tool_name, "trace_call_path") == 0) {
-        return handle_trace_call_path(srv, args_json);
+        return cbm_mcp_handle_federated_trace_path(srv, args_json, &srv->horizon_pool);
     }
     if (strcmp(tool_name, "get_architecture") == 0) {
         return handle_get_architecture(srv, args_json);
@@ -17313,6 +17324,12 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
     }
     if (strcmp(tool_name, "ingest_traces") == 0) {
         return handle_ingest_traces(srv, args_json);
+    }
+    if (strcmp(tool_name, "promote_horizon") == 0) {
+        if (srv && srv->store) {
+            cbm_admission_gate_set_base_db(&srv->admission_gate, (sqlite3 *)cbm_store_get_db(srv->store));
+        }
+        return handle_promote_horizon(srv, args_json, &srv->horizon_pool, &srv->admission_gate);
     }
     char msg[CBM_SZ_256];
     snprintf(msg, sizeof(msg), "unknown tool: %s", tool_name);

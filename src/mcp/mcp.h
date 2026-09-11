@@ -214,6 +214,7 @@ char *cbm_mcp_server_handle(cbm_mcp_server_t *srv, const char *line);
 
 /* Handle a tools/call request. Returns MCP tool result JSON. */
 char *cbm_mcp_handle_tool(cbm_mcp_server_t *srv, const char *tool_name, const char *args_json);
+char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, void *pool, void *gate);
 
 /* ── Supervised background index (RSS isolation, #832) ────────── */
 

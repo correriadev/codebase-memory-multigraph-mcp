@@ -1,0 +1,6 @@
+{
+  "featureId": "F001",
+  "score": 0.95,
+  "openPoints": [],
+  "architectureTip": "Consider integrating a native Tree-sitter parser into the admission gate for AST-level semantic diffing of modified symbol signatures, further isolating anchor verification from file lexical structure."
+}

@@ -104,4 +104,18 @@ char *cbm_mcp_render_semantic_paging_for_testing(int total, int offset, int retu
                                                  bool total_exact, bool json_format);
 #endif
 
+/* Federated overlay handlers and base handlers */
+typedef struct HorizonConnectionPool HorizonConnectionPool;
+typedef struct AdmissionGate AdmissionGate;
+
+char *cbm_mcp_handle_federated_search_graph(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
+char *cbm_mcp_handle_federated_query_graph(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
+char *cbm_mcp_handle_federated_trace_path(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
+char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool, AdmissionGate *gate);
+
+char *handle_search_graph(cbm_mcp_server_t *srv, const char *args);
+char *handle_query_graph(cbm_mcp_server_t *srv, const char *args);
+char *handle_trace_call_path(cbm_mcp_server_t *srv, const char *args);
+
 #endif
+
