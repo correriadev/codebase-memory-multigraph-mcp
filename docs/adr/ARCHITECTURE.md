@@ -7,7 +7,7 @@ tags: [architecture, design-patterns, multi-graph-federation]
 edges:
   - relation: references
     target: "adr:tests"
-updated: 2026-09-11
+updated: 2026-09-13
 ---
 # Project Architecture
 
@@ -64,6 +64,15 @@ if (rc == CBM_URI_OK) {
 sqlite3 *db = NULL;
 sqlite3_open_v2("unmanaged.db", &db, SQLITE_OPEN_READWRITE, NULL);
 
+# REQUIRED: Dynamic disk database attachment during horizon promotion
+sqlite3 *orig_db = gate->base_db;
+gate->base_db = project_disk_db;
+cbm_admission_gate_admit(gate, horizon_id, anchors, count);
+gate->base_db = orig_db;
+
+# FORBIDDEN: Consolidating promoted horizon state into ephemeral in-memory databases
+gate->base_db = cbm_store_open_memory(); // Promoted nodes lost on process exit
+
 # REQUIRED: Cycle-pruned traversal with 64-bit FNV-1a VisitedSet
 VisitedSet visited = cbm_visited_init();
 cbm_visited_add(&visited, uri.hash);
@@ -79,8 +88,11 @@ traverse_dependencies(node); // Vulnerable to stack overflow on cyclic reference
 | Model Context Protocol (MCP) | LLM client communication and tool interface | JSON-RPC 2.0 via standard I/O streams (`stdio`) |
 | Tree-sitter Runtime | Concrete Syntax Tree parsing and AST symbol signature hashing | In-memory C runtime binding with vendored grammars |
 | Host Operating System | Client PID liveness check for daemon reaper | `OpenProcess` (Windows) / `kill(pid, 0)` (POSIX) |
+| Host OS & WSL2 Boundary | Cross-platform path canonicalization and inode unlinking | `cbm_path_within_root`, `install -m 755` bypassing `ETXTBSY` |
+
+<!-- DOCUMENT MAP: omitted — this baseline ADR has exactly 1 edge. The ## REFERENCES section below carries the relation. Include ## DOCUMENT MAP with Mermaid graph TD only when 2+ edges exist. -->
 
 ## REFERENCES
 
+- [**README.md**](../README.md): Main documentation index.
 - [**TESTS.md**](./TESTS.md): Testing strategies, test suites, and execution commands.
-- [**multi_graph_federation.md**](../feature/multi_graph_federation.md): Multi-graph federation feature specification and source routing.

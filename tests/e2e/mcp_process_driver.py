@@ -39,6 +39,11 @@ def resolve_mcp_binary() -> str:
         if os.path.isfile(path):
             return path
 
+    # Check PATH first (fast native filesystem on Linux/WSL)
+    which_bin = shutil.which("codebase-memory-mcp")
+    if which_bin:
+        return which_bin
+
     # Check local build directory
     root = Path(__file__).resolve().parent.parent.parent
     local_builds = [
@@ -48,11 +53,6 @@ def resolve_mcp_binary() -> str:
     for b in local_builds:
         if b.is_file():
             return str(b)
-
-    # Check PATH
-    which_bin = shutil.which("codebase-memory-mcp")
-    if which_bin:
-        return which_bin
 
     # Check user local appdata
     appdata_bin = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "codebase-memory-mcp" / "codebase-memory-mcp.exe"
@@ -65,11 +65,12 @@ def resolve_mcp_binary() -> str:
 class MCPProcessSession:
     """Manages an active MCP server subprocess speaking JSON-RPC 2.0 over stdio."""
 
-    def __init__(self, binary_path: Optional[str] = None, env: Optional[Dict[str, str]] = None):
+    def __init__(self, binary_path: Optional[str] = None, env: Optional[Dict[str, str]] = None, cwd: Optional[str] = None):
         self.binary_path = binary_path or resolve_mcp_binary()
         self.env = dict(os.environ)
         if env:
             self.env.update(env)
+        self.cwd = cwd
 
         # Set ASan options if running with address sanitizer
         self.env.setdefault("ASAN_OPTIONS", "detect_leaks=1:abort_on_error=1:log_path=stderr")
@@ -99,6 +100,7 @@ class MCPProcessSession:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=self.env,
+            cwd=self.cwd,
             bufsize=0  # unbuffered binary I/O
         )
         self._is_running = True

@@ -408,9 +408,11 @@ You: "Install this MCP server: https://github.com/DeusData/codebase-memory-mcp"
 
 | Requirement | Check | Install |
 |-------------|-------|---------|
-| **C compiler** (gcc or clang) | `gcc --version` or `clang --version` | macOS: `xcode-select --install`, Linux: `apt install build-essential` |
+| **C compiler** (gcc or clang) | `gcc --version` or `clang --version` | macOS: `xcode-select --install`, Linux/WSL: `apt install build-essential` |
 | **C++ compiler** | `g++ --version` or `clang++ --version` | Same as above |
-| **zlib** | — | macOS: included, Linux: `apt install zlib1g-dev` |
+| **zlib** | — | macOS: included, Linux/WSL: `apt install zlib1g-dev` |
+| **SQLite3 headers** | — | Linux/WSL: `apt install libsqlite3-dev` (vendored fallback included) |
+| **Python 3.10+** | `python3 --version` | Pre-installed on Linux/WSL, needed for E2E suite |
 | **Git** | `git --version` | Pre-installed on most systems |
 
 </details>
@@ -418,16 +420,68 @@ You: "Install this MCP server: https://github.com/DeusData/codebase-memory-mcp"
 ```bash
 git clone https://github.com/DeusData/codebase-memory-mcp.git
 cd codebase-memory-mcp
-scripts/build.sh --with-ui          # the shipped composition (graph UI embedded)
-scripts/build.sh                    # without the UI (development only)
-# Binary at: build/c/codebase-memory-mcp   (codebase-memory-mcp.exe on Windows)
+
+# Pure C native production build
+make -f Makefile.cbm cbm
+# Output: build/c/codebase-memory-mcp (or build/c/codebase-memory-mcp.exe on Windows)
+
+# Or build via wrapper script (with embedded 3D Web UI)
+scripts/build.sh --with-ui
 ```
 
 Every platform ships **one self-contained executable**: the graph UI and the agent integration templates are linked into the binary, so an extracted archive is immediately complete.
 
+#### Windows <> WSL2 Architecture & Build Workflow
+
+When developing or executing in a hybrid Windows and Windows Subsystem for Linux (WSL2) environment, consider the following architectural boundaries:
+
+1. **Filesystem Performance Boundary (DrvFs vs. Native ext4):**
+   - Repositories located on the Windows filesystem (e.g. `C:\Users\<user>\...`) are mounted inside WSL2 at `/mnt/c/Users/<user>/...` through the 9P/DrvFs protocol.
+   - DrvFs incurs noticeable translation latency for deep directory scans and repeated stat/hash operations (~10–15s for cold daemon identity checks).
+   - **Optimization:** When running under WSL2, install the compiled binary to native Linux ext4 filesystem paths (e.g., `/usr/local/bin/codebase-memory-mcp`) via `install -m 755 build/c/codebase-memory-mcp /usr/local/bin/codebase-memory-mcp`. This drops startup and verification latencies from $>15\text{s}$ to $<0.3\text{s}$.
+
+2. **Daemon Lifecycle & Binary Replacement (`ETXTBSY`):**
+   - On Linux/WSL, running executables are locked by the kernel. Overwriting a running binary directly via `cp` triggers `ETXTBSY (Text file busy)`.
+   - **Safe Update Flow:** Use `install -m 755` (which unlinks the destination inode before writing) or terminate running instances first:
+     ```bash
+     # Stop background daemon and kill any lingering MCP worker processes
+     pkill -9 -f codebase-memory-mcp 2>/dev/null || true
+
+     # Install fresh binary
+     sudo install -m 755 build/c/codebase-memory-mcp /usr/local/bin/codebase-memory-mcp
+
+     # Restart the background coordination daemon
+     codebase-memory-mcp daemon start
+     ```
+
+3. **Cross-Platform Path Normalization:**
+   - The native C runtime (`src/foundation/compat_fs.c` and `src/admission/anchor_checker.c`) seamlessly handles both Windows drive letters (`C:\path\to\repo`) and POSIX paths (`/mnt/c/path/to/repo` or `/home/...`).
+   - MCP tool calls (such as `promote_horizon`, `search_graph`, and `index_repository`) automatically normalize mixed separators (`\` and `/`) and resolve relative paths against the declared `repo_path`.
+
+4. **Multi-Graph Federation & Black-Box E2E Testing:**
+   - The E2E test suite (`tests/e2e/run_e2e.py`) exercises real-world multi-graph federation, private cognitive horizons, and Two-Tier AST anchor checks directly against the compiled binary communicating over standard I/O pipes (JSON-RPC 2.0 stdio):
+     ```bash
+     # Run the full 12-scenario E2E test suite in WSL2
+     python3 tests/e2e/run_e2e.py
+
+     # Run specific refactoring admission and anchor verification tests
+     python3 -m unittest tests.e2e.test_refactoring_admission
+     ```
+   - In virtualized or WSL environments, the test subprocess session sets a default initialization timeout of `15.0s` (`session.initialize(timeout=15.0)`) to accommodate subprocess creation and initial daemon handshake.
+
 Run the test suite (6,768 tests across 120 suites):
 
 ```bash
+# Foundational unit tests (arena, hash table, string intern, workspace)
+make -f Makefile.cbm test-foundation
+
+# Full test suite with AddressSanitizer and UndefinedBehaviorSanitizer
+make -f Makefile.cbm test
+
+# ThreadSanitizer build for race condition auditing
+make -f Makefile.cbm test-tsan
+
+# Legacy script runner
 scripts/test.sh                     # full: clean sanitizer build + all suites + guards
 scripts/test.sh --suites <name>     # one suite, incremental, seconds
 build/c/test-runner --list-suites   # what is available

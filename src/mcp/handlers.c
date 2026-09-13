@@ -119,7 +119,7 @@ static void cbm_mcp_integrate_overlay_into_content(yyjson_mut_doc *mdoc, yyjson_
                         char *new_text = yyjson_mut_write(idoc, 0, NULL);
                         yyjson_mut_doc_free(idoc);
                         if (new_text) {
-                            yyjson_mut_obj_del(item, "text");
+                            yyjson_mut_obj_remove_str(item, "text");
                             yyjson_mut_obj_add_strcpy(mdoc, item, "text", new_text);
                             free(new_text);
                         }
@@ -140,7 +140,7 @@ static void cbm_mcp_integrate_overlay_into_content(yyjson_mut_doc *mdoc, yyjson_
                     if (combined) {
                         snprintf(combined, comb_len, "%s\n\n### Active Horizon Overlays (%s)\n```json\n%s\n```\n",
                                  orig_text ? orig_text : "", overlay_key, overlay_json ? overlay_json : "[]");
-                        yyjson_mut_obj_del(item, "text");
+                        yyjson_mut_obj_remove_str(item, "text");
                         yyjson_mut_obj_add_strcpy(mdoc, item, "text", combined);
                         free(combined);
                     }

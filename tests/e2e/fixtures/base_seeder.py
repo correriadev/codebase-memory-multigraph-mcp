@@ -53,9 +53,8 @@ CREATE TABLE IF NOT EXISTS edges (
 HORIZON_SCHEMA = """
 CREATE TABLE IF NOT EXISTS horizon_metadata (
     horizon_id TEXT PRIMARY KEY,
-    owner_session_id TEXT NOT NULL,
     client_pid INTEGER NOT NULL,
-    status TEXT NOT NULL DEFAULT 'ACTIVE',
+    status TEXT NOT NULL CHECK(status IN ('ACTIVE', 'PROMOTED', 'DISCARDED')),
     created_at INTEGER NOT NULL,
     last_heartbeat INTEGER NOT NULL
 );
@@ -63,19 +62,20 @@ CREATE TABLE IF NOT EXISTS horizon_metadata (
 CREATE TABLE IF NOT EXISTS symbolic_nodes (
     cbm_uri TEXT PRIMARY KEY,
     label TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'PROPOSED',
+    epistemic_status TEXT NOT NULL DEFAULT 'PROPOSED' CHECK(epistemic_status IN ('PROPOSED', 'ACCEPTED', 'CONTESTED', 'SHADOWED')),
     is_dangling INTEGER NOT NULL DEFAULT 0,
-    properties TEXT DEFAULT '{}',
+    code_snippet TEXT,
     created_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS virtual_edges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_uri TEXT NOT NULL,
     target_uri TEXT NOT NULL,
     edge_type TEXT NOT NULL,
     origin_horizon TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    PRIMARY KEY (source_uri, target_uri, edge_type)
+    UNIQUE(source_uri, target_uri, edge_type)
 );
 """
 
@@ -160,23 +160,25 @@ def seed_horizon_db(
         now_epoch = int(time.time())
         conn.execute(
             """INSERT OR REPLACE INTO horizon_metadata 
-               (horizon_id, owner_session_id, client_pid, status, created_at, last_heartbeat)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (horizon_id, f"session_{horizon_id}", client_pid, status, now_epoch, now_epoch)
+               (horizon_id, client_pid, status, created_at, last_heartbeat)
+               VALUES (?, ?, ?, ?, ?)""",
+            (horizon_id, client_pid, status, now_epoch, now_epoch)
         )
 
         if nodes:
             for n in nodes:
+                status_val = n.get("epistemic_status") or n.get("status") or "PROPOSED"
+                snippet = n.get("code_snippet") or json.dumps(n.get("properties", {}))
                 conn.execute(
                     """INSERT OR REPLACE INTO symbolic_nodes 
-                       (cbm_uri, label, status, is_dangling, properties, created_at)
+                       (cbm_uri, label, epistemic_status, is_dangling, code_snippet, created_at)
                        VALUES (?, ?, ?, ?, ?, ?)""",
                     (
                         n["cbm_uri"],
                         n.get("label", "Function"),
-                        n.get("status", "PROPOSED"),
+                        status_val,
                         1 if n.get("is_dangling", False) else 0,
-                        json.dumps(n.get("properties", {})),
+                        snippet,
                         now_epoch
                     )
                 )

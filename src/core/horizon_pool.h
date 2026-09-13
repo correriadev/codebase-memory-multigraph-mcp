@@ -33,7 +33,7 @@ typedef struct {
     uint64_t last_heartbeat;
 } HorizonAggregate;
 
-typedef struct {
+typedef struct HorizonConnectionPool {
     sqlite3 *open_handles[CBM_MAX_HORIZON_FDS];
     char active_ids[CBM_MAX_HORIZON_FDS][CBM_HORIZON_ID_MAX];
     uint64_t lru_ticks[CBM_MAX_HORIZON_FDS];

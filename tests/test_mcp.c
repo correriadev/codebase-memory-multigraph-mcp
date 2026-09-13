@@ -1222,6 +1222,7 @@ TEST(mcp_tools_list) {
     ASSERT_NOT_NULL(strstr(json, "detect_changes"));
     ASSERT_NOT_NULL(strstr(json, "manage_adr"));
     ASSERT_NOT_NULL(strstr(json, "ingest_traces"));
+    ASSERT_NOT_NULL(strstr(json, "promote_horizon"));
     free(json);
     PASS();
 }
@@ -1415,6 +1416,7 @@ TEST(mcp_tools_have_behavior_annotations) {
         {"detect_changes", true, false, true, false},
         {"manage_adr", false, true, false, false},
         {"ingest_traces", false, false, false, false},
+        {"promote_horizon", false, false, false, false},
     };
 
     char *json = cbm_mcp_tools_list();

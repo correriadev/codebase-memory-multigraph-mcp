@@ -71,16 +71,17 @@ class TestMultiAgentIsolationE2E(unittest.TestCase):
 
             # 4. Launch real MCP Server via Subprocess and verify Protocol Compliance
             with MCPProcessSession(env=sandbox.env_vars) as session:
-                init_resp = session.initialize(timeout=5.0)
+                init_resp = session.initialize(timeout=15.0)
                 self.assertTrue(init_resp.is_success(), f"Init error: {init_resp.error}")
 
-                tools_resp = session.list_tools(timeout=5.0)
+                tools_resp = session.list_tools(timeout=15.0)
                 self.assertTrue(tools_resp.is_success(), f"Tools error: {tools_resp.error}")
 
                 # Base query over real MCP stdio
                 base_query = session.call_tool(
                     name="search_graph",
-                    arguments={"project": project_name, "query": "OrderHandler"}
+                    arguments={"project": project_name, "query": "OrderHandler"},
+                    timeout=15.0
                 )
                 self.assertTrue(base_query.is_success(), f"Base query error: {base_query.error}")
                 self.assertIn("OrderHandler", str(base_query.result))

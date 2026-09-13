@@ -5,11 +5,30 @@
 #include <string.h>
 
 static void make_file_path(const char *root, const char *rel, char *out, size_t out_sz) {
-    if (root && root[0]) {
-        snprintf(out, out_sz, "%s/%s", root, rel);
-    } else {
-        snprintf(out, out_sz, "%s", rel);
+    if (!rel || !rel[0]) {
+        if (out && out_sz > 0) out[0] = '\0';
+        return;
     }
+    bool is_abs = (rel[0] == '/') ||
+                  (((rel[0] >= 'a' && rel[0] <= 'z') || (rel[0] >= 'A' && rel[0] <= 'Z')) && rel[1] == ':');
+
+    if (is_abs || !root || !root[0]) {
+        snprintf(out, out_sz, "%s", rel);
+    } else {
+        snprintf(out, out_sz, "%s/%s", root, rel);
+    }
+    for (char *p = out; *p; p++) {
+        if (*p == '\\') *p = '/';
+    }
+#if !defined(_WIN32)
+    if (((out[0] >= 'a' && out[0] <= 'z') || (out[0] >= 'A' && out[0] <= 'Z')) && out[1] == ':' && out[2] == '/') {
+        char drive = out[0];
+        if (drive >= 'A' && drive <= 'Z') drive += ('a' - 'A');
+        char temp[1024];
+        snprintf(temp, sizeof(temp), "/mnt/%c/%s", drive, out + 3);
+        snprintf(out, out_sz, "%s", temp);
+    }
+#endif
 }
 
 bool cbm_fast_offset_match(const char *root, const TwoTierAnchor *anchor) {

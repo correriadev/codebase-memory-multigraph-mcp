@@ -1,5 +1,7 @@
 #include "mcp.h"
 #include "../admission/admission_gate.h"
+#include "../core/cbm_uri.h"
+#include "../foundation/platform.h"
 #include <yyjson/yyjson.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,9 +33,6 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
     if (!gate) {
         cbm_admission_gate_init(&local_gate, "default", 1);
         gate = &local_gate;
-    }
-    if (srv && srv->store && gate && !gate->base_db) {
-        cbm_admission_gate_set_base_db(gate, (sqlite3 *)cbm_store_get_db(srv->store));
     }
 
     /* Parse anchors from JSON */
@@ -99,9 +98,70 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
     }
 
     char err_buf[512] = {0};
-    const char *repo_root = srv ? srv->session_root : NULL;
+    char *arg_repo = cbm_mcp_get_string_arg(args_json, "repo_path");
+    if (!arg_repo) arg_repo = cbm_mcp_get_string_arg(args_json, "repoPath");
+    if (!arg_repo) arg_repo = cbm_mcp_get_string_arg(args_json, "project");
+
+    char canonical_root[1024] = {0};
+    const char *repo_root = NULL;
+    if (arg_repo && arg_repo[0]) {
+        snprintf(canonical_root, sizeof(canonical_root), "%s", arg_repo);
+        for (char *p = canonical_root; *p; p++) {
+            if (*p == '\\') *p = '/';
+        }
+#if !defined(_WIN32)
+        if (((canonical_root[0] >= 'a' && canonical_root[0] <= 'z') ||
+             (canonical_root[0] >= 'A' && canonical_root[0] <= 'Z')) &&
+            canonical_root[1] == ':' && canonical_root[2] == '/') {
+            char drive = canonical_root[0];
+            if (drive >= 'A' && drive <= 'Z') drive += ('a' - 'A');
+            char temp[1024];
+            snprintf(temp, sizeof(temp), "/mnt/%c/%s", drive, canonical_root + 3);
+            snprintf(canonical_root, sizeof(canonical_root), "%s", temp);
+        }
+#endif
+        repo_root = canonical_root;
+        free(arg_repo);
+    } else {
+        repo_root = cbm_mcp_server_session_root(srv);
+    }
+
+    sqlite3 *owned_base_db = NULL;
+    sqlite3 *prev_base_db = NULL;
+    char prev_project_id[64] = {0};
+
+    char *arg_project = cbm_mcp_get_string_arg(args_json, "project");
+    if (!arg_project) arg_project = cbm_mcp_get_string_arg(args_json, "projectName");
+    if (!arg_project) arg_project = cbm_mcp_get_string_arg(args_json, "project_name");
+
+    const char *proj_name = arg_project;
+    if (!proj_name && srv) {
+        proj_name = cbm_mcp_server_session_project(srv);
+    }
+
+    if (gate && proj_name && proj_name[0]) {
+        const char *cdir = cbm_resolve_cache_dir();
+        if (cdir && cdir[0]) {
+            char base_path[1024];
+            snprintf(base_path, sizeof(base_path), "%s/%s.db", cdir, proj_name);
+            if (sqlite3_open_v2(base_path, &owned_base_db, SQLITE_OPEN_READWRITE, NULL) == SQLITE_OK) {
+                prev_base_db = gate->base_db;
+                snprintf(prev_project_id, sizeof(prev_project_id), "%s", gate->project_id);
+                cbm_admission_gate_set_base_db(gate, owned_base_db);
+                snprintf(gate->project_id, sizeof(gate->project_id), "%s", proj_name);
+            }
+        }
+    }
 
     int rc = cbm_promote_horizon(gate, pool, repo_root, horizon_id, anchors, anchor_count, err_buf, sizeof(err_buf));
+    if (owned_base_db) {
+        cbm_admission_gate_set_base_db(gate, prev_base_db);
+        snprintf(gate->project_id, sizeof(gate->project_id), "%s", prev_project_id);
+        sqlite3_close_v2(owned_base_db);
+    }
+    if (arg_project) {
+        free(arg_project);
+    }
     if (anchors) {
         free(anchors);
     }

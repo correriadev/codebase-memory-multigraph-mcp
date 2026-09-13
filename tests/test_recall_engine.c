@@ -14,7 +14,7 @@ TEST(test_recall_engine_init) {
 }
 
 TEST(test_recall_engine_capacity) {
-    ASSERT_GE(CBM_RECALL_MAX_AFFECTED, 256);
+    ASSERT_GTE(CBM_RECALL_MAX_AFFECTED, 256);
     PASS();
 }
 

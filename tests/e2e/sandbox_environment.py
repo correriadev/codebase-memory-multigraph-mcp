@@ -63,6 +63,7 @@ class TestSandboxEnvironment:
         """Environment variables for child processes."""
         return {
             "CBM_PROJECT_DIR": str(self.project_dir).replace("\\", "/"),
+            "CBM_CACHE_DIR": str(self.cache_dir).replace("\\", "/"),
             "CBM_REAPER_TTL_SECONDS": "1",
         }
 

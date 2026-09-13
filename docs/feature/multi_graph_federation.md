@@ -9,7 +9,7 @@ edges:
     target: "adr:architecture"
   - relation: tested_by
     target: "adr:tests"
-updated: 2026-09-11
+updated: 2026-09-13
 ---
 # Multi-Graph Federation
 Coordinates ephemeral cognitive horizon overlays and multi-graph federation over the persistent base graph.
@@ -71,7 +71,7 @@ Multi-Graph Federation enables speculative overlays on top of the immutable Base
 - **Addressing & Identity**: Uses canonical `cbm://<repo>/<path>#<symbol>` URIs hashed with 64-bit FNV-1a.
 - **Connection Management**: `HorizonConnectionPool` bounds open SQLite file descriptors to 16 using LRU eviction.
 - **Query Federation**: Streaming `KWayMergeContext` merges ordered streams using a min-heap with $O(K)$ memory footprint.
-- **Admission Gate**: `AdmissionGate` verifies source code stability before merging horizon state into the Base Graph.
+- **Admission Gate**: `AdmissionGate` verifies source code stability before merging horizon state into persistent Base Graph (`<cache_dir>/<project>.db`), dynamically attaching target project DB and parsing symbol names from URI fragments.
 - **Epistemic Recall**: `EpistemicRecallService` computes reverse dependency closures ($deps^{-1}$) up to depth 5.
 - **Orphan Reclamation**: `HorizonReaperService` unlinks stale horizon databases exceeding 1-hour TTL when client PID terminates.
 

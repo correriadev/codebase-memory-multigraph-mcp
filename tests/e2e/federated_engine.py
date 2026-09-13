@@ -56,7 +56,7 @@ def execute_federated_search(
             conn = sqlite3.connect(h_path)
             cur = conn.cursor()
             query_sql = (
-                "SELECT cbm_uri, label, properties FROM symbolic_nodes "
+                "SELECT cbm_uri, label, code_snippet AS properties FROM symbolic_nodes "
                 "WHERE cbm_uri LIKE ? ORDER BY cbm_uri ASC"
             )
             like_arg = f"%{pattern}%"

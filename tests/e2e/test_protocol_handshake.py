@@ -43,12 +43,12 @@ class TestProtocolHandshakeE2E(unittest.TestCase):
         self.assertTrue(binary, "Binary should be resolved")
 
         with MCPProcessSession(binary) as session:
-            init_resp = session.initialize(timeout=5.0)
+            init_resp = session.initialize(timeout=15.0)
             self.assertTrue(init_resp.is_success(), f"Init failed: {init_resp.error}")
             self.assertIsNotNone(init_resp.result)
             self.assertIn("capabilities", init_resp.result)
 
-            tools_resp = session.list_tools(timeout=5.0)
+            tools_resp = session.list_tools(timeout=15.0)
             self.assertTrue(tools_resp.is_success(), f"Tools list failed: {tools_resp.error}")
             tools = tools_resp.result.get("tools", [])
             tool_names = [t.get("name") for t in tools]

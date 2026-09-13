@@ -91,9 +91,11 @@ int cbm_promote_horizon(AdmissionGate *gate,
                         } else {
                             const char *ins2 = "INSERT OR REPLACE INTO nodes (project, label, name, qualified_name, properties) VALUES (?, ?, ?, ?, ?)";
                             if (sqlite3_prepare_v2(gate->base_db, ins2, -1, &ins, NULL) == SQLITE_OK) {
+                                const char *hash_pos = uri ? strchr(uri, '#') : NULL;
+                                const char *sym_name = (hash_pos && *(hash_pos + 1)) ? hash_pos + 1 : (uri ? uri : "");
                                 sqlite3_bind_text(ins, 1, gate->project_id[0] ? gate->project_id : "default", -1, SQLITE_STATIC);
                                 sqlite3_bind_text(ins, 2, lbl ? lbl : "Symbol", -1, SQLITE_STATIC);
-                                sqlite3_bind_text(ins, 3, uri, -1, SQLITE_STATIC);
+                                sqlite3_bind_text(ins, 3, sym_name, -1, SQLITE_STATIC);
                                 sqlite3_bind_text(ins, 4, uri, -1, SQLITE_STATIC);
                                 sqlite3_bind_text(ins, 5, code ? code : "{}", -1, SQLITE_STATIC);
                                 sqlite3_step(ins);

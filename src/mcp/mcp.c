@@ -55,6 +55,8 @@ enum {
 #include "mcp/mcp_internal.h"
 #include "store/store.h"
 #include <sqlite3.h>
+#include "core/horizon_pool.h"
+#include "admission/admission_gate.h"
 #include "cypher/cypher.h"
 #include "discover/discover.h"
 #include "pipeline/pipeline.h"
@@ -748,6 +750,15 @@ static const tool_def_t TOOLS[] = {
      "\"object\",\"properties\":{\"caller\":{\"type\":\"string\"},\"callee\":{\"type\":\"string\"},"
      "\"count\":{\"type\":\"integer\"}},\"additionalProperties\":false}},\"project\":{\"type\":"
      "\"string\"}},\"required\":[\"traces\",\"project\"]}"},
+
+    {"promote_horizon", "Validate Two-Tier anchors and admit a horizon into the base graph",
+     "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
+     "\"Identifier of the horizon to promote\"},\"anchors\":{\"type\":\"array\",\"description\":"
+     "\"Optional Two-Tier anchors for drift validation\",\"items\":{\"type\":\"object\","
+     "\"properties\":{\"file_path\":{\"type\":\"string\"},\"symbol_name\":{\"type\":\"string\"},"
+     "\"byte_start\":{\"type\":\"integer\"},\"byte_len\":{\"type\":\"integer\"},"
+     "\"ast_signature_hash\":{\"type\":\"integer\"},\"expected_text\":{\"type\":\"string\"}},"
+     "\"required\":[\"file_path\"]}}},\"required\":[\"horizon_id\"]}"},
 };
 
 static const int TOOL_COUNT = sizeof(TOOLS) / sizeof(TOOLS[0]);
@@ -787,6 +798,7 @@ static const tool_annotation_def_t TOOL_ANNOTATIONS[] = {
     {"detect_changes", true, false, true, false},
     {"manage_adr", false, true, false, false},
     {"ingest_traces", false, false, false, false},
+    {"promote_horizon", false, false, false, false},
 };
 
 static const tool_annotation_def_t *mcp_tool_annotations(const char *name) {
@@ -1476,7 +1488,8 @@ static bool repo_path_is_absolute(const char *path) {
     return (path[0] == '/' && path[1] == '/') ||
            (isalpha((unsigned char)path[0]) && path[1] == ':' && path[2] == '/');
 #else
-    return path[0] == '/';
+    return path[0] == '/' ||
+           (isalpha((unsigned char)path[0]) && path[1] == ':' && (path[2] == '/' || path[2] == '\\'));
 #endif
 }
 

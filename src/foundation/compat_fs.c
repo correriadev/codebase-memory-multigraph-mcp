@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #ifdef _WIN32
 
@@ -1142,8 +1143,18 @@ int cbm_canonical_path(const char *path, char *out, size_t out_sz) {
     free(utf8);
     return 1;
 #else
+    char translated[CBM_SZ_4K];
+    const char *p = path;
+    if (isalpha((unsigned char)path[0]) && path[1] == ':' && (path[2] == '/' || path[2] == '\\')) {
+        char drive = (char)tolower((unsigned char)path[0]);
+        snprintf(translated, sizeof(translated), "/mnt/%c%s", drive, path + 2);
+        for (char *s = translated; *s; s++) {
+            if (*s == '\\') *s = '/';
+        }
+        p = translated;
+    }
     /* Callers pass >= 4K buffers (>= PATH_MAX on our platforms). */
-    return realpath(path, out) != NULL;
+    return realpath(p, out) != NULL;
 #endif
 }
 

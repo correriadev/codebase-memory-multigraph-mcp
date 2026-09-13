@@ -9,7 +9,7 @@ edges:
     target: "adr:architecture"
   - relation: tested_by
     target: "adr:tests"
-updated: 2026-09-11
+updated: 2026-09-13
 ---
 # Multi-Graph Federation End-to-End Test Suite
 Validates black-box MCP stdio JSON-RPC protocol compliance, multi-agent horizon isolation, two-tier anchor refactoring admission, and client crash recovery with daemon horizon reaping.
@@ -35,7 +35,8 @@ Validates black-box MCP stdio JSON-RPC protocol compliance, multi-agent horizon 
   ],
   "code_files": [
     "tests/e2e/fixtures/base_seeder.py",
-    "tests/e2e/fixtures/specimens.py"
+    "tests/e2e/fixtures/specimens.py",
+    "tests/e2e/fixtures/harness_specimen.py"
   ],
   "test_files": [
     "tests/e2e/test_protocol_handshake.py",
@@ -47,33 +48,26 @@ Validates black-box MCP stdio JSON-RPC protocol compliance, multi-agent horizon 
 }
 ```
 
+## OVERVIEW
+Black-box E2E validation framework communicating with the native `codebase-memory-mcp` binary via standard I/O pipes using JSON-RPC 2.0. Exercises multi-agent cognitive horizon isolation, real-world AST anchor verification, and atomic Base Graph SQLite consolidation without Python mocks.
+
 ## FOLDER STRUCTURE
+<folder_structure>
 ```
 tests/e2e/
-  __init__.py
-  jsonrpc_client.py            # JSON-RPC 2.0 protocol models and framing
-  mcp_process_driver.py        # Subprocess driver with async line readers and kill_force
-  sandbox_environment.py       # Hermetic sandbox directory manager with retry cleanup
-  federated_engine.py          # O(K) heap-based streaming merge and horizon query engine
-  admission_verifier.py        # Two-tier anchor verification and atomic promotion
-  reaper_harness.py            # OS PID liveness checking and TTL eviction scanner
-  run_e2e.py                   # Unified runner and test reporter
-  fixtures/
-    __init__.py
-    base_seeder.py             # Deterministic SQLite Base and Horizon seeder
-    specimens.py               # Real source file specimens for physical disk mutations
-  test_protocol_handshake.py   # Subprocess stdio handshake and tools listing
-  test_multi_agent_isolation.py# Private cognitive horizon isolation across virtual agents
-  test_refactoring_admission.py# Benign comment shifts vs breaking AST signature drift
-  test_crash_recovery_reaper.py# Abrupt client SIGKILL and orphan database unlinking
-  test_streaming_pagination.py # Paginated K-Way merge with node shadowing
+├── fixtures/                  # Deterministic Base/Horizon seeders and realistic source specimens
+├── drivers/                   # MCP subprocess managers and JSON-RPC 2.0 framing drivers
+├── harnesses/                 # Process supervision, reaper simulation, and K-way merge engines
+└── scenarios/                 # Isolated test scenarios (handshake, isolation, admission, reaping)
 ```
+</folder_structure>
 
 ## ARCHITECTURE & SYSTEM INTEGRATION
-- References: [Architecture Guide](./docs/adr/ARCHITECTURE.md), [Testing Protocol](./docs/adr/TESTS.md).
-- **Subprocess Driver**: Spawns native `codebase-memory-mcp` binary communicating over `stdin`/`stdout` pipes with dedicated daemon reader threads, timeout protection, and clean process tree termination (`taskkill /F /T` / `SIGKILL`).
+- References: [Architecture Guide](../adr/ARCHITECTURE.md), [Testing Protocol](../adr/TESTS.md).
+- **Subprocess Driver**: Spawns native `codebase-memory-mcp` binary communicating over `stdin`/`stdout` pipes with dedicated daemon reader threads, timeout protection (15.0s for virtualized/WSL environments), and clean process tree termination (`taskkill /F /T` / `SIGKILL`).
 - **Hermetic Sandbox**: Generates isolated project scopes with dedicated `.db` namespaces, preventing collisions with active background daemons.
-- **Two-Tier Anchor Verification**: Verifies fast-path byte offsets on disk followed by FNV-1a 64-bit AST signature hashes when comments or headers shift lines.
+- **Two-Tier Anchor Verification**: Verifies fast-path SHA-256 byte hashes on disk followed by Tree-Sitter AST symbol signature comparison when comments or whitespaces shift lines. Rejects breaking mutations with `ANCHOR_DRIFT`.
+- **Realistic Specimens (`harness_specimen.py`)**: Generates TypeScript structures matching production SDKs (`harness-kit/sdk/src/agent-runner/IAgentRunner.ts`), validating multi-OS path resolution (`repo_path` relative and absolute paths).
 - **Horizon Reaper Verification**: Spawns real OS client processes, terminates them forcibly, and validates deterministic removal of `.db`, `.db-wal`, and `.db-shm` files without lock leakage.
 - **Streaming K-Way Merge**: Implements Min-Heap merging with priority shadowing across Base and Horizon databases over multiple paginated steps.
 
@@ -82,8 +76,31 @@ Run the complete suite:
 ```bash
 python tests/e2e/run_e2e.py
 ```
-Or via Makefile:
+Or via WSL2 Linux:
 ```bash
-make -f Makefile.cbm test-e2e
+wsl.exe -d Ubuntu -- python3 tests/e2e/run_e2e.py
 ```
-Coverage includes 11 comprehensive automated scenarios with zero failures and sub-4-second execution time.
+
+Coverage includes 12 automated real-world scenarios with 100% pass rate:
+- Protocol handshake, capabilities negotiation, and tool catalog reflection (`test_protocol_handshake.py`).
+- Concurrent multi-agent cognitive horizon isolation and private symbol invisibility (`test_multi_agent_isolation.py`).
+- Two-Tier anchor verification: exact match, benign comment shift, and signature drift rejection (`test_refactoring_admission.py`).
+- Multi-OS path resolution and dynamic Base Graph SQLite consolidation (`test_refactoring_admission.py`).
+- Client crash detection and orphan SQLite database cleanup by the background reaper (`test_crash_recovery_reaper.py`).
+- Paginated K-Way merge with node shadowing across horizons (`test_streaming_pagination.py`).
+
+## DOCUMENT MAP
+
+```mermaid
+graph TD
+    THIS["Multi-Graph Federation E2E"] -->|implements| ARCH["Architecture ADR"]
+    THIS -->|tested_by| TESTS["Testing Protocol ADR"]
+    click ARCH "../adr/ARCHITECTURE.md"
+    click TESTS "../adr/TESTS.md"
+```
+
+## REFERENCES
+
+- [**ARCHITECTURE.md**](../adr/ARCHITECTURE.md): Multi-graph federation architecture, layers, and storage models.
+- [**TESTS.md**](../adr/TESTS.md): Test execution protocol, unit suites, and federation regression harness.
+- [**multi_graph_federation.md**](./multi_graph_federation.md): Multi-graph federation feature specification and source routing.

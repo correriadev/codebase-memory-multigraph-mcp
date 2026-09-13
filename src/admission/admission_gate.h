@@ -11,7 +11,7 @@
 #define CBM_ADMISSION_ERR_HORIZON_NOT_FOUND -2
 #define CBM_ADMISSION_ERR_INVALID_STATE -3
 
-typedef struct {
+typedef struct AdmissionGate {
     char project_id[64];
     uint64_t base_generation;
     uint32_t active_recalls_count;

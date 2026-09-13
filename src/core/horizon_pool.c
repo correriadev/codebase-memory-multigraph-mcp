@@ -217,6 +217,7 @@ int cbm_horizon_pool_get(HorizonConnectionPool *pool, const char *horizon_id, sq
     }
 
     sqlite3_exec(db, "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;", NULL, NULL, NULL);
+    sqlite3_exec(db, HORIZON_DDL, NULL, NULL, NULL);
 
     pool->open_handles[target_slot] = db;
     snprintf(pool->active_ids[target_slot], sizeof(pool->active_ids[target_slot]), "%s", horizon_id);
@@ -238,10 +239,14 @@ int cbm_horizon_set_status(HorizonConnectionPool *pool, const char *horizon_id, 
     else if (status == HORIZON_DISCARDED) status_str = "DISCARDED";
 
     sqlite3_stmt *stmt = NULL;
-    rc = sqlite3_prepare_v2(db, "UPDATE horizon_metadata SET status = ? WHERE horizon_id = ?", -1, &stmt, NULL);
+    const char *upsert_sql =
+        "INSERT INTO horizon_metadata (horizon_id, client_pid, status, created_at, last_heartbeat) "
+        "VALUES (?, 0, ?, strftime('%s','now'), strftime('%s','now')) "
+        "ON CONFLICT(horizon_id) DO UPDATE SET status = excluded.status, last_heartbeat = excluded.last_heartbeat;";
+    rc = sqlite3_prepare_v2(db, upsert_sql, -1, &stmt, NULL);
     if (rc == SQLITE_OK) {
-        sqlite3_bind_text(stmt, 1, status_str, -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 2, horizon_id, -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 1, horizon_id, -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 2, status_str, -1, SQLITE_STATIC);
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
         return 0;
