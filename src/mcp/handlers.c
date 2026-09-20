@@ -112,7 +112,7 @@ static void cbm_mcp_integrate_overlay_into_content(yyjson_mut_doc *mdoc, yyjson_
                     yyjson_doc_free(inner_doc);
                     if (idoc) {
                         yyjson_mut_val *iroot = yyjson_mut_doc_get_root(idoc);
-                        yyjson_mut_val *copy_val = yyjson_val_mut_copy(idoc, (yyjson_val *)overlay_val);
+                        yyjson_mut_val *copy_val = yyjson_mut_val_mut_copy(idoc, overlay_val);
                         if (copy_val) {
                             yyjson_mut_obj_add_val(idoc, iroot, overlay_key, copy_val);
                         }
@@ -128,7 +128,7 @@ static void cbm_mcp_integrate_overlay_into_content(yyjson_mut_doc *mdoc, yyjson_
                     /* orig_text is plain text or markdown: append overlay section */
                     if (inner_doc) yyjson_doc_free(inner_doc);
                     yyjson_mut_doc *sdoc = yyjson_mut_doc_new(NULL);
-                    yyjson_mut_val *sval = yyjson_val_mut_copy(sdoc, (yyjson_val *)overlay_val);
+                    yyjson_mut_val *sval = yyjson_mut_val_mut_copy(sdoc, overlay_val);
                     yyjson_mut_doc_set_root(sdoc, sval);
                     char *overlay_json = yyjson_mut_write(sdoc, 0, NULL);
                     yyjson_mut_doc_free(sdoc);
