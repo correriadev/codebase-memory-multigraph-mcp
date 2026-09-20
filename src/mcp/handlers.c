@@ -163,6 +163,18 @@ char *cbm_mcp_handle_federated_search_graph(cbm_mcp_server_t *srv, const char *a
         return handle_search_graph(srv, args_json);
     }
 
+    /* Validate all active horizons exist before proceeding */
+    for (size_t i = 0; i < horizon_count; i++) {
+        sqlite3 *hdb = NULL;
+        if (cbm_horizon_pool_get(pool, horizons[i], &hdb) != 0 || !hdb) {
+            char err_resp[512];
+            snprintf(err_resp, sizeof(err_resp),
+                     "{\"isError\":true,\"code\":\"HORIZON_NOT_FOUND\",\"message\":\"Active horizon '%s' does not exist in storage\"}",
+                     horizons[i]);
+            return cbm_mcp_text_result(err_resp, true);
+        }
+    }
+
     /* Merge base and horizon overlays using K-Way merge */
     char *base_result = handle_search_graph(srv, args_json);
     if (!base_result) return NULL;
@@ -241,6 +253,18 @@ char *cbm_mcp_handle_federated_query_graph(cbm_mcp_server_t *srv, const char *ar
 
     if (horizon_count == 0 || !pool) {
         return handle_query_graph(srv, args_json);
+    }
+
+    /* Validate all active horizons exist before proceeding */
+    for (size_t i = 0; i < horizon_count; i++) {
+        sqlite3 *hdb = NULL;
+        if (cbm_horizon_pool_get(pool, horizons[i], &hdb) != 0 || !hdb) {
+            char err_resp[512];
+            snprintf(err_resp, sizeof(err_resp),
+                     "{\"isError\":true,\"code\":\"HORIZON_NOT_FOUND\",\"message\":\"Active horizon '%s' does not exist in storage\"}",
+                     horizons[i]);
+            return cbm_mcp_text_result(err_resp, true);
+        }
     }
 
     char *base_result = handle_query_graph(srv, args_json);
@@ -339,6 +363,18 @@ char *cbm_mcp_handle_federated_trace_path(cbm_mcp_server_t *srv, const char *arg
 
     if (horizon_count == 0 || !pool) {
         return handle_trace_call_path(srv, args_json);
+    }
+
+    /* Validate all active horizons exist before proceeding */
+    for (size_t i = 0; i < horizon_count; i++) {
+        sqlite3 *hdb = NULL;
+        if (cbm_horizon_pool_get(pool, horizons[i], &hdb) != 0 || !hdb) {
+            char err_resp[512];
+            snprintf(err_resp, sizeof(err_resp),
+                     "{\"isError\":true,\"code\":\"HORIZON_NOT_FOUND\",\"message\":\"Active horizon '%s' does not exist in storage\"}",
+                     horizons[i]);
+            return cbm_mcp_text_result(err_resp, true);
+        }
     }
 
     char *base_result = handle_trace_call_path(srv, args_json);

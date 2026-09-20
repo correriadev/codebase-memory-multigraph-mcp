@@ -24,7 +24,7 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
     HorizonConnectionPool local_pool;
     bool own_pool = false;
     if (!pool) {
-        cbm_horizon_pool_init(&local_pool, NULL);
+        cbm_horizon_pool_init(&local_pool, cbm_resolve_cache_dir());
         pool = &local_pool;
         own_pool = true;
     }
@@ -170,10 +170,14 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
     }
 
     if (rc != CBM_ADMISSION_OK) {
+        const char *err_code = "PROMOTION_FAILED";
+        if (rc == CBM_ADMISSION_ERR_ANCHOR_DRIFT) err_code = "ANCHOR_DRIFT";
+        else if (rc == CBM_ADMISSION_ERR_HORIZON_NOT_FOUND) err_code = "HORIZON_NOT_FOUND";
+
         char err_resp[1024];
         snprintf(err_resp, sizeof(err_resp),
                  "{\"isError\":true,\"code\":\"%s\",\"message\":\"%s\"}",
-                 (rc == CBM_ADMISSION_ERR_ANCHOR_DRIFT) ? "ANCHOR_DRIFT" : "PROMOTION_FAILED",
+                 err_code,
                  err_buf[0] ? err_buf : "Admission gate rejected promotion");
         free(horizon_id);
         return cbm_mcp_text_result(err_resp, true);

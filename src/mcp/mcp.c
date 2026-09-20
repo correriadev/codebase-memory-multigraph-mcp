@@ -487,6 +487,7 @@ static const tool_def_t TOOLS[] = {
      "qn/file/lines and in/out over CALLS/USAGE/CALL_REFERENCE/INHERITS/IMPLEMENTS.",
      "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},"
      "\"query\":{\"type\":\"string\"},"
+     "\"active_horizons\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Optional active horizon IDs for federated speculative overlay\"},"
      "\"label\":{\"type\":\"string\"},\"name_pattern\":{\"type\":\"string\"},\"qn_pattern\":{"
      "\"type\":\"string\"},\"file_pattern\":{\"type\":\"string\"},"
      "\"relationship\":{\"type\":\"string\"},\"min_degree\":{\"type\":\"integer\"},"
@@ -515,6 +516,7 @@ static const tool_def_t TOOLS[] = {
      "Use get_graph_schema(diagnostics=full) for properties.",
      "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Cypher "
      "query\"},\"project\":{\"type\":\"string\"},"
+     "\"active_horizons\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Optional active horizon IDs for federated speculative overlay\"},"
      "\"graph\":{\"type\":\"string\",\"enum\":[\"code\",\"missed\"],\"default\":\"code\","
      "\"description\":\"code graph (default) or missed coverage-gap file tree.\"},"
      "\"max_rows\":{\"type\":\"integer\","
@@ -535,7 +537,7 @@ static const tool_def_t TOOLS[] = {
      "Trace callers/callees, data flow, or cross-service paths. Defaults exclude tests and "
      "resolver evidence. Rows keep qn/hop with explicit totals, relations, and continuations.",
      "{\"type\":\"object\",\"properties\":{\"function_name\":{\"type\":\"string\"},\"project\":{"
-     "\"type\":\"string\"},\"direction\":{\"type\":\"string\",\"enum\":[\"inbound\",\"outbound\","
+     "\"type\":\"string\"},\"active_horizons\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Optional active horizon IDs for federated speculative overlay\"},\"direction\":{\"type\":\"string\",\"enum\":[\"inbound\",\"outbound\","
      "\"both\"],\"default\":\"both\"},\"depth\":{\"type\":\"integer\",\"default\":3,"
      "\"minimum\":1,\"maximum\":15},"
      "\"limit\":{\"type\":\"integer\",\"default\":100,\"minimum\":1,\"maximum\":5000,"
@@ -751,6 +753,20 @@ static const tool_def_t TOOLS[] = {
      "\"count\":{\"type\":\"integer\"}},\"additionalProperties\":false}},\"project\":{\"type\":"
      "\"string\"}},\"required\":[\"traces\",\"project\"]}"},
 
+    {"create_horizon", "Create or update an ephemeral cognitive horizon overlay with speculative nodes and virtual edges",
+     "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
+     "\"Identifier for the horizon (e.g. h_calculadora_mobile)\"},\"project\":{\"type\":\"string\","
+     "\"description\":\"Project name or path to associate with this horizon\"},\"nodes\":{\"type\":"
+     "\"array\",\"description\":\"Speculative symbolic nodes\",\"items\":{\"type\":\"object\","
+     "\"properties\":{\"cbm_uri\":{\"type\":\"string\"},\"label\":{\"type\":\"string\"},"
+     "\"epistemic_status\":{\"type\":\"string\",\"enum\":[\"PROPOSED\",\"ACCEPTED\",\"CONTESTED\",\"SHADOWED\"],"
+     "\"default\":\"PROPOSED\"},\"is_dangling\":{\"type\":\"boolean\",\"default\":true},"
+     "\"code_snippet\":{\"type\":\"string\"}},\"required\":[\"cbm_uri\",\"label\"]}},"
+     "\"edges\":{\"type\":\"array\",\"description\":\"Virtual edges connecting speculative nodes\","
+     "\"items\":{\"type\":\"object\",\"properties\":{\"source_uri\":{\"type\":\"string\"},"
+     "\"target_uri\":{\"type\":\"string\"},\"edge_type\":{\"type\":\"string\"}},"
+     "\"required\":[\"source_uri\",\"target_uri\",\"edge_type\"]}}}}"},
+
     {"promote_horizon", "Validate Two-Tier anchors and admit a horizon into the base graph",
      "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
      "\"Identifier of the horizon to promote\"},\"anchors\":{\"type\":\"array\",\"description\":"
@@ -798,6 +814,7 @@ static const tool_annotation_def_t TOOL_ANNOTATIONS[] = {
     {"detect_changes", true, false, true, false},
     {"manage_adr", false, true, false, false},
     {"ingest_traces", false, false, false, false},
+    {"create_horizon", false, false, true, false},
     {"promote_horizon", false, false, false, false},
 };
 
@@ -17337,6 +17354,9 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
     }
     if (strcmp(tool_name, "ingest_traces") == 0) {
         return handle_ingest_traces(srv, args_json);
+    }
+    if (strcmp(tool_name, "create_horizon") == 0) {
+        return handle_create_horizon(srv, args_json, &srv->horizon_pool);
     }
     if (strcmp(tool_name, "promote_horizon") == 0) {
         if (srv && srv->store) {

@@ -34,6 +34,17 @@ int cbm_promote_horizon(AdmissionGate *gate,
         return CBM_ADMISSION_ERR_HORIZON_NOT_FOUND;
     }
 
+    /* Verify horizon exists in pool before proceeding */
+    if (pool) {
+        sqlite3 *check_db = NULL;
+        if (cbm_horizon_pool_get(pool, horizon_id, &check_db) != 0 || !check_db) {
+            if (out_error && err_sz > 0) {
+                snprintf(out_error, err_sz, "Horizon '%s' not found", horizon_id);
+            }
+            return CBM_ADMISSION_ERR_HORIZON_NOT_FOUND;
+        }
+    }
+
     /* Validate each anchor against the codebase files */
     if (anchors && anchor_count > 0) {
         for (size_t i = 0; i < anchor_count; i++) {

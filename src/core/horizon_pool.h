@@ -48,6 +48,9 @@ int cbm_horizon_pool_init(HorizonConnectionPool *pool, const char *storage_dir);
 /* Close all handles in the pool */
 void cbm_horizon_pool_close_all(HorizonConnectionPool *pool);
 
+/* Invalidate and close a specific horizon connection handle if cached */
+int cbm_horizon_pool_invalidate(HorizonConnectionPool *pool, const char *horizon_id);
+
 /* Creates a new isolated horizon database with horizon_schema.sql applied */
 int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const char *custom_id, char *out_id, size_t out_sz);
 

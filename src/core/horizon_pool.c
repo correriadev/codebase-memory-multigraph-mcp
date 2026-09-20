@@ -65,6 +65,7 @@ static int make_horizon_path(const HorizonConnectionPool *pool, const char *hori
         if (out_path && out_sz > 0) out_path[0] = '\0';
         return -1;
     }
+
     if (pool->base_dir[0]) {
         snprintf(out_path, out_sz, "%s/horizons/%s.db", pool->base_dir, horizon_id);
     } else {
@@ -109,6 +110,21 @@ void cbm_horizon_pool_close_all(HorizonConnectionPool *pool) {
     pool->count = 0;
 }
 
+int cbm_horizon_pool_invalidate(HorizonConnectionPool *pool, const char *horizon_id) {
+    if (!pool || !horizon_id) return -1;
+    for (size_t i = 0; i < CBM_MAX_HORIZON_FDS; i++) {
+        if (pool->open_handles[i] && strcmp(pool->active_ids[i], horizon_id) == 0) {
+            sqlite3_close_v2(pool->open_handles[i]);
+            pool->open_handles[i] = NULL;
+            pool->active_ids[i][0] = '\0';
+            pool->lru_ticks[i] = 0;
+            pool->count--;
+            return 0;
+        }
+    }
+    return 0;
+}
+
 int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const char *custom_id, char *out_id, size_t out_sz) {
     if (!pool || !out_id || out_sz == 0) return -1;
 
@@ -127,7 +143,7 @@ int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const c
     ensure_directories(db_path);
 
     sqlite3 *db = NULL;
-    int rc = sqlite3_open(db_path, &db);
+    int rc = sqlite3_open_v2(db_path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
     if (rc != SQLITE_OK) {
         if (db) sqlite3_close_v2(db);
         return -1;
@@ -145,7 +161,8 @@ int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const c
     sqlite3_stmt *stmt = NULL;
     const char *insert_meta =
         "INSERT INTO horizon_metadata (horizon_id, client_pid, status, created_at, last_heartbeat) "
-        "VALUES (?, ?, 'ACTIVE', ?, ?)";
+        "VALUES (?, ?, 'ACTIVE', ?, ?) "
+        "ON CONFLICT(horizon_id) DO UPDATE SET status = 'ACTIVE', last_heartbeat = excluded.last_heartbeat;";
     rc = sqlite3_prepare_v2(db, insert_meta, -1, &stmt, NULL);
     if (rc == SQLITE_OK) {
         sqlite3_bind_text(stmt, 1, horizon_id, -1, SQLITE_STATIC);
@@ -208,8 +225,14 @@ int cbm_horizon_pool_get(HorizonConnectionPool *pool, const char *horizon_id, sq
         return -1;
     }
 
+    struct stat st;
+    if (stat(db_path, &st) != 0 || st.st_size == 0) {
+        *out_db = NULL;
+        return -1; /* Horizon file does not exist or is empty; fail fast */
+    }
+
     sqlite3 *db = NULL;
-    int rc = sqlite3_open(db_path, &db);
+    int rc = sqlite3_open_v2(db_path, &db, SQLITE_OPEN_READWRITE, NULL);
     if (rc != SQLITE_OK) {
         if (db) sqlite3_close_v2(db);
         *out_db = NULL;

@@ -339,7 +339,8 @@ FEDERATION_SRCS = \
     src/admission/recall_engine.c \
     src/daemon/horizon_reaper.c \
     src/mcp/handlers.c \
-    src/mcp/promote_handler.c
+    src/mcp/promote_handler.c \
+    src/mcp/horizon_handler.c
 
 # Shared MCP daemon coordination and local transport
 DAEMON_SRCS = \
