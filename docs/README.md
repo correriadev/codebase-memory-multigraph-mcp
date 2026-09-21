@@ -6,6 +6,8 @@ Index of project technical documentation for **codebase-memory-mcp**. Use the li
 
 | Document | Description | Reading |
 |---|---|---|
+| [**.digest.md**](./.digest.md) | Fast-path machine-readable orientation digest (stack, test commands, rules). | **Mandatory** |
+| [**.graph.json**](./.graph.json) | Macro relation graph index for agent topology navigation and 1-hop routing. | **Mandatory** |
 | [**ARCHITECTURE.md**](./adr/ARCHITECTURE.md) | System architecture, folder organization, layers, and design patterns. | **Mandatory** |
 | [**TESTS.md**](./adr/TESTS.md) | Testing strategies, test suites, minimum coverage, and execution commands. | **Mandatory** |
 | [**multi_graph_federation.md**](./feature/multi_graph_federation.md) | Ephemeral cognitive horizons, streaming K-way merge, and admission gate federation. | Optional |

@@ -9,7 +9,7 @@ edges:
     target: "adr:architecture"
   - relation: tested_by
     target: "adr:tests"
-updated: 2026-09-13
+updated: 2026-09-20
 ---
 # Multi-Graph Federation End-to-End Test Suite
 Validates black-box MCP stdio JSON-RPC protocol compliance, multi-agent horizon isolation, two-tier anchor refactoring admission, and client crash recovery with daemon horizon reaping.
@@ -75,10 +75,6 @@ tests/e2e/
 Run the complete suite:
 ```bash
 python tests/e2e/run_e2e.py
-```
-Or via WSL2 Linux:
-```bash
-wsl.exe -d Ubuntu -- python3 tests/e2e/run_e2e.py
 ```
 
 Coverage includes 12 automated real-world scenarios with 100% pass rate:

@@ -9,7 +9,7 @@ edges:
     target: "adr:architecture"
   - relation: tested_by
     target: "adr:tests"
-updated: 2026-09-13
+updated: 2026-09-20
 ---
 # Multi-Graph Federation
 Coordinates ephemeral cognitive horizon overlays and multi-graph federation over the persistent base graph.
@@ -25,6 +25,7 @@ Coordinates ephemeral cognitive horizon overlays and multi-graph federation over
   ],
   "registration_files": [
     "src/mcp/handlers.c",
+    "src/mcp/horizon_handler.c",
     "src/mcp/mcp_internal.h",
     "src/mcp/promote_handler.c"
   ],

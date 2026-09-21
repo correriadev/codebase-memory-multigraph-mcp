@@ -7,7 +7,7 @@ tags: [testing, unit-tests, e2e-tests, coverage]
 edges:
   - relation: references
     target: "adr:architecture"
-updated: 2026-09-13
+updated: 2026-09-20
 ---
 # Testing Protocol
 

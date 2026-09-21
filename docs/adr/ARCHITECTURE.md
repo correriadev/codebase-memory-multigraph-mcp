@@ -7,7 +7,7 @@ tags: [architecture, design-patterns, multi-graph-federation]
 edges:
   - relation: references
     target: "adr:tests"
-updated: 2026-09-13
+updated: 2026-09-20
 ---
 # Project Architecture
 

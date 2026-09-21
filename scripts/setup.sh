@@ -61,7 +61,7 @@ detect_platform() {
     case "$os" in
         Darwin) os="darwin" ;;
         Linux)  os="linux" ;;
-        *)      die "Unsupported OS: $os. Use WSL2 on Windows." ;;
+        *)      die "Unsupported OS: $os. Use install.ps1 on Windows." ;;
     esac
 
     case "$arch" in

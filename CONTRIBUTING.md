@@ -17,8 +17,9 @@ scripts/build.sh
 
 macOS: `xcode-select --install` provides clang.
 Linux: `sudo apt install build-essential zlib1g-dev` (Debian/Ubuntu) or `sudo dnf install gcc zlib-devel` (Fedora).
+Windows: Install MSYS2 (`winget install MSYS2.MSYS2`). In MSYS2, install the CLANG64 toolchain (`pacman -S mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-zlib make`). Build via PowerShell using `pwsh scripts/build-windows.ps1` or run `scripts/build.sh CC=clang CXX=clang++` inside the MSYS2 CLANG64 shell.
 
-The binary is output to `build/c/codebase-memory-mcp`.
+The binary is output to `build/c/codebase-memory-mcp` (`build/c/codebase-memory-mcp.exe` on Windows).
 
 ## Run Tests
 
