@@ -113,6 +113,8 @@ char *cbm_mcp_handle_federated_query_graph(cbm_mcp_server_t *srv, const char *ar
 char *cbm_mcp_handle_federated_trace_path(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 char *handle_create_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool, AdmissionGate *gate);
+char *handle_sync_horizon_spec(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
+char *handle_validate_scope_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 
 char *handle_search_graph(cbm_mcp_server_t *srv, const char *args);
 char *handle_query_graph(cbm_mcp_server_t *srv, const char *args);

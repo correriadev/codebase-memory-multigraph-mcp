@@ -333,14 +333,17 @@ FEDERATION_SRCS = \
     src/core/cbm_uri.c \
     src/core/horizon_pool.c \
     src/core/symbolic_node.c \
+    src/core/horizon_spec_parser.c \
     src/query/kway_merge.c \
     src/admission/anchor_checker.c \
     src/admission/admission_gate.c \
     src/admission/recall_engine.c \
+    src/admission/scope_validator.c \
     src/daemon/horizon_reaper.c \
     src/mcp/handlers.c \
     src/mcp/promote_handler.c \
-    src/mcp/horizon_handler.c
+    src/mcp/horizon_handler.c \
+    src/mcp/horizon_sync_handler.c
 
 # Shared MCP daemon coordination and local transport
 DAEMON_SRCS = \
@@ -585,10 +588,12 @@ TEST_MCP_SRCS = \
 TEST_FEDERATION_SRCS = \
     tests/test_cbm_uri.c \
     tests/test_horizon_reaper.c \
+    tests/test_horizon_spec_parser.c \
     tests/test_kway_merge.c \
     tests/test_mcp_federation.c \
     tests/test_anchor_checker.c \
-    tests/test_recall_engine.c
+    tests/test_recall_engine.c \
+    tests/test_scope_validator.c
 
 TEST_DAEMON_SRCS = \
     tests/test_daemon.c \

@@ -25,7 +25,8 @@ static const char *HORIZON_DDL =
     "    client_pid INTEGER NOT NULL,\n"
     "    status TEXT NOT NULL CHECK(status IN ('ACTIVE', 'PROMOTED', 'DISCARDED')),\n"
     "    created_at INTEGER NOT NULL,\n"
-    "    last_heartbeat INTEGER NOT NULL\n"
+    "    last_heartbeat INTEGER NOT NULL,\n"
+    "    based_on_seq TEXT NOT NULL DEFAULT '0'\n"
     ");\n"
     "CREATE TABLE IF NOT EXISTS symbolic_nodes (\n"
     "    cbm_uri TEXT PRIMARY KEY,\n"
@@ -47,7 +48,14 @@ static const char *HORIZON_DDL =
     "    UNIQUE(source_uri, target_uri, edge_type)\n"
     ");\n"
     "CREATE INDEX IF NOT EXISTS idx_virtual_edges_source ON virtual_edges(source_uri);\n"
-    "CREATE INDEX IF NOT EXISTS idx_virtual_edges_target ON virtual_edges(target_uri);\n";
+    "CREATE INDEX IF NOT EXISTS idx_virtual_edges_target ON virtual_edges(target_uri);\n"
+    "CREATE VIRTUAL TABLE IF NOT EXISTS spec_fts USING fts5(\n"
+    "    file_path UNINDEXED,\n"
+    "    heading_slug,\n"
+    "    title,\n"
+    "    content,\n"
+    "    tokenize = 'porter unicode61'\n"
+    ");\n";
 
 static bool is_valid_horizon_id(const char *id) {
     if (!id || !id[0]) return false;
@@ -125,7 +133,7 @@ int cbm_horizon_pool_invalidate(HorizonConnectionPool *pool, const char *horizon
     return 0;
 }
 
-int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const char *custom_id, char *out_id, size_t out_sz) {
+int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const char *custom_id, const char *based_on_seq, char *out_id, size_t out_sz) {
     if (!pool || !out_id || out_sz == 0) return -1;
 
     char horizon_id[CBM_HORIZON_ID_MAX];
@@ -160,15 +168,16 @@ int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const c
     uint64_t now = (uint64_t)time(NULL);
     sqlite3_stmt *stmt = NULL;
     const char *insert_meta =
-        "INSERT INTO horizon_metadata (horizon_id, client_pid, status, created_at, last_heartbeat) "
-        "VALUES (?, ?, 'ACTIVE', ?, ?) "
-        "ON CONFLICT(horizon_id) DO UPDATE SET status = 'ACTIVE', last_heartbeat = excluded.last_heartbeat;";
+        "INSERT INTO horizon_metadata (horizon_id, client_pid, status, created_at, last_heartbeat, based_on_seq) "
+        "VALUES (?, ?, 'ACTIVE', ?, ?, ?) "
+        "ON CONFLICT(horizon_id) DO UPDATE SET status = 'ACTIVE', last_heartbeat = excluded.last_heartbeat, based_on_seq = excluded.based_on_seq;";
     rc = sqlite3_prepare_v2(db, insert_meta, -1, &stmt, NULL);
     if (rc == SQLITE_OK) {
         sqlite3_bind_text(stmt, 1, horizon_id, -1, SQLITE_STATIC);
         sqlite3_bind_int64(stmt, 2, (sqlite3_int64)client_pid);
         sqlite3_bind_int64(stmt, 3, (sqlite3_int64)now);
         sqlite3_bind_int64(stmt, 4, (sqlite3_int64)now);
+        sqlite3_bind_text(stmt, 5, based_on_seq ? based_on_seq : "0", -1, SQLITE_STATIC);
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
     }

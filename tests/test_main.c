@@ -887,6 +887,8 @@ extern void suite_stack_overflow_b(void);
 extern void suite_stack_overflow_c(void);
 extern void suite_dump_verify(void);
 extern void suite_dump_verify_io(void);
+extern void suite_horizon_spec_parser(void);
+extern void suite_scope_validator(void);
 
 /* Free the main thread's thread-local node-type bitset cache before exit so
  * LeakSanitizer (Linux x64) doesn't report it. Worker threads free their own
@@ -1040,6 +1042,8 @@ int main(int argc, char **argv) {
     RUN_SELECTED_SUITE(mcp);
     RUN_SELECTED_SUITE(mcp_mutation_guard);
     RUN_SELECTED_SUITE(index_supervisor);
+    RUN_SELECTED_SUITE(horizon_spec_parser);
+    RUN_SELECTED_SUITE(scope_validator);
 
     /* Shared MCP daemon coordination + private framing */
     RUN_SELECTED_SUITE(daemon);

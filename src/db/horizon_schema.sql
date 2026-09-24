@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS horizon_metadata (
     client_pid INTEGER NOT NULL,
     status TEXT NOT NULL CHECK(status IN ('ACTIVE', 'PROMOTED', 'DISCARDED')),
     created_at INTEGER NOT NULL,
-    last_heartbeat INTEGER NOT NULL
+    last_heartbeat INTEGER NOT NULL,
+    based_on_seq TEXT NOT NULL DEFAULT '0'
 );
 
 CREATE TABLE IF NOT EXISTS symbolic_nodes (
@@ -36,3 +37,11 @@ CREATE TABLE IF NOT EXISTS virtual_edges (
 
 CREATE INDEX IF NOT EXISTS idx_virtual_edges_source ON virtual_edges(source_uri);
 CREATE INDEX IF NOT EXISTS idx_virtual_edges_target ON virtual_edges(target_uri);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS spec_fts USING fts5(
+    file_path UNINDEXED,
+    heading_slug,
+    title,
+    content,
+    tokenize = 'porter unicode61'
+);

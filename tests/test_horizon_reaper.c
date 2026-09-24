@@ -1,6 +1,11 @@
 #include "test_framework.h"
 #include "../src/daemon/horizon_reaper.h"
 #include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 TEST(test_pid_alive_self) {
 #ifdef _WIN32

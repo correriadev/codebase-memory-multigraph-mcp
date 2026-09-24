@@ -775,6 +775,20 @@ static const tool_def_t TOOLS[] = {
      "\"byte_start\":{\"type\":\"integer\"},\"byte_len\":{\"type\":\"integer\"},"
      "\"ast_signature_hash\":{\"type\":\"integer\"},\"expected_text\":{\"type\":\"string\"}},"
      "\"required\":[\"file_path\"]}}},\"required\":[\"horizon_id\"]}"},
+
+    {"sync_horizon_spec", "Sync and compile tactical specification markdown into an ephemeral horizon overlay",
+     "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
+     "\"Identifier of the target horizon\"},\"file_path\":{\"type\":\"string\",\"description\":"
+     "\"Path of the markdown specification file\"},\"content\":{\"type\":\"string\",\"description\":"
+     "\"Optional markdown text content (reads from file_path on disk if omitted)\"},"
+     "\"project\":{\"type\":\"string\",\"description\":\"Optional repository or project name\"}},"
+     "\"required\":[\"horizon_id\",\"file_path\"]}"},
+
+    {"validate_scope_horizon", "Validate scope adjacency and detect isolated dangling nodes in a horizon overlay",
+     "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
+     "\"Identifier of the horizon to validate\"},\"strict_connectivity\":{\"type\":\"boolean\","
+     "\"description\":\"Whether dangling nodes without edges fail validation (default true)\"}},"
+     "\"required\":[\"horizon_id\"]}"},
 };
 
 static const int TOOL_COUNT = sizeof(TOOLS) / sizeof(TOOLS[0]);
@@ -816,6 +830,8 @@ static const tool_annotation_def_t TOOL_ANNOTATIONS[] = {
     {"ingest_traces", false, false, false, false},
     {"create_horizon", false, false, true, false},
     {"promote_horizon", false, false, false, false},
+    {"sync_horizon_spec", false, false, true, false},
+    {"validate_scope_horizon", true, false, true, false},
 };
 
 static const tool_annotation_def_t *mcp_tool_annotations(const char *name) {
@@ -17363,6 +17379,12 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
             cbm_admission_gate_set_base_db(&srv->admission_gate, (sqlite3 *)cbm_store_get_db(srv->store));
         }
         return handle_promote_horizon(srv, args_json, &srv->horizon_pool, &srv->admission_gate);
+    }
+    if (strcmp(tool_name, "sync_horizon_spec") == 0) {
+        return handle_sync_horizon_spec(srv, args_json, &srv->horizon_pool);
+    }
+    if (strcmp(tool_name, "validate_scope_horizon") == 0) {
+        return handle_validate_scope_horizon(srv, args_json, &srv->horizon_pool);
     }
     char msg[CBM_SZ_256];
     snprintf(msg, sizeof(msg), "unknown tool: %s", tool_name);

@@ -52,7 +52,7 @@ void cbm_horizon_pool_close_all(HorizonConnectionPool *pool);
 int cbm_horizon_pool_invalidate(HorizonConnectionPool *pool, const char *horizon_id);
 
 /* Creates a new isolated horizon database with horizon_schema.sql applied */
-int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const char *custom_id, char *out_id, size_t out_sz);
+int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const char *custom_id, const char *based_on_seq, char *out_id, size_t out_sz);
 
 /* Transparently fetches or reopens an SQLite handle with LRU eviction */
 int cbm_horizon_pool_get(HorizonConnectionPool *pool, const char *horizon_id, sqlite3 **out_db);

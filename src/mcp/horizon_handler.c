@@ -60,15 +60,38 @@ char *handle_create_horizon(cbm_mcp_server_t *srv, const char *args_json, Horizo
         h_id_str = yyjson_get_str(v_id);
     }
 
+    /* 2. Extract client_pid */
     uint32_t pid = 0;
+    yyjson_val *v_pid = yyjson_obj_get(root, "client_pid");
+    if (!v_pid) v_pid = yyjson_obj_get(root, "clientPid");
+    if (v_pid && yyjson_is_int(v_pid)) {
+        pid = (uint32_t)yyjson_get_int(v_pid);
+    } else {
 #ifdef _WIN32
-    pid = (uint32_t)GetCurrentProcessId();
+        pid = (uint32_t)GetCurrentProcessId();
 #else
-    pid = (uint32_t)getpid();
+        pid = (uint32_t)getpid();
 #endif
+    }
+
+    /* 3. Extract based_on_seq */
+    const char *seq_str = "0";
+    char seq_buf[64] = {0};
+    yyjson_val *v_seq = yyjson_obj_get(root, "based_on_seq");
+    if (!v_seq) v_seq = yyjson_obj_get(root, "basedOnSeq");
+    if (v_seq && yyjson_is_str(v_seq)) {
+        seq_str = yyjson_get_str(v_seq);
+    } else {
+        cbm_store_t *store = srv ? cbm_mcp_server_store(srv) : NULL;
+        if (store) {
+            if (cbm_store_generation(store, seq_buf, sizeof(seq_buf)) == CBM_STORE_OK && seq_buf[0] != '\0') {
+                seq_str = seq_buf;
+            }
+        }
+    }
 
     char actual_id[CBM_HORIZON_ID_MAX] = {0};
-    int rc = cbm_create_horizon(pool, pid, h_id_str, actual_id, sizeof(actual_id));
+    int rc = cbm_create_horizon(pool, pid, h_id_str, seq_str, actual_id, sizeof(actual_id));
     if (rc != 0) {
         yyjson_doc_free(doc);
         if (own_pool) cbm_horizon_pool_close_all(&local_pool);
@@ -197,7 +220,7 @@ char *handle_create_horizon(cbm_mcp_server_t *srv, const char *args_json, Horizo
 
     char resp[512];
     snprintf(resp, sizeof(resp),
-             "{\"success\":true,\"horizon_id\":\"%s\",\"status\":\"ACTIVE\",\"nodes_count\":%zu,\"edges_count\":%zu}",
-             actual_id, nodes_count, edges_count);
+             "{\"success\":true,\"horizon_id\":\"%s\",\"status\":\"ACTIVE\",\"client_pid\":%u,\"based_on_seq\":\"%s\",\"nodes_count\":%zu,\"edges_count\":%zu}",
+             actual_id, pid, seq_str, nodes_count, edges_count);
     return cbm_mcp_text_result(resp, false);
 }
