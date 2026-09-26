@@ -3,7 +3,7 @@
 > **Product:** HarnessKit — a harness-engineering framework for AI-assisted software development
 > **Analyst:** C. G. Jung, depth psychologist of the engineering collective
 > **Status:** Living document (like all memory in this system)
-> **Source of truth:** `README.md`, `docs/workflow/`, `skills/*/SKILL.md`, `agents/*.md`
+> **Source of truth:** external — the harness-kit repository (`README.md`, `docs/workflow/`, `skills/*/SKILL.md`, `agents/*.md`). This analysis was authored there and relocated here as historical/conceptual provenance; it is the root of the lineage (PRD → PRD_V1 → PRD_V2 → ADR_V1).
 
 ---
 

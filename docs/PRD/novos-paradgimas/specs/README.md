@@ -44,6 +44,20 @@ New archetypes for harness-kit, per ADR_V1 §3–4. None of these exist as skill
 | [B07](harnesskit-skills/SCOPE-B07-constellation-individuator.md) | `constellation-individuator` (Level 5) | [A/E] | A09, B05 | REVIEW |
 | [B08](harnesskit-skills/SCOPE-B08-level-graduator.md) | `level-graduator` (rebirth / non-regression gate) | [A/E] | B07 | REVIEW |
 
+## Track C — Idealization Plane substrate (`doc-plane/`)
+
+The documentary base graph of ADR_V1 §3.6–3.7 (Emendations I–II): the claim substrate, its anchors, its birth pipeline, and its drift and pulse queries. Previously sketched in conversation as A11–A13; broken here into atomic, testable scopes.
+
+| Scope | Capability | Mark | Deps | Status |
+| --- | --- | --- | --- | --- |
+| [C01](doc-plane/SCOPE-C01-claim-node-anatomy.md) | Claim Node Anatomy (model + distillation validation) | [B/E] | A04 | REVIEW |
+| [C02](doc-plane/SCOPE-C02-anchor-kinds.md) | Anchor Kinds (file-bytes / log-ref / derivation) | [B/E] | A09 | REVIEW |
+| [C03](doc-plane/SCOPE-C03-conversational-birth-sweep.md) | Conversational Birth, Intent Validation & Closure Sweep | [E] | A01, A07, A09, C01, C02 | REVIEW |
+| [C04](doc-plane/SCOPE-C04-structural-extraction-l0.md) | Structural Extraction L0 (markdown → section nodes) | [B/E] | C02 | REVIEW |
+| [C05](doc-plane/SCOPE-C05-referential-resolution-edges.md) | Referential Resolution L1 & Edge Families (REALIZED_BY slot) | [E] | C01, A03 | REVIEW |
+| [C06](doc-plane/SCOPE-C06-prose-drift-ladder.md) | Prose Drift Ladder (lexical / structural / gone; log-immutable) | [E] | C02, C04 | REVIEW |
+| [C07](doc-plane/SCOPE-C07-aging-orphan-queries.md) | Aging & Orphan Queries (the ECG) | [E] | C05 | REVIEW |
+
 ## Review order (suggested)
 
 ```text
@@ -51,6 +65,14 @@ A01 → A02 → A04 ──┐          (substrate: horizon, contract, refusals)
 A03 ──────────────┼→ A05..A10 (gates, ledgers, verdicts, traces)
                   └→ B01..B06 (skills that consume the substrate)
                         B07 → B08  (individuation — admit last, if at all)
+
+C01 → C02 → C04 ──┐
+        C03 ←─────┤           (claim substrate: anatomy, anchors, birth)
+C05 ──────────────┤           (edges + REALIZED_BY slot — after C01)
+C06 ← C04, C02    │
+C07 ← C05         (ECG — last: pulse queries need the slot filled)
 ```
+
+Additional rules for Track C: the doc plane must not be implemented before the judgment machinery it depends on (A07 admission, A08 blindness, A10 contestation) — an Idealization Plane without gates is a cache with ambitions, the exact possession ADR_V1 §5.1 refuses. Conversational birth (C03) must not be approved before A09: a LOG_REF anchor without factual traces is an anchor into narration.
 
 Rules carried over from the PRD line: no scope may implement, review, and validate itself (A08 + B03 separate creation from judgment); every scope's acceptance evidence is host-log-based; exhaustion never promotes (A06); Level-5 scopes (B07/B08) must not be approved while Track A judgment scopes (A07, A08, A10) are unapproved — a system that cannot be corrected must not be allowed to grow (ADR_V1 §5.5).

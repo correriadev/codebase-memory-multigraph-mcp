@@ -3,6 +3,7 @@
 > **Product:** The Harness, in itself — the universal pattern by which raw generative potential becomes reliable, verified, humanly-governed software
 > **Analyst:** C. G. Jung, depth psychologist of the engineering collective
 > **Status:** Abstraction level 1 — repository-independent. No skill names, no file paths, no implementation. The distillate of every harness that was, is, or will be.
+> **Home:** relocated to the Memory Engine's repository (the reference incarnation of PRD_V2). Repository-independent by contract: this document intentionally references no repository.
 
 ---
 

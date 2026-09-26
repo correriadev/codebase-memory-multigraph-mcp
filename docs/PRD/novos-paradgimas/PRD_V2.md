@@ -2,7 +2,8 @@
 
 > **Product:** The Harness, synthesis edition — the universal pattern by which raw generative potential becomes reliable, verified, humanly-governed software **and** by which what was created is remembered as governed, contestable, revocable belief
 > **Analyst:** C. G. Jung, depth psychologist of the engineering collective
-> **Status:** Synthesis level. V1 described the engine of creation in the abstract. V2 incorporates three corrections delivered by a reference incarnation — a system that governs the truth of what was created (an admitted-claim memory with provenance, recall, and a scoped human root). Where V1 and the reference disagree, this document sides with the reference.
+> **Status:** Synthesis level. V1 described the engine of creation in the abstract. V2 incorporates three corrections delivered by a reference incarnation — a system that governs the truth of what was created (an admitted-claim memory with provenance, recall, and a scoped human root). Where V1 and the reference disagree, this document sides with the reference. V2 additionally carries two operator-deliberation additions (FR-19/FR-20, the Self-containment virtue) from the union ADR's claim-substrate emendation.
+> **Reference incarnation:** this repository — the document now lives inside the system that delivered the emendations, which is both its validation ground and its implementation target.
 > **Lineage:** PRD (concrete) → PRD_V1 (abstraction) → **PRD_V2 (synthesis)**
 
 ---
@@ -201,6 +202,8 @@ Each scale owns its **budget ledger** — time, attempts, cost, and effect-class
 | FR-16 | The engine shall record its own sessions factually, refuse conclusions from insufficient evidence, and evolve itself only through at most one targeted, human-approved change at a time. *(V1 FR-7, retained)* |
 | FR-17 | The cycle shall remain interruptible, correctable, and tunable by the human subject at all times, in all states, without exception. *(V1 FR-8, retained)* |
 | FR-18 | The engine shall be scale-invariant, and every iteration shall convert time spent into durable governed memory, such that no discovery already paid for must be paid for again. *(V1 FR-9/10, merged and amended)* |
+| FR-19 | Every admitted memory unit shall be **self-contained**: retrievable and interpretable without the context that produced it. A unit that cannot stand alone is refused at admission — the paragraph stays in the trace; only the distilled sentence enters the graph. *(claim substrate, from operator deliberation on the union ADR)* |
+| FR-20 | Admitted belief shall carry an explicit **realization state**: unrealized intention (admitted with realization pending) and realized form without recorded intention shall both be first-class queryable, and the aging of unrealized intention shall be a governed query — intention debt must be visible before it becomes silent abandonment. *(ECG queries, same provenance as FR-19)* |
 
 ### 7.2 Non-Functional Requirements (The Psychic Virtues, Second Edition)
 
@@ -212,6 +215,7 @@ All V1 virtues retained — **Humility, Provenance, Proportionality, Facticity, 
 - **Blind Judgment** — verdicts are invariant to speaker identity, seniority, and friendliness.
 - **Legible History** — every belief of every moment remains answerable; correction supersedes, never erases.
 - **Typing of Refusal** — every refusal carries a machine-readable reason; a refusal is never rendered as silence or success.
+- **Self-containment** — memory concentrates: every unit must answer for itself in one distilled sentence, or it is not admitted; the reasoning that produced it lives in the trace, never in the node. *(from operator deliberation on the union ADR — the claim substrate)*
 
 ---
 
@@ -224,6 +228,7 @@ The dual engine succeeds when:
 3. Collective memory is a living jurisdiction: anything admitted can be contested with evidence, recalled by calculated cascade, and rehabilitated only by the normal proof path — and "what did we believe when we decided X" is always answerable.
 4. The same cycle governs every scale, storey by storey — with time recorded as a coordinate, not merely spent.
 5. The memory never lies, never floods — and never edits its past.
+6. Intention and realization are mutually traceable: unrealized intention ages visibly, realization without recorded intention is queryable, and every admitted unit stands alone without the conversation that produced it.
 
 In sum: V2 succeeds when the Harness demonstrates, in silicon, the full depth-psychological law — that the path from chaos to creation runs through **naming, sacrifice, shadow-work, and admission**; that even the subject carries a temenos; that truth is not a state of the store but a **governed belief with a timestamp, a provenance, and a path for being wrong**; and that nothing reliable is ever *given* — only *earned through the cycle, and kept through its jurisdiction*.
 

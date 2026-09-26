@@ -1,7 +1,8 @@
 # ADR V1 — The Coniunctio: Skills as Graph-Native Archetypes
 
 > **Decision record for:** the union of the Creation Engine (skills — archetypal functions of governed creation) and the Memory Engine (the graph — jurisdiction of admitted belief)
-> **Status:** PROPOSED — this document is itself a speculative node in an ephemeral horizon. It must be contested, verified, and admitted before it governs anything.
+> **Status:** PROPOSED, emended once — §3.6 (The Two Persistent Planes) added on relocation to the reference repository, after a proposal/contestation cycle whose verdict was APPROVED WITH EMENDATION. The record as a whole remains a speculative node in an ephemeral horizon: it must still be contested, verified, and admitted before it governs anything.
+> **Home:** this record lives in the repository of the Memory Engine (the reference incarnation of PRD V2) — the union's substrate and its first implementation target.
 > **Position:** In accordance with the Axiom of Provenance, every claim below carries an epistemic mark: **[B]** baseline, evidenced in existing implementations; **[E]** evolutionary, plausible but unexecuted; **[A]** open, design unresolved. In accordance with the Axiom of Named Exclusion, §9 declares what this record excludes. This record is written from inside the architecture it describes — the ideation below is itself an instance of Level-5 expansion (§4), and is offered to the same gates it proposes.
 
 ---
@@ -122,6 +123,63 @@ A skill that treats a refusal as a transient error and retries identically is no
 
 Every claim, proposal, authorization, and trace carries `based_on_seq`. Skills reason over the sequence explicitly: staleness is detectable before it is fatal, worst-case contamination is computable, and "what did we hold when this skill last ran" is answerable across the whole union **[B]**. Time remains the only variable — but it is now a *coordinated* variable: one clock for creation and memory, which is what makes the union one psyche rather than two systems.
 
+### 3.6 The Two Persistent Planes (Emendation I — accepted)
+
+*Added after a contestation cycle on this record's relocation to the reference repository. Proposal: split the persistent plane into two base graphs by nature. Verdict: APPROVED WITH EMENDATION — the split and the asymmetric references stand; the emendation below preserves the recall ceiling between the planes. Marks: [B] where evidenced today, [E] where evolutionary.*
+
+The persistent plane differentiates into **two natures** — the same fractal, two phases of the coniunctio:
+
+| | **Realization Plane** (code base graph) | **Idealization Plane** (documentation base graph — new) |
+| --- | --- | --- |
+| Nature | The idea **incarnate**: solidified, verified form | The idea **before and after incarnation**: intention, design, decision |
+| Emitting stations | 4–9 (Sacrifice → Admission) | 1–3, 10 (Conception, Interrogation, Differentiation, Reflexion) |
+| Gate nature | Executable verification + anchor in the real (AST, file, test) | Internal coherence + anchors that resolve + operator validation of intent (intent is never epistemic — Emendation I of PRD V2) |
+| Machinery | horizons, contestation, admission, recall, provenance — the same pipeline at every scale (FR-14) | identical |
+
+**Structural asymmetry.** Documentary claims may reference code claims (typed edges: `ANCHORS`, `REFERENCES`, `REALIZED_BY`); code claims never carry structural edges into documentation. *Prose can be about code; code is never about prose.* The code graph remains self-contained — judged only by the real, never by prose — so a recalled document cannot cascade into the symbol graph through edges, and contested prose cannot contaminate code admission. **[E]**
+
+**The emendation: provenance is not an edge.** The prohibition applies to *structural* edges only. Every code claim carries a **derivation chain in its provenance** — the birth certificate naming the spec, horizon, and session that generated it. Recall cascades over recorded derivation (it is both the input to propagation and the ceiling of recall); without it, a recalled spec cannot reach the code it generated, and "what did we believe when we wrote this" dies for code — the contamination would only change its hiding place. Provenance lives in claim metadata; it is not a graph edge, and the asymmetry of storage is never violated. **[E]**
+
+**Status and realization are different coordinates.** Documentary claims use the same closed status ladder as all claims (proposed / admitted / contested / superseded / revoked). "This document became code" is not a status — it is the typed edge `REALIZED_BY`, a reference held by the idealization plane pointing at what it became. Coordinates never collapse into one scale. **[E]**
+
+**Two creation directions, both through the pipeline.** The Idealization Plane admits content bottom-up (distilled from the code graph — grounded authoring) and top-down (born from operator prose, declared `ungrounded` by choice, never pretending a ground it lacks). Prose → documentation base → code base crosses one boundary at a time; direct prose-to-code promotion is a `HORIZON_SKIP`. **[E]**
+
+**Cross-plane drift.** Documentary anchors targeting code symbols inherit the drift ladder: `structural` suspends, `gone` demotes, `lexical/renamed` does not demote. Without it, the first rename breaks the documentary jurisdiction silently and `ANCHOR_NOT_FOUND` becomes noise. **[E]**
+
+**Storage direction ≠ retrieval direction.** "Which documents speak of this symbol?" remains answerable by indexing documentary edges by their code targets — the asymmetry governs where edges live, never what can be queried. **[E]**
+
+**Expansive consequence.** With a governed Idealization Plane, the union's self-knowledge — its PRDs, ADRs, decisions, and debate records — becomes contestable, recallable, queryable memory: Level 5 gains a second substrate, the Ouroboros feeds on two planes, and the system acquires the memory of *why*, including the governed ability to discover it was wrong about *why*. The document lineage that produced this record is the first tenant of the Idealization Plane. **[E]**
+
+### 3.7 The Claim Substrate (Emendation II — accepted)
+
+*Added after an operator-guided exercise of the conversational claim lifecycle (birth, relations, anatomy). Verdict: the substrate is prose-native by construction — the existing abstractions (symbolic nodes, typed edges, epistemic status, spec parser, FTS) carry no AST dependency. Marks: [B] evidenced today, [E] evolutionary.*
+
+**The atomic unit is the claim.** The documentary plane's node is not a symbol but a proposition: a predicate with epistemic status, an anchor, provenance, and consequence. **[B — symbolic_node's schema is already claim-shaped]**
+
+**Three birth natures, three anchor kinds.** A claim enters the world by one of three doors, and the door determines the anchor's physics:
+
+| Birth | Content | Anchor kind | Drift physics |
+| --- | --- | --- | --- |
+| **A — prose-as-file** (specs, ADRs) | markdown documents | `(file_path, byte_range, expected_text)` — existing two-tier machinery | drifts mechanically; ladder of §3.6 applies |
+| **B — prose-as-conversation** (born in dialogue, no file) | operator decisions, verdicts, open questions | `(session_id, horizon_id, event_seq)` — **the append-only host log IS the filesystem of conversational prose** | **cannot drift** (log is immutable); change is epistemic only (supersession/recall with scar) |
+| **C — prose-as-distillate** (bottom-up: digests, micrographs) | derived from code-graph queries | the generating query (recomputable) | invalidated when the generator's output changes |
+
+The asymmetry is decisive: file-born claims change *mechanically* (drift); conversation-born claims change only *epistemically* (supersession). The log-anchored claim has the most stable ground in the entire union — append-only beats mutable bytes. **[E]**
+
+**Node anatomy — every field earns its place by a future question.** A claim node carries: `predicate` (one self-contained sentence), `type` (DECISION / OPEN_QUESTION / CONSTRAINT / FACT / VERDICT), `status` (closed ladder), `anchor` (per birth nature), `provenance` (origin session, proposed_by, **validated_by** — operator or ∅), `consequence` (what breaks if ignored), `based_on_seq`, and a **typed realization slot** (`REALIZED_BY`, initially ∅). Fields map to retrieval questions: the predicate answers *"what do we believe about X?"*; `validated_by` answers *"operator decision or model assumption?"*; the realization slot answers *"did this ever become real?"* — the two-currency audit. **[E]**
+
+**The distillation rule (one-sentence rule).** The node is the distillate; the paragraph stays in the trace. A predicate that cannot be retrieved without the conversation that produced it ("as discussed above…") is refused — it is noise with provenance, not memory. Refusal code: `PREDICATE_NOT_SELF_CONTAINED` (extends the A04 taxonomy; supersedes, never edits). **[E]**
+
+**Edge families.** A claim relates by three families, only the last requiring code to exist: (1) **birth** — `DERIVES_FROM → log_ref`, always present for conversational claims; (2) **rhetorical** — `SUPPORTS`, `CONTRADICTS`, `REFINES`, `SUPERSEDES`, claim↔claim, zero code; (3) **realization** — `REFERENCES` (talks *about* a symbol) and `REALIZED_BY` (became code), doc→code only, per the §3.6 asymmetry. `REALIZED_BY = ∅` is not a broken dangling state — it is a **typed pending slot** awaiting incarnation. **[E]**
+
+**The ECG queries.** Two first-class queries read the union's pulse: *aging intention* (admitted claims with `REALIZED_BY = ∅` older than N — intention that never happened, visible before it becomes silent abandonment) and *orphan realization* (code without a claim explaining it — realization without recorded intention). Together they expose both halves of unpaid debt. **[E]**
+
+**Claim-capture: two layers.** When does prose enter the substrate? (1) The **capture reflex** — embedded policy in every Track-B skill, governed by the single mechanical test of reuse: *what will influence a decision after the step that created it is memory*; triggered by operator decisions, binding commitments, expensive-to-rediscover findings, and rendered verdicts; never by exploration or dead ends (those become exclusion *counts*). (2) The **closure sweep** — mechanical backstop: at session close, every PROPOSED claim has a mandatory destination (promoted, converted to open question with owner, or discarded with exclusion counts); **closure without sweep is a conformance failure**. The reflex may fail in judgment; the sweep cannot fail by construction. **[E]**
+
+**Intent validation is the operator's; coherence is the gate's.** DECISION and OPEN_QUESTION claims require `validated_by: operator` before promotion — the agent never self-validates intent. FACT and CONSTRAINT claims admit on evidence through the blind gate. Emendation I of PRD_V2, applied to a sentence of chat. **[E]**
+
+**Extraction ladder.** How claims leave prose: **L0 structural** (headings/sections/links — deterministic parser, admits directly; syntax, not semantics); **L1 referential** (symbols/paths cited in predicate text auto-resolve against the code graph into `REFERENCES` edges — deterministic); **L2 semantic** (the agent proposes claims — born PROPOSED in a horizon, subject to the full pipeline; LLM extraction directly into the base graph is possession). The documentary plane's semantic indexer is the agent itself, governed by the same temenos it serves. **[E]**
+
 ---
 
 ## 4. The Spiral of Expanding Consciousness
@@ -181,6 +239,7 @@ The union's specific possessions, each named and terminal by design **[E]**:
 4. **Silent refusals** — a refusal rendered as empty success. The gravest lie available to the union.
 5. **Level skipping** — Level 4 (self-evolution) attempted before Level 3 (contestable belief) is admitted. A system that cannot be corrected must not be allowed to grow; a system that cannot be audited must not be allowed to evolve.
 6. **The unbound Ouroboros** — skill evolution without human-approved promotion, or recall without evidence. The serpent that eats its tail outside the temenos devours the psyche.
+7. **Undistilled capture** — a memory unit that cannot be retrieved without the context that produced it ("as discussed above") is not memory; it is noise with provenance. Refused at validation (`PREDICATE_NOT_SELF_CONTAINED`); and a session that closes without sweeping its PROPOSED claims to their destinations has failed conformance, not saved time.
 
 ---
 
@@ -205,6 +264,10 @@ The union's specific possessions, each named and terminal by design **[E]**:
 
 Per the Axiom of Testimony, this record claims no verification of itself. Its [B] marks point to behaviors evidenced in existing implementations; its [E] marks are proposals; its [A] marks are honestly unresolved. Per the Axiom of the Scoped Subject, its authors hold no epistemic privilege over it: this record is submitted, not spoken. Its admission — like every promotion in the union it describes — requires an adversarial read, a blind verdict, and a human approval that has not yet been given.
 
+Emendation I (§3.6) followed the same discipline: proposed (the two-planes split), contested (against PRD_V1, PRD_V2, and this record), verdict rendered (APPROVED WITH EMENDATION — the provenance/edge distinction), and only then emended — with the verdict recorded here rather than silently absorbed. The emendation does not grant the record admission; it supersedes one section with a scar.
+
+Emendation II (§3.7) followed the same cycle through an operator-guided exercise: the conversational claim was walked through birth, contestation, and promotion in a concrete scenario before the section was admitted; the two-planes verdict (Emendation I) was re-tested against it and held — birth family B's log-anchor is the strongest ground in the union precisely because Emendation I made the audit log append-only by design.
+
 ## 9. Exclusion Summary
 
 In accordance with the Axiom of Named Exclusion, this record declares what it deliberately does not contain:
@@ -218,4 +281,4 @@ In accordance with the Axiom of Named Exclusion, this record declares what it de
 
 ---
 
-*Provenance: PRD (concrete) → PRD_V1 (abstraction) → PRD_V2 (synthesis) → ADR_V1 (ideation, this record). Each derivation crossed one boundary. This record is the first artifact authored under the protocol it proposes: proposed in an ephemeral horizon, dangling by design, awaiting contestation.*
+*Provenance: PRD (concrete) → PRD_V1 (abstraction) → PRD_V2 (synthesis) → ADR_V1 (ideation, this record). Each derivation crossed one boundary. This record is the first artifact authored under the protocol it proposes: proposed in an ephemeral horizon, dangling by design, awaiting contestation. Relocated from the Creation Engine's repository to the Memory Engine's repository — the implementation target — and emended twice there (§3.6 Two Persistent Planes; §3.7 Claim Substrate), each after a proposal/verdict cycle recorded in §8. Per its own §3.6–3.7, this lineage is the first content of the Idealization Plane: born as prose-conversation, anchored to the dialogue that produced it, awaiting realization.*

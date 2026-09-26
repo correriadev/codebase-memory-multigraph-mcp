@@ -30,6 +30,11 @@ static const CbmRefusalDef k_refusal_defs[CBM_REFUSAL_CODE_COUNT] = {
     {CBM_REFUSAL_CONTEST_UNPROVEN, "CONTEST_UNPROVEN", "withdraw or produce evidence; a contest without evidence does not exist"},
     {CBM_REFUSAL_SCOPE_EXCEEDED, "SCOPE_EXCEEDED", "obtain scoped authorization for this context; old consent does not transfer"},
     {CBM_REFUSAL_RETRY_IDENTICAL, "RETRY_IDENTICAL", "halt that line of work; identical re-submission is a discipline violation"},
+    {CBM_REFUSAL_CLAIM_INVALID, "CLAIM_INVALID", "correct the named field; claims must satisfy structural and type constraints"},
+    {CBM_REFUSAL_PREDICATE_NOT_SELF_CONTAINED, "PREDICATE_NOT_SELF_CONTAINED", "rephrase predicate as a self-contained single sentence without deictic references"},
+    {CBM_REFUSAL_SWEEP_INCOMPLETE, "SWEEP_INCOMPLETE", "assign mandatory destinations to all proposed claims before closing session"},
+    {CBM_REFUSAL_CODE_DOC_ASYMMETRY, "CODE_DOC_ASYMMETRY", "edges must be doc-to-code only; code nodes cannot point to documentary nodes"},
+    {CBM_REFUSAL_LOG_REF_IMMUTABLE, "LOG_REF_IMMUTABLE", "log-anchored claims cannot drift; use epistemic supersession or recall instead"},
 };
 
 static const CbmRefusalDef *find_def(CbmRefusalCode code) {
