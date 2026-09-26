@@ -123,11 +123,161 @@ And the healthy relation between an incarnation and its tradition is the same as
 - **No specialist skills are born.** Track B remains mechanics-universal; the specialist (backend, frontend, QA — or prosodist, or gothic designer) is now a *binding plus a theme graph*, not a skill. The skill paradigm the harness-kit docs assumed is superseded by data.
 - The blind gate stays blind: conformance is never an admission criterion; it is a grounding and review concern with a recorded deviation path.
 
-## 9. Consequences for the technical body (proposed — not yet extracted)
+## 9. PBB Breakdown: Product Backlog Building
 
-A fourth spec domain is implied — **Track D (`knowledge-base/`)**: D01 registry graph; D02 binding claims; D03 routing + provenance transparency; D04 cross-territory typed references; D05 theme drift propagation; D06 founding proposals. A04 extends with `PROVENANCE_UNDECLARED`; C03's sweep gains the founding-offer destination; C07 gains orphan-binding queries. Existing [B] substrate: named project indexes and `cross-repo-intelligence` linking. *Extraction awaits the operator's verdict on this document — per the discipline, nothing is implemented before contestation.*
+Applying the PBB (Product Backlog Building) framework to PRD_V3: decomposing the third territory (Tradition) into Personas, Features, and Product Backlog Items (PBIs) with BDD acceptance criteria verifiable exclusively via host logs (Axiom of Testimony).
 
-## 10. Open questions
+### 9.1 Personas
+
+1. **Persona 1: The Operator / Tech Lead (The Sovereign Subject)**
+   - *Nature:* Holds the intentional and normative mandate; sovereign over purpose, standards adoption, and acceptable risk; holds zero epistemic authority to fabricate evidence.
+   - *Needs:* Answer to *"Why was it done this way?"* (citable canon or explicit confession); the ability to bind normative (`DEVE`) or advisory (`PODE`) traditions to a project; explicit recording of costly deviations (`DEVIATES_FROM`); prompt notification of tradition drift; sole authority to accept/decline theme founding proposals.
+2. **Persona 2: The Autonomous Craft Agent (The Craft Worker)**
+   - *Nature:* Operates across generation, refactoring, backlog formulation, and testing. Universal mechanics (Track B) driven by externalized canon (Track D).
+   - *Needs:* Strict activity classification (`CONSULTATIVE` vs `SPECIALTY`); clear two-fork provenance mandate (cite canon or confess invention); structural barrier preventing accidental mutation of shared tradition graphs; automated refusal if attempting silent invention.
+3. **Persona 3: The Institutional Curator (The Guardian of Tradition)**
+   - *Nature:* Manages the collective corpus; maintains the catalog of themes, versions, and namespaces; monitors institutional taste across incarnations.
+   - *Needs:* A dedicated KnowledgeBase registry where theme absence is a queryable state (`ABSENT`), not an error; cross-graph drift detection triggering re-verification notices when canon evolves; queryable visibility into orphan bindings and unreconciled project deviations; receipt of harvestable founding proposals from completed project sessions.
+
+### 9.2 Features (PBB Canvas)
+
+- **Feature F1: KnowledgeBase Registry & Absence Semantics (`FR-21`, `FR-28`)**
+  - Manages the catalog of thematic graphs. Exposes absence as a queryable first-class epistemic state. Maintains fractal scale-invariance where each material theme graph is an independent union tenant.
+- **Feature F2: Binding Claims & Deviation Ledger (`FR-22`, `FR-25`)**
+  - Enables version-pinned binding claims on the Idealization plane (`DEVE` / `PODE`). Prevents agent self-validation. Governs strictness through cost by recording explicit, scarred deviation claims (`DEVIATES_FROM`).
+- **Feature F3: Epistemic Activity Routing & Provenance Enforcement (`FR-23`, `FR-24`)**
+  - Segregates consultative queries from specialty craft production. Enforces the provenance dichotomy: every craft judgment must carry a canon citation or a declared invention flag, rejecting undeclared invention via `PROVENANCE_UNDECLARED`.
+- **Feature F4: Cross-Territory Typed Edges & Non-Write Barrier (`FR-25`)**
+  - Implements unidirectional, typed cross-territory edges (`CONFORMS_TO`, `DEVIATES_FROM`, `CONSULTS`). Enforces a strict non-write barrier protecting theme graphs from project mutations. Elevates collisions to open contestações (`CONTESTATION_OPEN`).
+- **Feature F5: Theme Drift Propagation & Orphan Diagnostics (`FR-26`)**
+  - Emits re-verification notices to bound projects when a theme version advances. Equips the ECG with collective queries for orphan bindings and unreviewed deviations.
+- **Feature F6: Session Closure Sweep & Founding Proposals (`FR-27`)**
+  - Extends session closure sweep (C03) to harvest reusable craft patterns developed under declared invention, formulating founding proposals offered strictly to the operator.
+
+### 9.3 Product Backlog Items (PBIs) & BDD Acceptance Criteria
+
+#### PBI-01: Theme Catalog Registration and Absence Querying (Feature F1 → Spec D01)
+- **User Story:** *As an Institutional Curator, I want to register and query theme entries in a dedicated KnowledgeBase registry graph, so that projects can discover institutional craft standards and query missing themes without runtime failures.*
+- **Scenario 1 (Valid Registration):**
+  - **Given** a valid theme registration payload containing `theme_id`, `namespace`, `curator`, `target_uri`, and `version`,
+  - **When** submitted to the KnowledgeBase registry,
+  - **Then** a theme node is admitted with `status=ACTIVE` and creation timestamp.
+- **Scenario 2 (Querying Unmaterialized Theme):**
+  - **Given** a registered theme entry whose physical graph has not yet been instantiated,
+  - **When** queried by an agent during grounding,
+  - **Then** the registry returns the entry with `status=ABSENT` and zero host exceptions are thrown.
+- **Scenario 3 (Malformed Theme Schema):**
+  - **Given** a theme submission missing required catalog metadata,
+  - **When** evaluated,
+  - **Then** refusal `THEME_SCHEMA_INVALID` is emitted naming the missing attributes.
+
+#### PBI-02: Operator-Validated Theme Binding & Deviation Scars (Feature F2 → Spec D02)
+- **User Story:** *As an Operator, I want to bind my project to an exact version of a craft theme and record explicit deviations with reasons, so that compliance is strictly governed by cost rather than silent divergence.*
+- **Scenario 1 (Operator Normative Binding):**
+  - **Given** an operator command binding `@inst/clean-arch` at version `2.1.0` as `NORMATIVE` (`DEVE`),
+  - **When** processed by the admission pipeline,
+  - **Then** a `type=BINDING` claim is recorded on the Idealization plane with `validated_by=operator` and pinned semver.
+- **Scenario 2 (Agent Self-Binding Prohibited):**
+  - **Given** an agent attempting to create a binding claim with `validated_by=agent`,
+  - **When** validated,
+  - **Then** the admission gate emits refusal `BINDING_SELF_VALIDATED`, blocking the claim.
+- **Scenario 3 (Recording Costly Deviation):**
+  - **Given** an intentional architectural departure from a bound theme rule,
+  - **When** authorized by the operator,
+  - **Then** a `type=DEVIATION` claim is admitted with `theme_rule_node_ref`, `reason`, and `affected_scope`, preserving the scar visibly.
+
+#### PBI-03: Epistemic Activity Routing & Anti-Silent Invention (Feature F3 → Spec D03)
+- **User Story:** *As an Operator, I want specialty judgments to be structurally checked for provenance, so that the agent can never present pretraining statistical bias as unvetted authority.*
+- **Scenario 1 (Consultative Routing):**
+  - **Given** a user query asking "What does service OrderProcessor do?",
+  - **When** evaluated by the classifier,
+  - **Then** it is classified as `CONSULTATIVE`, grounding is restricted to the project planes, and no theme citations are demanded.
+- **Scenario 2 (Specialty Activity with Canon Citation):**
+  - **Given** a task generating a new domain module under a bound theme,
+  - **When** the agent emits code citing `{theme_id: "@inst/clean-arch", node_uri: "rules/aggregate-root"}`,
+  - **Then** the judgment is admitted with epistemic status `CITED_CANON`.
+- **Scenario 3 (Specialty Activity with Declared Invention):**
+  - **Given** a task in an area without governing themes,
+  - **When** the agent provides `declared_invention: true` with rationale,
+  - **Then** the judgment is admitted with epistemic status `DECLARED_INVENTION`.
+- **Scenario 4 (Undeclared Invention Refused):**
+  - **Given** a specialty judgment produced without canon citation and without declared invention,
+  - **When** evaluated,
+  - **Then** refusal `PROVENANCE_UNDECLARED` is emitted and logged.
+
+#### PBI-04: Cross-Territory Edge Typing & Non-Write Barrier (Feature F4 → Spec D04)
+- **User Story:** *As an Institutional Curator, I want theme graphs to be protected by an immutable non-write barrier, so that project incarnations never mutate shared institutional memory.*
+- **Scenario 1 (Strict Edge Typing):**
+  - **Given** an edge created from a project entity to a theme node,
+  - **When** validated,
+  - **Then** the edge type must strictly belong to `{CONFORMS_TO, DEVIATES_FROM, CONSULTS}`.
+- **Scenario 2 (Write Barrier Enforcement):**
+  - **Given** any mutation command targeting a theme graph originating from a project session context,
+  - **When** intercepted by the engine gateway,
+  - **Then** mutation is blocked and refusal `TERRITORY_WRITE_FORBIDDEN` is logged.
+- **Scenario 3 (Conflict Contestation):**
+  - **Given** a direct contradiction between a project claim and a bound theme standard,
+  - **When** identified,
+  - **Then** the agent is prohibited from auto-resolving; event `CONTESTATION_OPEN` (A10) is emitted to the operator.
+
+#### PBI-05: Theme Drift Propagation & Orphan Diagnostics (Feature F5 → Spec D05)
+- **User Story:** *As an Operator, I want to be alerted when a bound theme advances and query orphan bindings, so that architectural drift and deprecated standards are immediately visible.*
+- **Scenario 1 (Drift Notice on Theme Bump):**
+  - **Given** a theme advancing from version `1.0.0` to `2.0.0` in the registry,
+  - **When** published,
+  - **Then** all incarnations carrying a normative binding receive a `THEME_DRIFT_NOTICE`, marking the binding `DRIFT_PENDING`.
+- **Scenario 2 (Orphan Binding ECG Query):**
+  - **Given** a project bound to a theme subsequently marked `ABSENT` or `DEPRECATED`,
+  - **When** ECG query `query_orphan_bindings` is run,
+  - **Then** the binding is returned as an orphan binding with its risk status and target provenance.
+
+#### PBI-06: Closure Sweep Founding Proposals (Feature F6 → Spec D06)
+- **User Story:** *As an Operator, I want high-value patterns crafted during sessions to be offered as theme founding proposals at closure, so that team craft can crystallize into institutional memory without uncontrolled auto-founding.*
+- **Scenario 1 (Harvesting Founding Seed):**
+  - **Given** a session containing validated `declared_invention` patterns,
+  - **When** the closure sweep runs,
+  - **Then** a `FOUNDING_PROPOSAL` is presented to the operator containing suggested namespace, rationale, and seed rules.
+- **Scenario 2 (Operator Accepts Proposal):**
+  - **Given** a `FOUNDING_PROPOSAL`,
+  - **When** accepted by the operator,
+  - **Then** a new theme entry is admitted to the KnowledgeBase registry with `status=DRAFT` and origin session provenance.
+- **Scenario 3 (Operator Declines Proposal):**
+  - **Given** a `FOUNDING_PROPOSAL`,
+  - **When** declined by the operator,
+  - **Then** the seed is discarded with a typed exclusion counter (`FOUNDING_PROPOSAL_DECLINED`) in the closure record.
+- **Scenario 4 (Autonomous Founding Prohibited):**
+  - **Given** an agent attempting to create a theme graph without operator validation,
+  - **When** intercepted,
+  - **Then** refusal `AUTO_FOUNDING_FORBIDDEN` is emitted.
+
+---
+
+## 10. Extracted Technical Specifications: Track D (`knowledge-base/`)
+
+Extracted and formalized into atomic specification files under `specs/knowledge-base/`:
+
+| Spec ID | Name | Domain | Deps | Key Artifacts & Refusals |
+| --- | --- | --- | --- | --- |
+| [D01](specs/knowledge-base/SCOPE-D01-registry-graph.md) | KnowledgeBase Registry Graph & Absence Querying | Catalog tenancy | A01, A04 | Node model, `status=ABSENT`, `THEME_SCHEMA_INVALID`, `THEME_UNKNOWN` |
+| [D02](specs/knowledge-base/SCOPE-D02-binding-claims.md) | Binding Claims (DEVE/PODE) & Deviation Ledger | Intent governance | C01, C03, D01 | `type=BINDING`, `type=DEVIATION`, `BINDING_SELF_VALIDATED`, scar queries |
+| [D03](specs/knowledge-base/SCOPE-D03-routing-provenance-transparency.md) | Epistemic Routing & Provenance Transparency | Provenance enforcement | A03, A04, D02 | `ActivityClass`, two-fork provenance, `PROVENANCE_UNDECLARED` refusal |
+| [D04](specs/knowledge-base/SCOPE-D04-cross-territory-typed-references.md) | Cross-Territory Typed Edges & Non-Write Barrier | Cross-graph boundary | C05, D01, D02 | `CONFORMS_TO`, `DEVIATES_FROM`, `CONSULTS`, `TERRITORY_WRITE_FORBIDDEN` |
+| [D05](specs/knowledge-base/SCOPE-D05-theme-drift-propagation.md) | Theme Drift Propagation & Orphan Binding ECG Queries | Drift & ECG health | C06, C07, D01, D02 | `THEME_DRIFT_NOTICE`, `query_orphan_bindings`, `query_unreconciled_deviations` |
+| [D06](specs/knowledge-base/SCOPE-D06-founding-proposals.md) | Closure Sweep Founding Proposals | Harvest & founding | C03, D01, D03 | `FOUNDING_PROPOSAL` destination, `AUTO_FOUNDING_FORBIDDEN` refusal |
+
+### 10.1 Refusal Taxonomy Extensions (Accretes A04)
+
+Track D introduces six typed refusals to the closed taxonomy:
+1. `PROVENANCE_UNDECLARED`: Specialty judgment carries neither canon citation nor declared invention flag.
+2. `BINDING_SELF_VALIDATED`: Agent attempted to self-validate a normative or consulted theme binding.
+3. `TERRITORY_WRITE_FORBIDDEN`: Project session attempted graph mutation inside an external theme graph.
+4. `AUTO_FOUNDING_FORBIDDEN`: Agent attempted to instantiate a new theme graph without operator validation.
+5. `THEME_SCHEMA_INVALID`: Theme catalog submission missing mandatory fields (`theme_id`, `namespace`, `curator`, `version`).
+6. `THEME_UNKNOWN`: Queried namespace or theme identifier does not exist in registry.
+
+---
+
+## 11. Open questions
 
 1. **Theme admission** — who admits a theme into the registry? Proposal: a founding is an operator-validated claim (C03 rule); institutional namespaces may add a collegial gate later, found by need.
 2. **Namespacing** — personal / institutional / public scopes for themes; collision policy between same-named themes.
@@ -137,4 +287,4 @@ A fourth spec domain is implied — **Track D (`knowledge-base/`)**: D01 registr
 
 ---
 
-*Provenance: PRD (concrete) → PRD_V1 (abstraction) → PRD_V2 (synthesis) → ADR_V1 (ideation, emended twice: §3.6 Two Persistent Planes; §3.7 Claim Substrate) → **PRD_V3 (extension: the third territory)**. Each derivation crossed one boundary. V3 was proposed by the operator as a problem statement — the recognition that the two planes answer WHAT and WHY but never HOW, and that the HOW was silently governed by the agent's training — and rendered into the lineage's discipline by the agent. Per its own subject, this document's specialty judgments carry declared provenance: the Jungian frame of §6 is declared invention (no bound theme); the substrate claims of §2 cite the reference incarnation's existing machinery [B]. Born as prose-conversation, anchored to the dialogue that produced it, PROPOSED — awaiting contestation.*
+*Provenance: PRD (concrete) → PRD_V1 (abstraction) → PRD_V2 (synthesis) → ADR_V1 (ideation, emended twice: §3.6 Two Persistent Planes; §3.7 Claim Substrate) → **PRD_V3 (extension: the third territory)** → **PBB Extraction (Track D Scopes D01–D06)**. Each derivation crossed one boundary. V3 was proposed by the operator as a problem statement — the recognition that the two planes answer WHAT and WHY but never HOW, and that the HOW was silently governed by the agent's training — and rendered into the lineage's discipline by the agent. Per its own subject, this document's specialty judgments carry declared provenance: the Jungian frame of §6 is declared invention (no bound theme); the substrate claims of §2 cite the reference incarnation's existing machinery [B]. Formalized via PBB analysis into engineering specifications D01–D06, awaiting final operator review.*

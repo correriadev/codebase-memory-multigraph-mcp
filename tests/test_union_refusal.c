@@ -157,6 +157,16 @@ TEST(test_fingerprint_part_separation) {
     PASS();
 }
 
+TEST(test_track_d_refusal_codes_exist) {
+    ASSERT_STR_EQ(cbm_refusal_code_string(CBM_REFUSAL_PROVENANCE_UNDECLARED), "PROVENANCE_UNDECLARED");
+    ASSERT_STR_EQ(cbm_refusal_code_string(CBM_REFUSAL_BINDING_SELF_VALIDATED), "BINDING_SELF_VALIDATED");
+    ASSERT_STR_EQ(cbm_refusal_code_string(CBM_REFUSAL_TERRITORY_WRITE_FORBIDDEN), "TERRITORY_WRITE_FORBIDDEN");
+    ASSERT_STR_EQ(cbm_refusal_code_string(CBM_REFUSAL_AUTO_FOUNDING_FORBIDDEN), "AUTO_FOUNDING_FORBIDDEN");
+    ASSERT_STR_EQ(cbm_refusal_code_string(CBM_REFUSAL_THEME_SCHEMA_INVALID), "THEME_SCHEMA_INVALID");
+    ASSERT_STR_EQ(cbm_refusal_code_string(CBM_REFUSAL_THEME_UNKNOWN), "THEME_UNKNOWN");
+    PASS();
+}
+
 SUITE(union_refusal) {
     RUN_TEST(test_refusal_code_roundtrip);
     RUN_TEST(test_refusal_unknown_string_not_a_code);
@@ -167,4 +177,6 @@ SUITE(union_refusal) {
     RUN_TEST(test_retry_different_code_ok);
     RUN_TEST(test_ledger_capacity_bounded);
     RUN_TEST(test_fingerprint_part_separation);
+    RUN_TEST(test_track_d_refusal_codes_exist);
 }
+

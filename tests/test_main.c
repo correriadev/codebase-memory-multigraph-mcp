@@ -905,6 +905,12 @@ extern void suite_union_doc_l0(void);
 extern void suite_union_doc_edges(void);
 extern void suite_union_drift(void);
 extern void suite_union_ecg(void);
+extern void suite_union_theme_registry(void);
+extern void suite_union_binding(void);
+extern void suite_union_routing(void);
+extern void suite_union_cross_territory(void);
+extern void suite_union_theme_drift(void);
+extern void suite_union_founding(void);
 
 /* Free the main thread's thread-local node-type bitset cache before exit so
  * LeakSanitizer (Linux x64) doesn't report it. Worker threads free their own
@@ -1076,6 +1082,12 @@ int main(int argc, char **argv) {
     RUN_SELECTED_SUITE(union_doc_edges);
     RUN_SELECTED_SUITE(union_drift);
     RUN_SELECTED_SUITE(union_ecg);
+    RUN_SELECTED_SUITE(union_theme_registry);
+    RUN_SELECTED_SUITE(union_binding);
+    RUN_SELECTED_SUITE(union_routing);
+    RUN_SELECTED_SUITE(union_cross_territory);
+    RUN_SELECTED_SUITE(union_theme_drift);
+    RUN_SELECTED_SUITE(union_founding);
 
     /* Shared MCP daemon coordination + private framing */
     RUN_SELECTED_SUITE(daemon);

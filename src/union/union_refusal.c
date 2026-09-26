@@ -35,6 +35,12 @@ static const CbmRefusalDef k_refusal_defs[CBM_REFUSAL_CODE_COUNT] = {
     {CBM_REFUSAL_SWEEP_INCOMPLETE, "SWEEP_INCOMPLETE", "assign mandatory destinations to all proposed claims before closing session"},
     {CBM_REFUSAL_CODE_DOC_ASYMMETRY, "CODE_DOC_ASYMMETRY", "edges must be doc-to-code only; code nodes cannot point to documentary nodes"},
     {CBM_REFUSAL_LOG_REF_IMMUTABLE, "LOG_REF_IMMUTABLE", "log-anchored claims cannot drift; use epistemic supersession or recall instead"},
+    {CBM_REFUSAL_PROVENANCE_UNDECLARED, "PROVENANCE_UNDECLARED", "cite governing theme node or explicitly declare invention with rationale; silent invention is refused"},
+    {CBM_REFUSAL_BINDING_SELF_VALIDATED, "BINDING_SELF_VALIDATED", "theme bindings are sovereign to the operator; obtain operator validation before admission"},
+    {CBM_REFUSAL_TERRITORY_WRITE_FORBIDDEN, "TERRITORY_WRITE_FORBIDDEN", "thematic graphs are read-only to project sessions; mutate via curator proposal or external flow"},
+    {CBM_REFUSAL_AUTO_FOUNDING_FORBIDDEN, "AUTO_FOUNDING_FORBIDDEN", "autonomous founding of theme graphs is forbidden; offer proposal to operator at closure sweep"},
+    {CBM_REFUSAL_THEME_SCHEMA_INVALID, "THEME_SCHEMA_INVALID", "correct the theme schema fields; theme_id, namespace, curator, and version are mandatory"},
+    {CBM_REFUSAL_THEME_UNKNOWN, "THEME_UNKNOWN", "theme identifier or namespace does not exist in registry; verify or register theme"},
 };
 
 static const CbmRefusalDef *find_def(CbmRefusalCode code) {

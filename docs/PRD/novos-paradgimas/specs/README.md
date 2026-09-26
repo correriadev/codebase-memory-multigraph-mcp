@@ -58,6 +58,19 @@ The documentary base graph of ADR_V1 §3.6–3.7 (Emendations I–II): the claim
 | [C06](doc-plane/SCOPE-C06-prose-drift-ladder.md) | Prose Drift Ladder (lexical / structural / gone; log-immutable) | [E] | C02, C04 | REVIEW |
 | [C07](doc-plane/SCOPE-C07-aging-orphan-queries.md) | Aging & Orphan Queries (the ECG) | [E] | C05 | REVIEW |
 
+## Track D — Thematic Knowledge Bases (`knowledge-base/`)
+
+The third territory (Tradition) of PRD_V3: external craft themes, indirect binding claims, epistemic routing, non-write barriers, cross-graph drift propagation, and closure founding proposals.
+
+| Scope | Capability | Mark | Deps | Status |
+| --- | --- | --- | --- | --- |
+| [D01](knowledge-base/SCOPE-D01-registry-graph.md) | KnowledgeBase Registry Graph & Absence Querying | [E] | A01, A04 | REVIEW |
+| [D02](knowledge-base/SCOPE-D02-binding-claims.md) | Binding Claims (DEVE/PODE) & Deviation Ledger | [E] | C01, C03, D01 | REVIEW |
+| [D03](knowledge-base/SCOPE-D03-routing-provenance-transparency.md) | Epistemic Routing & Provenance Transparency | [E] | A03, A04, D02 | REVIEW |
+| [D04](knowledge-base/SCOPE-D04-cross-territory-typed-references.md) | Cross-Territory Typed Edges & Non-Write Barrier | [E] | C05, D01, D02 | REVIEW |
+| [D05](knowledge-base/SCOPE-D05-theme-drift-propagation.md) | Theme Drift Propagation & Orphan Binding ECG Queries | [E] | C06, C07, D01, D02 | REVIEW |
+| [D06](knowledge-base/SCOPE-D06-founding-proposals.md) | Closure Sweep Founding Proposals | [E] | C03, D01, D03 | REVIEW |
+
 ## Review order (suggested)
 
 ```text
@@ -71,8 +84,17 @@ C01 → C02 → C04 ──┐
 C05 ──────────────┤           (edges + REALIZED_BY slot — after C01)
 C06 ← C04, C02    │
 C07 ← C05         (ECG — last: pulse queries need the slot filled)
+
+D01 (registry) ──────┐
+D02 (bindings) ←─────┼─ C01, C03
+D03 (routing/prov) ←─┼─ A03, A04, D02
+D04 (typed edges) ←──┼─ C05, D02
+D05 (drift/orphan) ←─┼─ C06, C07, D02
+D06 (founding seed) ←┘─ C03, D03
 ```
 
 Additional rules for Track C: the doc plane must not be implemented before the judgment machinery it depends on (A07 admission, A08 blindness, A10 contestation) — an Idealization Plane without gates is a cache with ambitions, the exact possession ADR_V1 §5.1 refuses. Conversational birth (C03) must not be approved before A09: a LOG_REF anchor without factual traces is an anchor into narration.
+
+Additional rules for Track D: Thematic Knowledge Bases (Tradition) must never receive direct writes from a project session (D04); binding claims must be operator-validated (D02); specialty judgments must never be silent (`PROVENANCE_UNDECLARED` refusal in D03); and founding proposals can only be offered to the operator, never auto-founded (D06).
 
 Rules carried over from the PRD line: no scope may implement, review, and validate itself (A08 + B03 separate creation from judgment); every scope's acceptance evidence is host-log-based; exhaustion never promotes (A06); Level-5 scopes (B07/B08) must not be approved while Track A judgment scopes (A07, A08, A10) are unapproved — a system that cannot be corrected must not be allowed to grow (ADR_V1 §5.5).

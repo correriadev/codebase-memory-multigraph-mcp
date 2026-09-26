@@ -362,7 +362,13 @@ UNION_SRCS = \
     src/union/union_doc_l0.c \
     src/union/union_doc_edges.c \
     src/union/union_drift.c \
-    src/union/union_ecg.c
+    src/union/union_ecg.c \
+    src/union/union_theme_registry.c \
+    src/union/union_binding.c \
+    src/union/union_routing.c \
+    src/union/union_cross_territory.c \
+    src/union/union_theme_drift.c \
+    src/union/union_founding.c
 
 # Shared MCP daemon coordination and local transport
 DAEMON_SRCS = \
@@ -630,7 +636,13 @@ TEST_UNION_SRCS = \
     tests/test_union_doc_l0.c \
     tests/test_union_doc_edges.c \
     tests/test_union_drift.c \
-    tests/test_union_ecg.c
+    tests/test_union_ecg.c \
+    tests/test_union_theme_registry.c \
+    tests/test_union_binding.c \
+    tests/test_union_routing.c \
+    tests/test_union_cross_territory.c \
+    tests/test_union_theme_drift.c \
+    tests/test_union_founding.c
 
 TEST_DAEMON_SRCS = \
     tests/test_daemon.c \
