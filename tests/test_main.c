@@ -889,6 +889,15 @@ extern void suite_dump_verify(void);
 extern void suite_dump_verify_io(void);
 extern void suite_horizon_spec_parser(void);
 extern void suite_scope_validator(void);
+extern void suite_union_refusal(void);
+extern void suite_union_contract(void);
+extern void suite_union_session(void);
+extern void suite_union_gateway(void);
+extern void suite_union_ledger(void);
+extern void suite_union_promotion(void);
+extern void suite_union_contest(void);
+extern void suite_union_trace(void);
+extern void suite_union_grounding(void);
 
 /* Free the main thread's thread-local node-type bitset cache before exit so
  * LeakSanitizer (Linux x64) doesn't report it. Worker threads free their own
@@ -1044,6 +1053,15 @@ int main(int argc, char **argv) {
     RUN_SELECTED_SUITE(index_supervisor);
     RUN_SELECTED_SUITE(horizon_spec_parser);
     RUN_SELECTED_SUITE(scope_validator);
+    RUN_SELECTED_SUITE(union_refusal);
+    RUN_SELECTED_SUITE(union_contract);
+    RUN_SELECTED_SUITE(union_session);
+    RUN_SELECTED_SUITE(union_gateway);
+    RUN_SELECTED_SUITE(union_ledger);
+    RUN_SELECTED_SUITE(union_promotion);
+    RUN_SELECTED_SUITE(union_contest);
+    RUN_SELECTED_SUITE(union_trace);
+    RUN_SELECTED_SUITE(union_grounding);
 
     /* Shared MCP daemon coordination + private framing */
     RUN_SELECTED_SUITE(daemon);
