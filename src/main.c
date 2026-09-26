@@ -1191,7 +1191,8 @@ static int handle_subcommand(int argc, char **argv, cbm_project_lock_manager_t *
         }
     }
     for (int i = SKIP_ONE; i < argc; i++) {
-        if (strcmp(argv[i], "--version") == 0) {
+        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0 ||
+            strcmp(argv[i], "-V") == 0 || strcmp(argv[i], "version") == 0) {
             printf("codebase-memory-mcp %s\n", CBM_VERSION);
             return 0;
         }

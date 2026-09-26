@@ -288,11 +288,17 @@ TEST(daemon_bootstrap_classifies_default_and_ui_as_mcp_clients) {
 
 TEST(daemon_bootstrap_classifies_stateless_commands_without_client) {
     char *version[] = {"codebase-memory-mcp", "--version", NULL};
+    char *version_short[] = {"codebase-memory-mcp", "-v", NULL};
+    char *version_caps[] = {"codebase-memory-mcp", "-V", NULL};
+    char *version_subcmd[] = {"codebase-memory-mcp", "version", NULL};
     char *help[] = {"codebase-memory-mcp", "--profile", "--help", NULL};
     char *install[] = {"codebase-memory-mcp", "install", "--dry-run", NULL};
     char *uninstall[] = {"codebase-memory-mcp", "uninstall", NULL};
     char *update[] = {"codebase-memory-mcp", "update", "-n", NULL};
     ASSERT_EQ(classify(2, version), CBM_DAEMON_PROCESS_STATELESS);
+    ASSERT_EQ(classify(2, version_short), CBM_DAEMON_PROCESS_STATELESS);
+    ASSERT_EQ(classify(2, version_caps), CBM_DAEMON_PROCESS_STATELESS);
+    ASSERT_EQ(classify(2, version_subcmd), CBM_DAEMON_PROCESS_STATELESS);
     ASSERT_EQ(classify(3, help), CBM_DAEMON_PROCESS_STATELESS);
     ASSERT_EQ(classify(3, install), CBM_DAEMON_PROCESS_STATELESS);
     ASSERT_EQ(classify(2, uninstall), CBM_DAEMON_PROCESS_STATELESS);

@@ -190,8 +190,9 @@ cbm_daemon_process_role_t cbm_daemon_process_role(int argc, char *const argv[]) 
             return bootstrap_has_help_after(argc, argv, arg + 1) ? CBM_DAEMON_PROCESS_STATELESS
                                                                  : CBM_DAEMON_PROCESS_DAEMON_CTL;
         }
-        if (bootstrap_arg_is(argv[arg], "--version") || bootstrap_arg_is(argv[arg], "--help") ||
-            bootstrap_arg_is(argv[arg], "-h")) {
+        if (bootstrap_arg_is(argv[arg], "--version") || bootstrap_arg_is(argv[arg], "-v") ||
+            bootstrap_arg_is(argv[arg], "-V") || bootstrap_arg_is(argv[arg], "version") ||
+            bootstrap_arg_is(argv[arg], "--help") || bootstrap_arg_is(argv[arg], "-h")) {
             return CBM_DAEMON_PROCESS_STATELESS;
         }
         for (size_t command = 0;
