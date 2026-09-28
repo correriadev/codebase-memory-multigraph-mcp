@@ -120,5 +120,22 @@ char *handle_search_graph(cbm_mcp_server_t *srv, const char *args);
 char *handle_query_graph(cbm_mcp_server_t *srv, const char *args);
 char *handle_trace_call_path(cbm_mcp_server_t *srv, const char *args);
 
+/* Track W: Union Workflow accessors */
+#include "../union/union_session.h"
+#include "../union/union_contract.h"
+#include "../union/union_gateway.h"
+#include "../union/union_theme_registry.h"
+#include "../union/union_binding.h"
+#include "../union/union_contest.h"
+
+CbmSessionRegistry *cbm_mcp_server_sessions(cbm_mcp_server_t *srv);
+CbmContractRegistry *cbm_mcp_server_contracts(cbm_mcp_server_t *srv);
+CbmGateway *cbm_mcp_server_gateway(cbm_mcp_server_t *srv);
+CbmThemeRegistry *cbm_mcp_server_theme_registry(cbm_mcp_server_t *srv);
+CbmBindingLedger *cbm_mcp_server_binding_ledger(cbm_mcp_server_t *srv);
+CbmContestRegistry *cbm_mcp_server_contest_registry(cbm_mcp_server_t *srv);
+HorizonConnectionPool *cbm_mcp_server_horizon_pool(cbm_mcp_server_t *srv);
+
 #endif
+
 

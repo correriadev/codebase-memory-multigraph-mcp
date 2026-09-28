@@ -3,16 +3,16 @@ doc_type: adr
 domain: testing
 stack: [C, Python, pytest, ASan, UBSan]
 node_id: "adr:tests"
-tags: [testing, unit-tests, e2e-tests, coverage]
+tags: [testing, unit-tests, e2e-tests, coverage, union-workflows]
 edges:
   - relation: references
     target: "adr:architecture"
-updated: 2026-09-20
+updated: 2026-09-27
 ---
 # Testing Protocol
 
 ## OVERVIEW
-Multi-tier test protocol combining pure C unit tests under Address and Undefined Behavior Sanitizers, mock-driven daemon isolation suites, and end-to-end Python regression testing over real MCP stdio channels.
+Multi-tier test protocol combining pure C unit tests under Address and Undefined Behavior Sanitizers, mock-driven daemon isolation suites, Union workflow integration tests, and end-to-end Python regression testing over real MCP stdio channels.
 
 ## COMMANDS
 | Type | Command | Description |
@@ -20,10 +20,11 @@ Multi-tier test protocol combining pure C unit tests under Address and Undefined
 | Foundation Unit | `make -f Makefile.cbm test-foundation` | Executes foundational C unit tests with ASan and UBSan |
 | Federation Unit | `make -f Makefile.cbm test` | Builds and runs all C test suites including federation and admission |
 | Thread Sanitizer | `make -f Makefile.cbm test-tsan` | Runs C test suite under ThreadSanitizer (TSan) for race detection |
+| Union Workflow | `make -f Makefile.cbm test-union-workflow` | Builds and executes the complete Union workflow E2E test suite |
+| Focused Suite | `./build/test-runner <suite>` | Runs targeted C test suite (e.g. `union_gateway`, `union_session`) |
 | Federation Python | `python -m unittest tests/test_multi_graph_federation.py` | Runs Python multi-graph federation unit and regression tests |
 | Full E2E Suite | `python3 tests/e2e/run_e2e.py` | Runs complete 12-scenario black-box MCP stdio JSON-RPC E2E suite |
 | Refactoring Admission | `python3 -m unittest tests.e2e.test_refactoring_admission` | Validates Two-Tier anchor checks, paths, and Base Graph consolidation |
-| Standalone C | `./build/test_kway_merge` | Runs standalone compiled C test binary with verbose output |
 
 ## MINIMUM COVERAGE
 REQUIRED: Maintain the following minimum coverage levels:
@@ -34,21 +35,24 @@ REQUIRED: Maintain the following minimum coverage levels:
 | Horizon Pool & Reaper | 85% | LRU cache eviction, handle exhaustion bounds, and orphan file reaping |
 | Query & K-Way Merge | 85% | Streaming heap ordering, shadowing, and LIMIT/SKIP pagination |
 | Admission & Recall | 90% | Two-tier anchor verification, promotion gate, and acyclic BFS recall |
+| Union Sessions & Contracts | 90% | Session lifecycles, contract verification, and restricted mode gates |
+| Gateways & Contestation | 85% | Effect classification, refusal taxonomy, and caller-blind verification |
+| Thematic KB & Doc Plane | 85% | Theme registries, binding claims, founding proposals, and drift checks |
 | Global Project Average | 80% | Across all production C modules and MCP handlers |
 
 ## PATTERNS & BEST PRACTICES
 REQUIRED: Execute all C unit test suites with AddressSanitizer (`-fsanitize=address`) and UndefinedBehaviorSanitizer (`-fsanitize=undefined`) enabled.
-REQUIRED: Execute E2E integration tests against the real compiled binary (`codebase-memory-mcp`) communicating over stdio pipes, avoiding mock algorithms.
-REQUIRED: Generate real TypeScript specimen structures (`HarnessKitSpecimen`) to validate AST two-tier anchor verification and drift rejection.
+REQUIRED: Execute E2E integration tests against real compiled binaries communicating over stdio pipes, avoiding mock algorithms.
+REQUIRED: Validate restricted mode behavior when opening union sessions without registered contracts.
+REQUIRED: Ensure blocking contestations prevent horizon promotion in all admission test fixtures.
 REQUIRED: Clean up all temporary SQLite horizon databases and WAL files in test fixture teardown functions.
-REQUIRED: Use isolated temporary directories for horizon databases to avoid cross-test pollution.
 FORBIDDEN: Hardcoding live host PIDs or executing unbounded sleeps in reaper daemon tests.
 FORBIDDEN: Suppressing sanitizer errors or ignoring memory leaks in C test suites.
 
 ## TOOLING
-- **Framework:** C11 custom test harness runner (via `Makefile.cbm`) and unittest / pytest for Python E2E integration tests.
+- **Framework:** C11 custom test harness runner (via `Makefile.cbm`), `test-runner` for sharded suites, and unittest / pytest for Python E2E integration tests.
 - **Assertions:** Native C assertion macros with formatted failure diagnostics and standard Python assertions.
-- **Specimens:** Concrete TypeScript and source specimens modeled after `harness-kit` to test AST mutation resilience.
+- **Specimens:** Concrete TypeScript specimens modeled after `harness-kit` to test AST mutation resilience.
 - **Sanitizers:** LLVM / GCC AddressSanitizer (ASan), UndefinedBehaviorSanitizer (UBSan), and ThreadSanitizer (TSan).
 - **Subprocess Driver:** `MCPProcessSession` managing stdio pipes, non-blocking asynchronous reader threads, and forceful termination.
 

@@ -343,7 +343,8 @@ FEDERATION_SRCS = \
     src/mcp/handlers.c \
     src/mcp/promote_handler.c \
     src/mcp/horizon_handler.c \
-    src/mcp/horizon_sync_handler.c
+    src/mcp/horizon_sync_handler.c \
+    src/mcp/union_handler.c
 
 # Union module (Track A: Scopes A01, A02, A04, A05, A06, A07, A08, A09, A10)
 UNION_SRCS = \
@@ -642,7 +643,8 @@ TEST_UNION_SRCS = \
     tests/test_union_routing.c \
     tests/test_union_cross_territory.c \
     tests/test_union_theme_drift.c \
-    tests/test_union_founding.c
+    tests/test_union_founding.c \
+    tests/test_union_workflow_e2e.c
 
 TEST_DAEMON_SRCS = \
     tests/test_daemon.c \
@@ -836,7 +838,7 @@ PP_OBJ_TSAN = $(BUILD_DIR)/tsan_preprocessor.o
 
 # ── Targets ──────────────────────────────────────────────────────
 
-.PHONY: test test-e2e test-par test-repro test-foundation test-tsan test-daemon-smoke cbm cbm-with-ui frontend embed clean-c lint lint-tidy lint-tidy-diff lint-cppcheck lint-format security
+.PHONY: test test-e2e test-par test-repro test-foundation test-tsan test-daemon-smoke test-union-workflow cbm cbm-with-ui frontend embed clean-c lint lint-tidy lint-tidy-diff lint-cppcheck lint-format security
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -1002,6 +1004,9 @@ test-focused: $(BUILD_DIR)/test-runner
 	@test -n "$(strip $(TEST_SUITES))" || \
 		(echo "TEST_SUITES is required for test-focused"; exit 2)
 	cd $(CURDIR) && $(BUILD_DIR)/test-runner $(TEST_SUITES)
+
+test-union-workflow: $(BUILD_DIR)/test-runner
+	cd $(CURDIR) && $(BUILD_DIR)/test-runner union_workflow_e2e
 
 # ── Cumulative bug-reproduction runner (RED board by design, non-gating) ──
 # Mirrors test-runner's link line but uses repro_main.c (own main + counters)

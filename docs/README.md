@@ -12,6 +12,7 @@ Index of project technical documentation for **codebase-memory-mcp**. Use the li
 | [**TESTS.md**](./adr/TESTS.md) | Testing strategies, test suites, minimum coverage, and execution commands. | **Mandatory** |
 | [**multi_graph_federation.md**](./feature/multi_graph_federation.md) | Ephemeral cognitive horizons, streaming K-way merge, and admission gate federation. | Optional |
 | [**multi_graph_federation_e2e.md**](./feature/multi_graph_federation_e2e.md) | Black-box MCP stdio JSON-RPC E2E test suite covering isolation, two-tier anchors, and recovery. | Optional |
+| [**union_workflow.md**](./feature/union_workflow.md) | Cognitive session horizons, effect-class gateways, craft theme bindings, and contestation. | Optional |
 
 ## Recommended Reading Order
 

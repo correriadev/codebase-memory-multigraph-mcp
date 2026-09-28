@@ -1,12 +1,12 @@
 # SCOPE B08 — `level-graduator` (rebirth / non-regression gate)
 
 > **Track:** B — New harness-kit skills · **Station:** cross-cutting (the temenos of the spiral)
-> **Status:** REVIEW · **Mark:** [A/E] · **Deps:** B07 · **Codes in:** harness-kit (not in this implementation cycle)
-> **Provenance:** ADR_V1 §4 (level transition as promotion); PRD_V2 Emendation III (recall, scar); ADR_V1 §4 ("no rebirth without a corpse; no corpse without a record")
+> **Status:** REVIEW · **Mark:** [A/E] · **Deps:** B07, D05 · **Codes in:** harness-kit (not in this implementation cycle)
+> **Provenance:** ADR_V1 §4 (level transition as promotion); PRD_V2 Emendation III (recall, scar); ADR_V1 §4 ("no rebirth without a corpse; no corpse without a record"); PRD_V3 §4 (Separation of procedural graduation from theme drift)
 
 ## Problem
 
-Level transitions and skill admissions are promotions, not feature flags. The previous mode must be recalled (marked stale, scarred, kept legible) before the new mode is admitted, and a non-regression gate must prove the old mode's valid outputs remain reachable in the new mode. Without this gate, the spiral becomes inflation.
+Level transitions and skill admissions are promotions, not feature flags. The previous mode must be recalled (marked stale, scarred, kept legible) before the new mode is admitted, and a non-regression gate must prove the old mode's valid outputs remain reachable in the new mode. Without this gate, the spiral becomes inflation. Furthermore, procedural skill graduation must remain cleanly decoupled from **theme version evolution** (which is governed as data drift via D05).
 
 ## Scope
 
@@ -16,11 +16,13 @@ Level transitions and skill admissions are promotions, not feature flags. The pr
   2. Run the suite; failures block admission (suite is adversarial to the candidate — PRD_V2 FR-15 lineage).
   3. On pass: the previous mode is **recalled with scar** — marked stale/superseded, never deleted; the new mode is admitted with provenance linking to the candidate, the suite result, and the operator approval.
   4. On fail: the candidate returns to B07 with the failure as evidence; no partial admissions.
+- Non-regression suite verification includes asserting that the candidate procedural organ preserves universal protocol adherence across all bound themes (`D02`) without regression in provenance tracking.
 - Rollback semantics: admission carries the rollback plan (PRD_V2 Reversibility); a graduated organ that must be withdrawn is withdrawn through recall, not deletion.
-- The graduator's own anti-totality: it gates and records; it never proposes candidates (B07's territory) and never admits without the subject.
+- The graduator's own anti-totality: it gates and records; it never proposes candidates (B07's territory) and never admits without the operator.
 
 **Out:**
 - Candidate generation (B07).
+- Theme version evolution & drift propagation (governed via D05 re-verification notices, not B08).
 - Recall cascade mechanics (existing machinery; the graduator triggers it, does not implement it).
 - Protocol-level version management of the taxonomy/contracts (A04/A02 supersede their own kind).
 

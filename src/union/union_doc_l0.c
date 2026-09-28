@@ -187,8 +187,10 @@ CbmRefusalCode cbm_doc_parse_l0(const char *file_path,
                         memcpy(sec->heading_title, title_start, title_len);
                         sec->heading_title[title_len] = '\0';
 
-                        cbm_doc_slugify(sec->heading_title, sec->heading_slug, sizeof(sec->heading_slug));
-                        snprintf(sec->uri, sizeof(sec->uri), "cbm://%s#%s", file_path, sec->heading_slug);
+                        char slug[sizeof(sec->heading_slug)];
+                        cbm_doc_slugify(sec->heading_title, slug, sizeof(slug));
+                        memcpy(sec->heading_slug, slug, sizeof(slug));
+                        snprintf(sec->uri, sizeof(sec->uri), "cbm://%s#%s", file_path, slug);
 
                         /* Configure FILE_BYTES anchor */
                         sec->anchor.kind = CBM_ANCHOR_FILE_BYTES;

@@ -1,17 +1,26 @@
 # SCOPE B02 — `horizon-deliberator` (DELIBERATE station)
 
 > **Track:** B — New harness-kit skills · **Station:** DELIBERATE (ADR_V1 §3.1)
-> **Status:** REVIEW · **Mark:** [E] · **Deps:** A01, A03 · **Codes in:** harness-kit (not in this implementation cycle)
-> **Provenance:** ADR_V1 §3.1; PRD_V2 Station 3 (Differentiation, speculative form); PRD_V2 Axiom of Provenance
+> **Status:** REVIEW · **Mark:** [E] · **Deps:** A01, A03, D02, D03, D04 · **Codes in:** harness-kit (not in this implementation cycle)
+> **Provenance:** ADR_V1 §3.1; PRD_V2 Station 3 (Differentiation, speculative form); PRD_V3 §3, §4 (Two-fork provenance & Deviation governance)
 
 ## Problem
 
-The system must be able to think without believing its thoughts (ADR_V1 Level 2). Today harness-kit skills author real artifacts directly — proposals are indistinguishable from facts the moment they are written. Deliberation needs a space: speculative, dangling, visibly unadmitted.
+The system must be able to think without believing its thoughts (ADR_V1 Level 2). Today harness-kit skills author real artifacts directly — proposals are indistinguishable from facts the moment they are written. Deliberation needs a space: speculative, dangling, visibly unadmitted. Furthermore, deliberation that invents craft rules silently or bypasses institutional tradition produces unreviewable divergence (PRD_V3 §1, §3).
 
 ## Scope
 
 **In:**
 - Skill definition implementing the DELIBERATE step: authors the working model as `PROPOSED`, dangling nodes inside a session horizon (A01) — never direct base-graph writes (log-verified).
+- **Two-Fork Provenance Discipline (`D03`)**:
+  - Every proposed specialty decision or artifact node must carry explicit craft provenance:
+    1. `canon_citation`: `{ theme_id, node_uri, pinned_version }` pointing to a bound or consulted theme rule; OR
+    2. `declared_invention`: `{ declared: true, rationale: string }` documenting the rationale for novel craft.
+  - Omission of both triggers refusal `PROVENANCE_UNDECLARED`.
+- **Deviation Formulation (`D02`)**:
+  - When deliberation identifies a necessary departure from a bound normative theme rule (`DEVE`), the deliberator authors a `type=DEVIATION` proposal containing `theme_rule_node_ref`, mandatory `reason`, and `affected_scope` (preserving the scar visibly on the Idealization plane).
+- **Non-Write Barrier Confinement (`D04`)**:
+  - Deliberation mutations are strictly isolated to the project session horizon. Mutations targeting external theme graphs trigger refusal `TERRITORY_WRITE_FORBIDDEN`.
 - Ambiguity parking: every unresolved point is recorded as an explicit open question with owner and consequence — never silently resolved; assumptions declared as assumptions.
 - Horizon hygiene: dangling nodes without edges are surfaced as validation warnings (isolation detection); deliberation must connect its speculations to grounded context (A03 refs) or declare them ungrounded.
 
@@ -23,10 +32,12 @@ The system must be able to think without believing its thoughts (ADR_V1 Level 2)
 ## Acceptance criteria (testable in isolation)
 
 1. **Given** a deliberation session, **When** it completes, **Then** the host log shows zero base-graph writes and all authored nodes carry `PROPOSED` status inside the session horizon.
-2. **Given** an ambiguous requirement, **When** deliberated, **Then** the horizon contains an explicit open-question record with owner and consequence, and no silent resolution appears in the trace.
-3. **Given** an assumption the skill must make to proceed, **When** recorded, **Then** it is declared as assumption with provenance ("model-generated, provisional") — never presented as validated (CTO handoff contract lineage).
-4. **Given** speculative nodes disconnected from grounded context, **When** the horizon is validated, **Then** isolation warnings are emitted and the skill must connect or explicitly declare them ungrounded before CONCRETIZE.
-5. **Given** a `HORIZON_SKIP` temptation (writing directly to base), **When** refused, **Then** the skill decomposes its write to the proper scale (B04 matrix).
+2. **Given** a specialty decision generated during deliberation, **When** emitted, **Then** it carries either an exact `canon_citation` or `declared_invention: true` with rationale — and no decision enters the horizon without provenance.
+3. **Given** an architectural solution that departs from a bound normative theme rule (`DEVE`), **When** deliberated, **Then** an explicit `type=DEVIATION` claim proposal is authored with rule reference, reason, and scope.
+4. **Given** an attempted write targeting an external theme graph during deliberation, **When** intercepted, **Then** refusal `TERRITORY_WRITE_FORBIDDEN` is emitted and the mutation is confined to the project horizon.
+5. **Given** an ambiguous requirement, **When** deliberated, **Then** the horizon contains an explicit open-question record with owner and consequence, and no silent resolution appears in the trace.
+6. **Given** an assumption the skill must make to proceed, **When** recorded, **Then** it is declared as assumption with provenance ("model-generated, provisional") — never presented as validated.
+7. **Given** a `HORIZON_SKIP` or `PROVENANCE_UNDECLARED` refusal, **When** handled, **Then** the skill adjusts its write scale or attaches explicit rationale without retrying identically (B04 matrix).
 
 ## Open questions
 

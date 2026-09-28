@@ -35,14 +35,14 @@ New archetypes for harness-kit, per ADR_V1 §3–4. None of these exist as skill
 
 | Scope | Skill / capability | Mark | Deps | Status |
 | --- | --- | --- | --- | --- |
-| [B01](harnesskit-skills/SCOPE-B01-graph-grounding.md) | `graph-grounding` (GROUND station) | [E] | A03 | REVIEW |
-| [B02](harnesskit-skills/SCOPE-B02-horizon-deliberator.md) | `horizon-deliberator` (DELIBERATE station) | [E] | A01, A03 | REVIEW |
-| [B03](harnesskit-skills/SCOPE-B03-adversarial-traverser.md) | `adversarial-traverser` (CONTEST station) | [E] | A03, A10 | REVIEW |
-| [B04](harnesskit-skills/SCOPE-B04-refusal-discipline.md) | Refusal-Handling Discipline (embedded in every skill) | [E] | A04 | REVIEW |
-| [B05](harnesskit-skills/SCOPE-B05-union-tracer.md) | `union-tracer` (TRACE station) | [E] | A09 | REVIEW |
-| [B06](harnesskit-skills/SCOPE-B06-skill-contract-attestor.md) | `skill-contract-attestor` | [E] | A02 | REVIEW |
-| [B07](harnesskit-skills/SCOPE-B07-constellation-individuator.md) | `constellation-individuator` (Level 5) | [A/E] | A09, B05 | REVIEW |
-| [B08](harnesskit-skills/SCOPE-B08-level-graduator.md) | `level-graduator` (rebirth / non-regression gate) | [A/E] | B07 | REVIEW |
+| [B01](harnesskit-skills/SCOPE-B01-graph-grounding.md) | `graph-grounding` (GROUND station) | [E] | A03, D01, D02, D03 | REVIEW |
+| [B02](harnesskit-skills/SCOPE-B02-horizon-deliberator.md) | `horizon-deliberator` (DELIBERATE station) | [E] | A01, A03, D02, D03, D04 | REVIEW |
+| [B03](harnesskit-skills/SCOPE-B03-adversarial-traverser.md) | `adversarial-traverser` (CONTEST station) | [E] | A03, A10, D02, D03, D04 | REVIEW |
+| [B04](harnesskit-skills/SCOPE-B04-refusal-discipline.md) | Refusal-Handling Discipline (embedded in every skill) | [E] | A04, D01-D06, C01 | REVIEW |
+| [B05](harnesskit-skills/SCOPE-B05-union-tracer.md) | `union-tracer` (TRACE station) | [E] | A09, D03, D06 | REVIEW |
+| [B06](harnesskit-skills/SCOPE-B06-skill-contract-attestor.md) | `skill-contract-attestor` | [E] | A02, B04 | REVIEW |
+| [B07](harnesskit-skills/SCOPE-B07-constellation-individuator.md) | `constellation-individuator` (Level 5) | [A/E] | A09, B05, D06 | REVIEW |
+| [B08](harnesskit-skills/SCOPE-B08-level-graduator.md) | `level-graduator` (rebirth / non-regression gate) | [A/E] | B07, D05 | REVIEW |
 
 ## Track C — Idealization Plane substrate (`doc-plane/`)
 

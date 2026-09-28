@@ -81,6 +81,7 @@ enum {
 #include "foundation/dump_verify.h"
 #include "foundation/compat_regex.h"
 #include "pipeline/artifact.h"
+#include "mcp/union_handler.h"
 
 #ifdef _WIN32
 #include "foundation/win_utf8.h"
@@ -789,6 +790,86 @@ static const tool_def_t TOOLS[] = {
      "\"Identifier of the horizon to validate\"},\"strict_connectivity\":{\"type\":\"boolean\","
      "\"description\":\"Whether dangling nodes without edges fail validation (default true)\"}},"
      "\"required\":[\"horizon_id\"]}"},
+
+    {"union_session_open", "Open a bounded session horizon for a skill identity with contract validation and restricted-mode gating",
+     "{\"type\":\"object\",\"properties\":{\"identity\":{\"type\":\"string\",\"description\":"
+     "\"Skill archetype identity (e.g. developer, architect)\"},\"contract_id\":{\"type\":\"string\","
+     "\"description\":\"Registered skill contract identifier\"},\"based_on_seq\":{\"type\":\"string\","
+     "\"description\":\"Belief sequence or generation hash this session is grounded upon\"},\"client_pid\":"
+     "{\"type\":\"integer\",\"description\":\"Client process ID\"}},\"required\":[\"identity\"]}"},
+
+    {"union_session_get", "Query the live state of an open session horizon",
+     "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
+     "\"Identifier of the session horizon\"}},\"required\":[\"horizon_id\"]}"},
+
+    {"union_session_close", "Close a session horizon, emitting a typed closure event and destroying speculative content",
+     "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
+     "\"Identifier of the session horizon to close\"},\"reason\":{\"type\":\"string\","
+     "\"enum\":[\"NORMAL\",\"ABNORMAL\",\"EMPTY\"],\"default\":\"NORMAL\"}},\"required\":[\"horizon_id\"]}"},
+
+    {"union_record_action", "Authorize and record a skill action through the effect-class gateway",
+     "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
+     "\"Active session horizon ID\"},\"action_name\":{\"type\":\"string\",\"description\":"
+     "\"Name of the action being invoked\"},\"effect_class\":{\"type\":\"string\","
+     "\"enum\":[\"IDEMPOTENT\",\"COMPENSABLE\",\"IRREVERSIBLE\",\"UNCLASSIFIED\"],\"default\":\"IDEMPOTENT\"},"
+     "\"auth_id\":{\"type\":\"string\",\"description\":\"Scoped operator authorization ID (required for IRREVERSIBLE)\"},"
+     "\"idempotency_key\":{\"type\":\"string\",\"description\":\"Idempotency key for COMPENSABLE actions\"}},"
+     "\"required\":[\"horizon_id\",\"action_name\"]}"},
+
+    {"classify_activity", "Classify incoming intent into CONSULTATIVE (local project) or SPECIALTY (normative craft / tradition required)",
+     "{\"type\":\"object\",\"properties\":{\"intent\":{\"type\":\"string\",\"description\":"
+     "\"The user intent, prompt, or task description\"}},\"required\":[\"intent\"]}"},
+
+    {"validate_provenance", "Validate specialty judgment provenance (requires active canon citation or declared invention with rationale)",
+     "{\"type\":\"object\",\"properties\":{\"theme_id\":{\"type\":\"string\",\"description\":"
+     "\"Governing craft theme ID for canon citation\"},\"node_uri\":{\"type\":\"string\","
+     "\"description\":\"Theme rule node URI\"},\"pinned_version\":{\"type\":\"string\","
+     "\"description\":\"Pinned version of the theme\"},\"declared_invention\":{\"type\":\"boolean\","
+     "\"description\":\"True if novel craft is explicitly declared\"},\"rationale\":{\"type\":\"string\","
+     "\"description\":\"Rationale for declared invention\"}}}"},
+
+    {"theme_lookup", "Lookup a Thematic Knowledge Base in the registry (surfaces ABSENT as a first-class state)",
+     "{\"type\":\"object\",\"properties\":{\"theme_id\":{\"type\":\"string\",\"description\":"
+     "\"Thematic Knowledge Base ID\"}},\"required\":[\"theme_id\"]}"},
+
+    {"theme_register", "Register or catalog a Thematic Knowledge Base",
+     "{\"type\":\"object\",\"properties\":{\"theme_id\":{\"type\":\"string\",\"description\":"
+     "\"Theme ID (e.g. @org/clean-arch)\"},\"namespace\":{\"type\":\"string\",\"description\":"
+     "\"Namespace\"},\"curator\":{\"type\":\"string\",\"description\":\"Curator identifier\"},"
+     "\"version\":{\"type\":\"string\",\"description\":\"Theme semantic version\"},"
+     "\"status\":{\"type\":\"string\",\"enum\":[\"ACTIVE\",\"ABSENT\"],\"default\":\"ACTIVE\"}},"
+     "\"required\":[\"theme_id\",\"namespace\",\"curator\",\"version\"]}"},
+
+    {"binding_claim", "Declare or query a project binding to a craft theme (DEVE normative or PODE consulted)",
+     "{\"type\":\"object\",\"properties\":{\"claim_id\":{\"type\":\"string\",\"description\":"
+     "\"Unique binding claim ID\"},\"theme_id\":{\"type\":\"string\",\"description\":"
+     "\"Theme ID\"},\"pinned_version\":{\"type\":\"string\",\"description\":\"Pinned version\"},"
+     "\"mode\":{\"type\":\"string\",\"enum\":[\"NORMATIVE\",\"CONSULTED\"],\"default\":\"NORMATIVE\"},"
+     "\"binding_scope\":{\"type\":\"string\",\"description\":\"Scope of code or architecture affected\"},"
+     "\"validated_by\":{\"type\":\"string\",\"description\":\"Validating entity (operator required for NORMATIVE)\"}},"
+     "\"required\":[\"claim_id\",\"theme_id\",\"pinned_version\",\"validated_by\"]}"},
+
+    {"founding_propose", "Propose a new Thematic Knowledge Base from declared inventions harvested during closure sweep",
+     "{\"type\":\"object\",\"properties\":{\"suggested_theme_id\":{\"type\":\"string\",\"description\":"
+     "\"Proposed theme ID\"},\"namespace\":{\"type\":\"string\",\"description\":\"Proposed namespace\"},"
+     "\"rationale\":{\"type\":\"string\",\"description\":\"Why this craft convention warrants formalization\"},"
+     "\"origin_session\":{\"type\":\"string\",\"description\":\"Origin session horizon ID\"},"
+     "\"suggested_curator\":{\"type\":\"string\",\"description\":\"Suggested curator\"}},"
+     "\"required\":[\"suggested_theme_id\",\"namespace\",\"rationale\",\"origin_session\"]}"},
+
+    {"founding_decide", "Operator decision on a founding proposal (accept into DRAFT theme or decline)",
+     "{\"type\":\"object\",\"properties\":{\"suggested_theme_id\":{\"type\":\"string\",\"description\":"
+     "\"Theme ID of the proposal\"},\"operator_accepted\":{\"type\":\"boolean\","
+     "\"description\":\"True to accept proposal into DRAFT, false to decline\"},\"is_agent_autonomous\":"
+     "{\"type\":\"boolean\",\"description\":\"True if caller is an agent (autonomous founding forbidden)\",\"default\":false}},"
+     "\"required\":[\"suggested_theme_id\",\"operator_accepted\"]}"},
+
+    {"contest_verify", "Submit a typed contestation with evidence against a target claim (caller-blind verification)",
+     "{\"type\":\"object\",\"properties\":{\"target_ref\":{\"type\":\"string\",\"description\":"
+     "\"Target claim or horizon reference\"},\"severity\":{\"type\":\"string\","
+     "\"enum\":[\"INFORMATIVE\",\"BLOCKING\",\"INVALIDATING\"],\"default\":\"BLOCKING\"},\"evidence\":"
+     "{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Mandatory concrete evidence references\"}},"
+     "\"required\":[\"target_ref\",\"evidence\"]}"},
 };
 
 static const int TOOL_COUNT = sizeof(TOOLS) / sizeof(TOOLS[0]);
@@ -832,6 +913,18 @@ static const tool_annotation_def_t TOOL_ANNOTATIONS[] = {
     {"promote_horizon", false, false, false, false},
     {"sync_horizon_spec", false, false, true, false},
     {"validate_scope_horizon", true, false, true, false},
+    {"union_session_open", false, false, false, false},
+    {"union_session_get", true, false, true, false},
+    {"union_session_close", false, true, false, false},
+    {"union_record_action", false, false, false, false},
+    {"classify_activity", true, false, true, false},
+    {"validate_provenance", true, false, true, false},
+    {"theme_lookup", true, false, true, false},
+    {"theme_register", false, false, false, false},
+    {"binding_claim", false, false, false, false},
+    {"founding_propose", false, false, false, false},
+    {"founding_decide", false, false, false, false},
+    {"contest_verify", false, false, false, false},
 };
 
 static const tool_annotation_def_t *mcp_tool_annotations(const char *name) {
@@ -1740,7 +1833,35 @@ struct cbm_mcp_server {
     cbm_mcp_tool_profile_t tool_profile;
     HorizonConnectionPool horizon_pool;
     AdmissionGate admission_gate;
+    CbmSessionRegistry session_registry;
+    CbmContractRegistry contract_registry;
+    CbmGateway gateway;
+    CbmThemeRegistry theme_registry;
+    CbmBindingLedger binding_ledger;
+    CbmContestRegistry contest_registry;
 };
+
+CbmSessionRegistry *cbm_mcp_server_sessions(cbm_mcp_server_t *srv) {
+    return srv ? &srv->session_registry : NULL;
+}
+CbmContractRegistry *cbm_mcp_server_contracts(cbm_mcp_server_t *srv) {
+    return srv ? &srv->contract_registry : NULL;
+}
+CbmGateway *cbm_mcp_server_gateway(cbm_mcp_server_t *srv) {
+    return srv ? &srv->gateway : NULL;
+}
+CbmThemeRegistry *cbm_mcp_server_theme_registry(cbm_mcp_server_t *srv) {
+    return srv ? &srv->theme_registry : NULL;
+}
+CbmBindingLedger *cbm_mcp_server_binding_ledger(cbm_mcp_server_t *srv) {
+    return srv ? &srv->binding_ledger : NULL;
+}
+CbmContestRegistry *cbm_mcp_server_contest_registry(cbm_mcp_server_t *srv) {
+    return srv ? &srv->contest_registry : NULL;
+}
+HorizonConnectionPool *cbm_mcp_server_horizon_pool(cbm_mcp_server_t *srv) {
+    return srv ? &srv->horizon_pool : NULL;
+}
 
 cbm_mcp_server_t *cbm_mcp_server_new(const char *store_path) {
     cbm_mcp_server_t *srv = calloc(CBM_ALLOC_ONE, sizeof(*srv));
@@ -1766,6 +1887,13 @@ cbm_mcp_server_t *cbm_mcp_server_new(const char *store_path) {
     if (srv->store) {
         cbm_admission_gate_set_base_db(&srv->admission_gate, (sqlite3 *)cbm_store_get_db(srv->store));
     }
+
+    cbm_session_registry_init(&srv->session_registry);
+    cbm_contract_registry_init(&srv->contract_registry);
+    cbm_gateway_init(&srv->gateway);
+    cbm_theme_registry_init(&srv->theme_registry);
+    cbm_binding_ledger_init(&srv->binding_ledger);
+    cbm_contest_registry_init(&srv->contest_registry);
 
     return srv;
 }
@@ -17385,6 +17513,44 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
     }
     if (strcmp(tool_name, "validate_scope_horizon") == 0) {
         return handle_validate_scope_horizon(srv, args_json, &srv->horizon_pool);
+    }
+
+    /* Track W: Union Workflow tools */
+    if (strcmp(tool_name, "union_session_open") == 0) {
+        return handle_union_session_open(srv, args_json);
+    }
+    if (strcmp(tool_name, "union_session_get") == 0) {
+        return handle_union_session_get(srv, args_json);
+    }
+    if (strcmp(tool_name, "union_session_close") == 0) {
+        return handle_union_session_close(srv, args_json);
+    }
+    if (strcmp(tool_name, "union_record_action") == 0) {
+        return handle_union_record_action(srv, args_json);
+    }
+    if (strcmp(tool_name, "classify_activity") == 0) {
+        return handle_classify_activity(srv, args_json);
+    }
+    if (strcmp(tool_name, "validate_provenance") == 0) {
+        return handle_validate_provenance(srv, args_json);
+    }
+    if (strcmp(tool_name, "theme_lookup") == 0) {
+        return handle_theme_lookup(srv, args_json);
+    }
+    if (strcmp(tool_name, "theme_register") == 0) {
+        return handle_theme_register(srv, args_json);
+    }
+    if (strcmp(tool_name, "binding_claim") == 0) {
+        return handle_binding_claim(srv, args_json);
+    }
+    if (strcmp(tool_name, "founding_propose") == 0) {
+        return handle_founding_propose(srv, args_json);
+    }
+    if (strcmp(tool_name, "founding_decide") == 0) {
+        return handle_founding_decide(srv, args_json);
+    }
+    if (strcmp(tool_name, "contest_verify") == 0) {
+        return handle_contest_verify(srv, args_json);
     }
     char msg[CBM_SZ_256];
     snprintf(msg, sizeof(msg), "unknown tool: %s", tool_name);

@@ -1,7 +1,11 @@
 #include "mcp.h"
+#include "mcp_internal.h"
 #include "../admission/admission_gate.h"
 #include "../core/cbm_uri.h"
 #include "../foundation/platform.h"
+#include "../foundation/log.h"
+#include "../union/union_refusal.h"
+#include "../union/union_contest.h"
 #include <yyjson/yyjson.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +22,32 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
     }
     if (!horizon_id) {
         return cbm_mcp_text_result("{\"isError\":true,\"code\":\"INVALID_PARAMS\",\"message\":\"horizon_id required\"}", true);
+    }
+
+    /* W03: Session and contest checks */
+    CbmSessionRegistry *sessions = srv ? cbm_mcp_server_sessions(srv) : NULL;
+    CbmContestRegistry *contests = srv ? cbm_mcp_server_contest_registry(srv) : NULL;
+
+    const CbmSessionHorizon *sh = sessions ? cbm_session_get(sessions, horizon_id) : NULL;
+    if (!sh) {
+        cbm_log(CBM_LOG_INFO, "union.promotion_bypass_session horizon_id=%s reason=legacy_or_federation_call", horizon_id);
+    } else {
+        if (contests && cbm_contest_is_blocked(contests, horizon_id) > 0) {
+            cbm_refusal_emit(CBM_REFUSAL_CONTEST_UNPROVEN, horizon_id, "promotion blocked by active blocking contestation");
+            char err_resp[512];
+            snprintf(err_resp, sizeof(err_resp),
+                     "{\"isError\":true,\"code\":\"CONTEST_BLOCKED\",\"message\":\"Promotion blocked by active blocking contestation\"}");
+            free(horizon_id);
+            return cbm_mcp_text_result(err_resp, true);
+        }
+        if (sh->refusals > 0) {
+            cbm_refusal_emit(CBM_REFUSAL_SCOPE_EXCEEDED, horizon_id, "promotion blocked by uncompensated gateway refusal");
+            char err_resp[512];
+            snprintf(err_resp, sizeof(err_resp),
+                     "{\"isError\":true,\"code\":\"GATEWAY_BLOCKED\",\"message\":\"Promotion blocked by uncompensated gateway refusal\"}");
+            free(horizon_id);
+            return cbm_mcp_text_result(err_resp, true);
+        }
     }
 
     /* Fallback local pool and gate if NULL provided so integrity checks cannot be bypassed */

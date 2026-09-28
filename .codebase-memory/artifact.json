@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "12dd8e35a6ec44336486aa1b5a3b21d7e7d4f918",
-    "indexed_at": "2026-09-25T00:03:18Z",
+    "commit": "40a26fd16880e5f9e989edbf7cf21500723ace2e",
+    "indexed_at": "2026-09-27T19:17:59Z",
     "project": "C-Users-corre-Documents-codebase-memory-mcp",
-    "nodes": 27177,
-    "edges": 135235,
-    "original_size": 146145280,
-    "compressed_size": 23034597,
+    "nodes": 27907,
+    "edges": 143036,
+    "original_size": 151060480,
+    "compressed_size": 23721024,
     "compression_level": 3
 }

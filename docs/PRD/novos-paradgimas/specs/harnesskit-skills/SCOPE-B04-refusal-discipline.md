@@ -24,6 +24,14 @@ A refusal is curriculum, not error. A skill that treats a typed refusal as a tra
 | `BUDGET_EXHAUSTED` | Escalate; never promote, never retry-loop |
 | `RETRY_IDENTICAL` | Treat as contract violation of this discipline: halt and log |
 | `CONTEST_UNPROVEN` | Withdraw or evidence; the traverser never reaches it (B03) |
+| `PROVENANCE_UNDECLARED` | Cite active theme node OR supply `declared_invention: true` with non-empty rationale; never proceed silently (D03) |
+| `BINDING_SELF_VALIDATED` | Abort self-binding; request operator validation; park binding as `PROPOSED` pending operator signature (D02) |
+| `TERRITORY_WRITE_FORBIDDEN` | Abort mutation targeting external theme graph; confine mutations to project horizon or emit proposal (D04) |
+| `AUTO_FOUNDING_FORBIDDEN` | Cease autonomous theme graph creation; package findings into a `FOUNDING_PROPOSAL` offered to operator at closure sweep (D06) |
+| `THEME_SCHEMA_INVALID` | Correct missing catalog metadata (`theme_id`, `namespace`, `curator`, `version`) before re-submitting (D01) |
+| `THEME_UNKNOWN` | Verify theme identifier in KnowledgeBase registry; fall back to declared invention or request operator registration (D01) |
+| `CLAIM_INVALID` | Supply missing mandatory fields for claim type before submitting to horizon (C01) |
+| `PREDICATE_NOT_SELF_CONTAINED` | Rewrite predicate into self-contained proposition removing blacklisted deictic references (C01) |
 
 - Scripted scenario suite: one scenario per code asserting the mandated behavior by host log.
 
