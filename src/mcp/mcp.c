@@ -1862,7 +1862,70 @@ struct cbm_mcp_server {
     CbmThemeRegistry theme_registry;
     CbmBindingLedger binding_ledger;
     CbmContestRegistry contest_registry;
+    char host_operator_identity[64];
+    char host_operator_token[64];
+    bool host_operator_authenticated;
 };
+
+void cbm_mcp_server_set_operator_authority(cbm_mcp_server_t *srv, const char *operator_id,
+                                           const char *auth_token) {
+    if (!srv) return;
+    if (operator_id && operator_id[0]) {
+        strncpy(srv->host_operator_identity, operator_id, sizeof(srv->host_operator_identity) - 1);
+        srv->host_operator_identity[sizeof(srv->host_operator_identity) - 1] = '\0';
+        srv->host_operator_authenticated = true;
+    } else {
+        srv->host_operator_identity[0] = '\0';
+        srv->host_operator_authenticated = false;
+    }
+    if (auth_token && auth_token[0]) {
+        strncpy(srv->host_operator_token, auth_token, sizeof(srv->host_operator_token) - 1);
+        srv->host_operator_token[sizeof(srv->host_operator_token) - 1] = '\0';
+    } else {
+        srv->host_operator_token[0] = '\0';
+    }
+}
+
+const char *cbm_mcp_server_get_operator_identity(const cbm_mcp_server_t *srv) {
+    if (!srv || !srv->host_operator_authenticated) return NULL;
+    return srv->host_operator_identity;
+}
+
+bool cbm_mcp_server_verify_operator_authority(const cbm_mcp_server_t *srv, const char *operator_id,
+                                             const char *auth_token) {
+    if (srv && srv->host_operator_authenticated) {
+        if (srv->host_operator_token[0] != '\0') {
+            if (!auth_token || strcmp(srv->host_operator_token, auth_token) != 0) {
+                return false;
+            }
+        }
+        if (operator_id && operator_id[0] != '\0') {
+            if (strcmp(srv->host_operator_identity, operator_id) != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /* Fallback to environment variables */
+    char env_id[64] = {0};
+    if (cbm_safe_getenv("CBM_OPERATOR_IDENTITY", env_id, sizeof(env_id), NULL) && env_id[0]) {
+        char env_tok[64] = {0};
+        if (cbm_safe_getenv("CBM_OPERATOR_TOKEN", env_tok, sizeof(env_tok), NULL) && env_tok[0]) {
+            if (!auth_token || strcmp(env_tok, auth_token) != 0) {
+                return false;
+            }
+        }
+        if (operator_id && operator_id[0] != '\0') {
+            if (strcmp(env_id, operator_id) != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    return false;
+}
 
 CbmSessionRegistry *cbm_mcp_server_sessions(cbm_mcp_server_t *srv) {
     return srv ? &srv->session_registry : NULL;
@@ -1917,6 +1980,16 @@ cbm_mcp_server_t *cbm_mcp_server_new(const char *store_path) {
     cbm_theme_registry_init(&srv->theme_registry);
     cbm_binding_ledger_init(&srv->binding_ledger);
     cbm_contest_registry_init(&srv->contest_registry);
+
+    char env_op[64] = {0};
+    if (cbm_safe_getenv("CBM_OPERATOR_IDENTITY", env_op, sizeof(env_op), NULL) && env_op[0]) {
+        strncpy(srv->host_operator_identity, env_op, sizeof(srv->host_operator_identity) - 1);
+        srv->host_operator_authenticated = true;
+    }
+    char env_tok[64] = {0};
+    if (cbm_safe_getenv("CBM_OPERATOR_TOKEN", env_tok, sizeof(env_tok), NULL) && env_tok[0]) {
+        strncpy(srv->host_operator_token, env_tok, sizeof(srv->host_operator_token) - 1);
+    }
 
     return srv;
 }

@@ -385,6 +385,7 @@ TEST(test_w05_territory_and_founding) {
     free(dec_bad_res);
 
     /* 7. Founding decide: operator accepted */
+    cbm_mcp_server_set_operator_authority(srv, "operator", NULL);
     const char *dec_good = "{\"suggested_theme_id\":\"@org/split-payment\",\"operator_accepted\":true,\"decided_by\":\"operator\",\"is_agent_autonomous\":false}";
     char *dec_good_res = handle_founding_decide(srv, dec_good);
     ASSERT(dec_good_res != NULL);
@@ -577,6 +578,7 @@ TEST(test_w03_promote_blocked_without_session_and_invalidating) {
 TEST(test_w05_founding_decline_and_metadata_preservation) {
     cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
     ASSERT(srv != NULL);
+    cbm_mcp_server_set_operator_authority(srv, "operator", NULL);
 
     /* 1. Propose theme with custom namespace and rationale */
     const char *prop_args = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"namespace\":\"architecture\",\"rationale\":\"actor pattern\",\"origin_session\":\"h_sess_99\",\"suggested_curator\":\"alice\"}";
@@ -817,6 +819,7 @@ TEST(test_w05_founding_requires_proposal_and_operator_identity) {
     free(res_agent);
 
     /* 4. Decide with operator identity -> succeeds */
+    cbm_mcp_server_set_operator_authority(srv, "operator_chief", NULL);
     const char *dec_ok = "{\"suggested_theme_id\":\"@org/strict-authority\",\"operator_accepted\":true,\"decided_by\":\"operator_chief\"}";
     char *res_ok = handle_founding_decide(srv, dec_ok);
     ASSERT(res_ok != NULL);
@@ -894,9 +897,395 @@ TEST(test_w07_contest_prefix_delimiter_isolation) {
     PASS();
 }
 
+TEST(test_w01_claims_outside_session_rejected) {
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    ASSERT(srv != NULL);
+
+    /* 1. Try capturing a claim without opening a session -> MUST fail with SESSION_NOT_FOUND */
+    const char *cap_no_sess = "{\"horizon_id\":\"h_nonexistent_999\",\"claim_id\":\"c_999\",\"type\":\"DECISION\",\"predicate\":\"orphaned claim\"}";
+    char *res_cap = handle_union_claim_capture(srv, cap_no_sess);
+    ASSERT(res_cap != NULL);
+    yyjson_doc *doc = yyjson_read(res_cap, strlen(res_cap), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    yyjson_val *payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "SESSION_NOT_FOUND");
+    yyjson_doc_free(doc);
+    free(res_cap);
+
+    /* 2. Try resolving a claim without opening a session -> MUST fail with SESSION_NOT_FOUND */
+    const char *res_no_sess = "{\"horizon_id\":\"h_nonexistent_999\",\"claim_id\":\"c_999\",\"destination\":\"DISCARDED\"}";
+    char *res_res = handle_union_claim_resolve(srv, res_no_sess);
+    ASSERT(res_res != NULL);
+    doc = yyjson_read(res_res, strlen(res_res), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "SESSION_NOT_FOUND");
+    yyjson_doc_free(doc);
+    free(res_res);
+
+    /* 3. Open a session, capture, then close, then try capturing after close -> MUST fail with SESSION_NOT_FOUND */
+    char *open_res = handle_union_session_open(srv, "{\"identity\":\"auditor\"}");
+    ASSERT(open_res != NULL);
+    doc = yyjson_read(open_res, strlen(open_res), 0);
+    ASSERT(doc != NULL);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_hid = yyjson_obj_get(payload, "horizon_id");
+    ASSERT(v_hid && yyjson_is_str(v_hid));
+    char hid[64];
+    strncpy(hid, yyjson_get_str(v_hid), sizeof(hid) - 1);
+    hid[sizeof(hid) - 1] = '\0';
+    yyjson_doc_free(doc);
+    free(open_res);
+
+    /* Capture inside session -> succeeds */
+    char cap_args[256];
+    snprintf(cap_args, sizeof(cap_args), "{\"horizon_id\":\"%s\",\"claim_id\":\"c_in_sess\",\"type\":\"DECISION\",\"predicate\":\"Valid session claim.\",\"based_on_seq\":\"seq_1\"}", hid);
+    char *res_cap2 = handle_union_claim_capture(srv, cap_args);
+    ASSERT(res_cap2 != NULL);
+    doc = yyjson_read(res_cap2, strlen(res_cap2), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == false);
+    yyjson_doc_free(doc);
+    free(res_cap2);
+
+    /* Resolve claim so session can close */
+    char resolve_args[256];
+    snprintf(resolve_args, sizeof(resolve_args), "{\"horizon_id\":\"%s\",\"claim_id\":\"c_in_sess\",\"destination\":\"DISCARDED\"}", hid);
+    char *res_res2 = handle_union_claim_resolve(srv, resolve_args);
+    ASSERT(res_res2 != NULL);
+    free(res_res2);
+
+    /* Close session */
+    char close_args[128];
+    snprintf(close_args, sizeof(close_args), "{\"horizon_id\":\"%s\",\"reason\":\"NORMAL\"}", hid);
+    char *close_res = handle_union_session_close(srv, close_args);
+    ASSERT(close_res != NULL);
+    free(close_res);
+
+    /* Try capturing now that session is closed -> MUST fail with SESSION_NOT_FOUND */
+    char *res_cap_closed = handle_union_claim_capture(srv, cap_args);
+    ASSERT(res_cap_closed != NULL);
+    doc = yyjson_read(res_cap_closed, strlen(res_cap_closed), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "SESSION_NOT_FOUND");
+    yyjson_doc_free(doc);
+    free(res_cap_closed);
+
+    cbm_mcp_server_free(srv);
+    PASS();
+}
+
+TEST(test_w05_founding_decide_requires_host_proven_authority) {
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    ASSERT(srv != NULL);
+    yyjson_val *payload = NULL;
+    cbm_union_reset_proposal_store_for_test();
+
+    /* 1. Propose theme */
+    const char *prop = "{\"suggested_theme_id\":\"@org/auth-guard\",\"namespace\":\"security\",\"rationale\":\"proven host auth\",\"origin_session\":\"h1\",\"suggested_curator\":\"operator\"}";
+    char *res_p = handle_founding_propose(srv, prop);
+    ASSERT(res_p != NULL);
+    free(res_p);
+
+    /* 2. Client passes decided_by: "operator" but host authority is NOT configured on server -> MUST fail */
+    const char *dec_unauth = "{\"suggested_theme_id\":\"@org/auth-guard\",\"operator_accepted\":true,\"decided_by\":\"operator\",\"is_agent_autonomous\":false}";
+    char *res_unauth = handle_founding_decide(srv, dec_unauth);
+    ASSERT(res_unauth != NULL);
+    yyjson_doc *doc = yyjson_read(res_unauth, strlen(res_unauth), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "AUTO_FOUNDING_FORBIDDEN");
+    yyjson_doc_free(doc);
+    free(res_unauth);
+
+    /* 3. Host establishes operator authority with an authentication token */
+    cbm_mcp_server_set_operator_authority(srv, "operator_lead", "secret_host_token_999");
+
+    /* 4. Client attempts with wrong token -> MUST fail with AUTO_FOUNDING_FORBIDDEN */
+    const char *dec_bad_tok = "{\"suggested_theme_id\":\"@org/auth-guard\",\"operator_accepted\":true,\"decided_by\":\"operator_lead\",\"operator_token\":\"wrong_token\"}";
+    char *res_bad_tok = handle_founding_decide(srv, dec_bad_tok);
+    ASSERT(res_bad_tok != NULL);
+    doc = yyjson_read(res_bad_tok, strlen(res_bad_tok), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    yyjson_doc_free(doc);
+    free(res_bad_tok);
+
+    /* 5. Client attempts with autonomous flag = true -> MUST fail with AUTO_FOUNDING_FORBIDDEN */
+    const char *dec_auto = "{\"suggested_theme_id\":\"@org/auth-guard\",\"operator_accepted\":true,\"decided_by\":\"operator_lead\",\"operator_token\":\"secret_host_token_999\",\"is_agent_autonomous\":true}";
+    char *res_auto = handle_founding_decide(srv, dec_auto);
+    ASSERT(res_auto != NULL);
+    doc = yyjson_read(res_auto, strlen(res_auto), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    yyjson_doc_free(doc);
+    free(res_auto);
+
+    /* 6. Client provides valid host operator credentials -> SUCCEEDS */
+    const char *dec_valid = "{\"suggested_theme_id\":\"@org/auth-guard\",\"operator_accepted\":true,\"decided_by\":\"operator_lead\",\"operator_token\":\"secret_host_token_999\",\"is_agent_autonomous\":false}";
+    char *res_valid = handle_founding_decide(srv, dec_valid);
+    ASSERT(res_valid != NULL);
+    doc = yyjson_read(res_valid, strlen(res_valid), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == false);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_dec = yyjson_obj_get(payload, "decided");
+    ASSERT(v_dec && yyjson_get_bool(v_dec) == true);
+    yyjson_val *v_acc = yyjson_obj_get(payload, "accepted");
+    ASSERT(v_acc && yyjson_get_bool(v_acc) == true);
+    yyjson_val *v_st = yyjson_obj_get(payload, "status");
+    ASSERT(v_st && yyjson_is_str(v_st));
+    ASSERT_STR_EQ(yyjson_get_str(v_st), "DRAFT");
+    yyjson_doc_free(doc);
+    free(res_valid);
+
+    cbm_mcp_server_free(srv);
+    PASS();
+}
+
+TEST(test_w05_proposal_store_capacity_and_persistence) {
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    ASSERT(srv != NULL);
+    yyjson_val *payload = NULL;
+    cbm_union_reset_proposal_store_for_test();
+
+    /* 1. Fill proposal store up to MAX_STORED_PROPOSALS (64) */
+    char prop_args[256];
+    for (int i = 0; i < 64; i++) {
+        snprintf(prop_args, sizeof(prop_args),
+                 "{\"suggested_theme_id\":\"@test/theme_%03d\",\"namespace\":\"domain\",\"rationale\":\"filling slot %d\",\"origin_session\":\"h_sess\"}",
+                 i, i);
+        char *res = handle_founding_propose(srv, prop_args);
+        ASSERT(res != NULL);
+        yyjson_doc *doc = yyjson_read(res, strlen(res), 0);
+        ASSERT(doc != NULL);
+        ASSERT(get_is_error(doc) == false);
+        yyjson_doc_free(doc);
+        free(res);
+    }
+
+    /* 2. 65th proposal MUST be rejected with PROPOSAL_STORE_FULL */
+    const char *prop_65 = "{\"suggested_theme_id\":\"@test/theme_overflow\",\"namespace\":\"domain\",\"rationale\":\"overflow attempt\",\"origin_session\":\"h_sess\"}";
+    char *res_65 = handle_founding_propose(srv, prop_65);
+    ASSERT(res_65 != NULL);
+    yyjson_doc *doc = yyjson_read(res_65, strlen(res_65), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "PROPOSAL_STORE_FULL");
+    yyjson_doc_free(doc);
+    free(res_65);
+
+    /* 3. Simulate process restart by reloading proposals from disk */
+    cbm_union_reload_proposals_for_test();
+
+    /* Verify that stored proposals persisted to disk and can be adjudicated */
+    cbm_mcp_server_set_operator_authority(srv, "operator_lead", "secret_host_key");
+    const char *dec_0 = "{\"suggested_theme_id\":\"@test/theme_000\",\"operator_accepted\":true,\"decided_by\":\"operator_lead\",\"operator_token\":\"secret_host_key\"}";
+    char *res_dec0 = handle_founding_decide(srv, dec_0);
+    ASSERT(res_dec0 != NULL);
+    doc = yyjson_read(res_dec0, strlen(res_dec0), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == false);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_dec = yyjson_obj_get(payload, "decided");
+    ASSERT(v_dec && yyjson_get_bool(v_dec) == true);
+    yyjson_doc_free(doc);
+    free(res_dec0);
+
+    /* After adjudicating slot 0, capacity freed up -> 65th proposal can now be added */
+    char *res_retry = handle_founding_propose(srv, prop_65);
+    ASSERT(res_retry != NULL);
+    doc = yyjson_read(res_retry, strlen(res_retry), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == false);
+    yyjson_doc_free(doc);
+    free(res_retry);
+
+    cbm_mcp_server_free(srv);
+    PASS();
+}
+
+TEST(test_w01_full_lifecycle_over_mcp_transport) {
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    ASSERT(srv != NULL);
+    cbm_mcp_server_set_operator_authority(srv, "operator_host", "auth_pwd_777");
+    cbm_union_reset_proposal_store_for_test();
+
+    /* 1. Open session via JSON-RPC */
+    const char *rpc_open =
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"union_session_open\",\"arguments\":{\"identity\":\"lead_arch\"}}}";
+    char *resp_open = cbm_mcp_server_handle(srv, rpc_open);
+    ASSERT(resp_open != NULL);
+    yyjson_doc *doc = yyjson_read(resp_open, strlen(resp_open), 0);
+    ASSERT(doc != NULL);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    ASSERT(root != NULL);
+    yyjson_val *v_res = yyjson_obj_get(root, "result");
+    ASSERT(v_res != NULL);
+    yyjson_val *v_sc = yyjson_obj_get(v_res, "structuredContent");
+    ASSERT(v_sc != NULL);
+    yyjson_val *v_hid = yyjson_obj_get(v_sc, "horizon_id");
+    ASSERT(v_hid && yyjson_is_str(v_hid));
+    char hid[64];
+    strncpy(hid, yyjson_get_str(v_hid), sizeof(hid) - 1);
+    hid[sizeof(hid) - 1] = '\0';
+    yyjson_doc_free(doc);
+    free(resp_open);
+
+    /* 2. Record action via JSON-RPC */
+    char rpc_act[512];
+    snprintf(rpc_act, sizeof(rpc_act),
+             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"union_record_action\",\"arguments\":{\"horizon_id\":\"%s\",\"action_name\":\"scan_ast\",\"effect_class\":\"IDEMPOTENT\"}}}",
+             hid);
+    char *resp_act = cbm_mcp_server_handle(srv, rpc_act);
+    ASSERT(resp_act != NULL);
+    doc = yyjson_read(resp_act, strlen(resp_act), 0);
+    ASSERT(doc != NULL);
+    root = yyjson_doc_get_root(doc);
+    ASSERT(root != NULL);
+    v_res = yyjson_obj_get(root, "result");
+    ASSERT(v_res != NULL);
+    v_sc = yyjson_obj_get(v_res, "structuredContent");
+    ASSERT(v_sc != NULL);
+    yyjson_val *v_rec = yyjson_obj_get(v_sc, "recorded");
+    ASSERT(v_rec && yyjson_get_bool(v_rec) == true);
+    yyjson_doc_free(doc);
+    free(resp_act);
+
+    /* 3. Capture claim via JSON-RPC */
+    char rpc_cap[512];
+    snprintf(rpc_cap, sizeof(rpc_cap),
+             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"union_claim_capture\",\"arguments\":{\"horizon_id\":\"%s\",\"claim_id\":\"claim_rpc_01\",\"type\":\"DECISION\",\"predicate\":\"Use WAL journal mode.\"}}}",
+             hid);
+    char *resp_cap = cbm_mcp_server_handle(srv, rpc_cap);
+    ASSERT(resp_cap != NULL);
+    doc = yyjson_read(resp_cap, strlen(resp_cap), 0);
+    ASSERT(doc != NULL);
+    root = yyjson_doc_get_root(doc);
+    ASSERT(root != NULL);
+    v_res = yyjson_obj_get(root, "result");
+    ASSERT(v_res != NULL);
+    v_sc = yyjson_obj_get(v_res, "structuredContent");
+    ASSERT(v_sc != NULL);
+    yyjson_val *v_cap = yyjson_obj_get(v_sc, "captured");
+    ASSERT(v_cap && yyjson_get_bool(v_cap) == true);
+    yyjson_doc_free(doc);
+    free(resp_cap);
+
+    /* 4. Resolve claim via JSON-RPC */
+    char rpc_resolve[512];
+    snprintf(rpc_resolve, sizeof(rpc_resolve),
+             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"union_claim_resolve\",\"arguments\":{\"horizon_id\":\"%s\",\"claim_id\":\"claim_rpc_01\",\"destination\":\"PROMOTED\",\"validator_identity\":\"operator\",\"owner_or_reason\":\"architecture\"}}}",
+             hid);
+    char *resp_resolve = cbm_mcp_server_handle(srv, rpc_resolve);
+    ASSERT(resp_resolve != NULL);
+    doc = yyjson_read(resp_resolve, strlen(resp_resolve), 0);
+    ASSERT(doc != NULL);
+    root = yyjson_doc_get_root(doc);
+    ASSERT(root != NULL);
+    v_res = yyjson_obj_get(root, "result");
+    ASSERT(v_res != NULL);
+    v_sc = yyjson_obj_get(v_res, "structuredContent");
+    ASSERT(v_sc != NULL);
+    yyjson_val *v_resolved = yyjson_obj_get(v_sc, "resolved");
+    ASSERT(v_resolved && yyjson_get_bool(v_resolved) == true);
+    yyjson_doc_free(doc);
+    free(resp_resolve);
+
+    /* 5. Founding propose via JSON-RPC */
+    char rpc_prop[512];
+    snprintf(rpc_prop, sizeof(rpc_prop),
+             "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"founding_propose\",\"arguments\":{\"suggested_theme_id\":\"@org/rpc-theme\",\"namespace\":\"core\",\"rationale\":\"transport test\",\"origin_session\":\"%s\"}}}",
+             hid);
+    char *resp_prop = cbm_mcp_server_handle(srv, rpc_prop);
+    ASSERT(resp_prop != NULL);
+    doc = yyjson_read(resp_prop, strlen(resp_prop), 0);
+    ASSERT(doc != NULL);
+    root = yyjson_doc_get_root(doc);
+    ASSERT(root != NULL);
+    v_res = yyjson_obj_get(root, "result");
+    ASSERT(v_res != NULL);
+    v_sc = yyjson_obj_get(v_res, "structuredContent");
+    ASSERT(v_sc != NULL);
+    yyjson_val *v_proposed = yyjson_obj_get(v_sc, "proposed");
+    ASSERT(v_proposed && yyjson_get_bool(v_proposed) == true);
+    yyjson_doc_free(doc);
+    free(resp_prop);
+
+    /* 6. Founding decide via JSON-RPC (using host-authenticated operator credentials) */
+    const char *rpc_decide =
+        "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"founding_decide\",\"arguments\":{\"suggested_theme_id\":\"@org/rpc-theme\",\"operator_accepted\":true,\"decided_by\":\"operator_host\",\"operator_token\":\"auth_pwd_777\"}}}";
+    char *resp_decide = cbm_mcp_server_handle(srv, rpc_decide);
+    ASSERT(resp_decide != NULL);
+    doc = yyjson_read(resp_decide, strlen(resp_decide), 0);
+    ASSERT(doc != NULL);
+    root = yyjson_doc_get_root(doc);
+    ASSERT(root != NULL);
+    v_res = yyjson_obj_get(root, "result");
+    ASSERT(v_res != NULL);
+    v_sc = yyjson_obj_get(v_res, "structuredContent");
+    ASSERT(v_sc != NULL);
+    yyjson_val *v_decided = yyjson_obj_get(v_sc, "decided");
+    ASSERT(v_decided && yyjson_get_bool(v_decided) == true);
+    yyjson_val *v_st = yyjson_obj_get(v_sc, "status");
+    ASSERT(v_st && yyjson_is_str(v_st));
+    ASSERT_STR_EQ(yyjson_get_str(v_st), "DRAFT");
+    yyjson_doc_free(doc);
+    free(resp_decide);
+
+    /* 7. Close session via JSON-RPC */
+    char rpc_close[512];
+    snprintf(rpc_close, sizeof(rpc_close),
+             "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"union_session_close\",\"arguments\":{\"horizon_id\":\"%s\",\"reason\":\"NORMAL\"}}}",
+             hid);
+    char *resp_close = cbm_mcp_server_handle(srv, rpc_close);
+    ASSERT(resp_close != NULL);
+    doc = yyjson_read(resp_close, strlen(resp_close), 0);
+    ASSERT(doc != NULL);
+    root = yyjson_doc_get_root(doc);
+    ASSERT(root != NULL);
+    v_res = yyjson_obj_get(root, "result");
+    ASSERT(v_res != NULL);
+    v_sc = yyjson_obj_get(v_res, "structuredContent");
+    ASSERT(v_sc != NULL);
+    yyjson_val *v_ok = yyjson_obj_get(v_sc, "success");
+    ASSERT(v_ok && yyjson_get_bool(v_ok) == true);
+    yyjson_doc_free(doc);
+    free(resp_close);
+
+    cbm_mcp_server_free(srv);
+    PASS();
+}
+
 SUITE(union_workflow_e2e) {
     RUN_TEST(test_w01_session_lifecycle);
     RUN_TEST(test_w01_session_close_sweep_and_trace);
+    RUN_TEST(test_w01_claims_outside_session_rejected);
+    RUN_TEST(test_w01_full_lifecycle_over_mcp_transport);
     RUN_TEST(test_w02_action_gateway_restricted_mode);
     RUN_TEST(test_w03_promote_blocked_by_active_contest);
     RUN_TEST(test_w03_promote_blocked_by_gateway_refusal);
@@ -905,6 +1294,8 @@ SUITE(union_workflow_e2e) {
     RUN_TEST(test_w05_territory_and_founding);
     RUN_TEST(test_w05_founding_decline_and_metadata_preservation);
     RUN_TEST(test_w05_founding_requires_proposal_and_operator_identity);
+    RUN_TEST(test_w05_founding_decide_requires_host_proven_authority);
+    RUN_TEST(test_w05_proposal_store_capacity_and_persistence);
     RUN_TEST(test_w07_contest_blind_verify);
     RUN_TEST(test_w07_contest_prefix_delimiter_isolation);
 }

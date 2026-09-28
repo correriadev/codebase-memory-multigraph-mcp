@@ -167,6 +167,19 @@ void cbm_mcp_server_set_config(cbm_mcp_server_t *srv, struct cbm_config *cfg);
 bool cbm_mcp_server_set_session_context(cbm_mcp_server_t *srv, const char *session_root,
                                         const char *allowed_root);
 
+/* Configure host-proven operator authority for governance adjudication (#union).
+ * operator_id and auth_token are copied. */
+void cbm_mcp_server_set_operator_authority(cbm_mcp_server_t *srv, const char *operator_id,
+                                           const char *auth_token);
+
+/* Verify caller-supplied credentials against host-proven operator authority.
+ * Returns true only if host operator authority is authenticated and credentials match. */
+bool cbm_mcp_server_verify_operator_authority(const cbm_mcp_server_t *srv, const char *operator_id,
+                                             const char *auth_token);
+
+/* Read-only operator identity accessor (NULL if unauthenticated). */
+const char *cbm_mcp_server_get_operator_identity(const cbm_mcp_server_t *srv);
+
 /* Read-only session context accessors. Returned strings are owned by srv. */
 const char *cbm_mcp_server_session_root(const cbm_mcp_server_t *srv);
 const char *cbm_mcp_server_session_project(const cbm_mcp_server_t *srv);

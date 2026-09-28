@@ -72,7 +72,7 @@ The 14 tools follow the canonical station lifecycle specified in AUDIT-WORKFLOW 
 3. **Session Deliberation**: `union_session_open` binds session to contract/identity. Craft judgment requires `validate_provenance`.
 4. **Execution Gateway**: `union_record_action` gates actions (`IDEMPOTENT`, `COMPENSABLE`, `IRREVERSIBLE`).
 5. **Caller-Blind Contestation**: `contest_verify` permits evidence-backed review (`target_horizon` and delimiter scoping isolate targets). Unresolved blocking contestations halt promotion.
-6. **Sweep & Harvesting**: Conversational claims are captured via `union_claim_capture` and resolved via `union_claim_resolve`. `union_session_close` blocks on unresolved claims (`SWEEP_INCOMPLETE`) and emits a factual trace logged to the host. Inventions are proposed via `founding_propose` and decided by the operator via `founding_decide` (requiring explicit operator authority `decided_by`).
+6. **Sweep & Harvesting**: Conversational claims are captured via `union_claim_capture` and resolved via `union_claim_resolve` (strictly rejected outside active open sessions). `union_session_close` blocks on unresolved claims (`SWEEP_INCOMPLETE`) and emits a factual trace logged to the host. Inventions are proposed via `founding_propose` (persisted to `<cache>/founding_proposals.json` with capacity guard) and adjudicated via `founding_decide` (requiring host-proven operator authority).
 
 ## HOW TO EXECUTE UNION WORKFLOWS
 
@@ -108,19 +108,19 @@ union_session_close(horizon_id="h_01", reason="NORMAL")
 | `union_session_open` | `identity`, `contract_id`, `based_on_seq`, `client_pid` | Open bounded session with restricted-mode gating. | — |
 | `union_session_get` | `horizon_id` | Query session actions, refusals, budget. | — |
 | `union_session_close` | `horizon_id`, `reason` | Close session, verify sweep resolution, log trace. | `reason="NORMAL"` |
-| `union_claim_capture` | `horizon_id`, `claim_id`, `type`, `predicate`, `consequence`, `based_on_seq` | Capture claim into horizon as `PROPOSED`. | — |
+| `union_claim_capture` | `horizon_id`, `claim_id`, `type`, `predicate`, `consequence`, `based_on_seq` | Capture claim into session as `PROPOSED`. | — |
 | `union_claim_resolve` | `horizon_id`, `claim_id`, `destination`, `owner_or_reason`, `validator_identity` | Assign destination (`PROMOTED`/`OPEN_QUESTION`/`DISCARDED`). | — |
 | `union_record_action` | `horizon_id`, `action_name`, `effect_class`, `auth_id`, `idempotency_key` | Authorize action (`IDEMPOTENT`/`COMPENSABLE`/`IRREVERSIBLE`). | `effect_class="IDEMPOTENT"` |
 | `contest_verify` | `target_ref`, `target_horizon`, `severity`, `evidence` | Submit contestation (`INFORMATIVE`/`BLOCKING`/`INVALIDATING`). | `severity="BLOCKING"` |
-| `founding_propose` | `suggested_theme_id`, `namespace`, `rationale`, `origin_session`, `suggested_curator` | Propose new theme from harvested inventions. | — |
-| `founding_decide` | `suggested_theme_id`, `operator_accepted`, `decided_by`, `is_agent_autonomous` | Operator decision (`DRAFT`/`DECLINED`); consumes proposal. | `is_agent_autonomous=false` |
+| `founding_propose` | `suggested_theme_id`, `namespace`, `rationale`, `origin_session` | Propose theme; disk-backed persistence. | — |
+| `founding_decide` | `suggested_theme_id`, `operator_accepted`, `decided_by`, `operator_token` | Adjudicate proposal; requires host authority. | — |
 
 ## BEST PRACTICES
 REQUIRED: Classify intent via `classify_activity` at prompt start.
 REQUIRED: Declare provenance on specialty judgments via `validate_provenance`.
 REQUIRED: Validate all mutations through `union_record_action`.
 REQUIRED: Provide concrete evidence when invoking `contest_verify`.
-PROHIBITED: Autonomous founding without operator authority (`decided_by`).
+PROHIBITED: Autonomous founding or self-approval without host operator credentials.
 PROHIBITED: Promoting horizons with active blocking/invalidating contestations.
 
 ## DOCUMENT MAP

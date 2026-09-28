@@ -38,6 +38,9 @@ char *handle_union_claim_resolve(cbm_mcp_server_t *srv, const char *args_json);
 
 CbmSessionSweepContext *cbm_mcp_get_session_sweep_context(const char *horizon_id);
 
+void cbm_union_reset_proposal_store_for_test(void);
+void cbm_union_reload_proposals_for_test(void);
+
 #ifdef __cplusplus
 }
 #endif
