@@ -43,10 +43,11 @@ static void get_proposals_file_path(char *buf, size_t sz) {
     snprintf(buf, sz, "%s/founding_proposals.json", dir);
 }
 
-static void save_proposals_to_disk(void) {
+static bool save_proposals_to_disk(void) {
     char path[1024];
     get_proposals_file_path(path, sizeof(path));
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    if (!doc) return false;
     yyjson_mut_val *arr = yyjson_mut_arr(doc);
     yyjson_mut_doc_set_root(doc, arr);
 
@@ -62,8 +63,9 @@ static void save_proposals_to_disk(void) {
         }
     }
 
-    yyjson_mut_write_file(path, doc, 0, NULL, NULL);
+    bool ok = yyjson_mut_write_file(path, doc, 0, NULL, NULL);
     yyjson_mut_doc_free(doc);
+    return ok;
 }
 
 static void load_proposals_from_disk(void) {
@@ -131,10 +133,17 @@ void cbm_union_reload_proposals_for_test(void) {
     load_proposals_from_disk();
 }
 
-static bool store_proposal(const char *theme_id, const char *namespace, const char *rationale,
-                           const char *origin_session, const char *curator) {
+typedef enum {
+    CBM_STORE_PROP_OK = 0,
+    CBM_STORE_PROP_FULL,
+    CBM_STORE_PROP_PERSISTENCE_FAILED,
+    CBM_STORE_PROP_INVALID
+} CbmStoreProposalResult;
+
+static CbmStoreProposalResult store_proposal(const char *theme_id, const char *namespace, const char *rationale,
+                                            const char *origin_session, const char *curator) {
     load_proposals_from_disk();
-    if (!theme_id || !theme_id[0]) return false;
+    if (!theme_id || !theme_id[0]) return CBM_STORE_PROP_INVALID;
     int slot = -1;
     for (size_t i = 0; i < MAX_STORED_PROPOSALS; i++) {
         if (s_proposals[i].active && strcmp(s_proposals[i].proposal.suggested_theme_id, theme_id) == 0) {
@@ -145,18 +154,26 @@ static bool store_proposal(const char *theme_id, const char *namespace, const ch
             slot = (int)i;
         }
     }
-    if (slot >= 0) {
-        s_proposals[slot].active = true;
-        memset(&s_proposals[slot].proposal, 0, sizeof(CbmFoundingProposal));
-        strncpy(s_proposals[slot].proposal.suggested_theme_id, theme_id, sizeof(s_proposals[slot].proposal.suggested_theme_id) - 1);
-        if (namespace) strncpy(s_proposals[slot].proposal.namespace, namespace, sizeof(s_proposals[slot].proposal.namespace) - 1);
-        if (rationale) strncpy(s_proposals[slot].proposal.rationale, rationale, sizeof(s_proposals[slot].proposal.rationale) - 1);
-        if (origin_session) strncpy(s_proposals[slot].proposal.origin_session, origin_session, sizeof(s_proposals[slot].proposal.origin_session) - 1);
-        if (curator) strncpy(s_proposals[slot].proposal.suggested_curator, curator, sizeof(s_proposals[slot].proposal.suggested_curator) - 1);
-        save_proposals_to_disk();
-        return true;
+    if (slot == -1) {
+        return CBM_STORE_PROP_FULL;
     }
-    return false;
+
+    CbmStoredProposal backup;
+    memcpy(&backup, &s_proposals[slot], sizeof(backup));
+
+    s_proposals[slot].active = true;
+    memset(&s_proposals[slot].proposal, 0, sizeof(CbmFoundingProposal));
+    strncpy(s_proposals[slot].proposal.suggested_theme_id, theme_id, sizeof(s_proposals[slot].proposal.suggested_theme_id) - 1);
+    if (namespace) strncpy(s_proposals[slot].proposal.namespace, namespace, sizeof(s_proposals[slot].proposal.namespace) - 1);
+    if (rationale) strncpy(s_proposals[slot].proposal.rationale, rationale, sizeof(s_proposals[slot].proposal.rationale) - 1);
+    if (origin_session) strncpy(s_proposals[slot].proposal.origin_session, origin_session, sizeof(s_proposals[slot].proposal.origin_session) - 1);
+    if (curator) strncpy(s_proposals[slot].proposal.suggested_curator, curator, sizeof(s_proposals[slot].proposal.suggested_curator) - 1);
+
+    if (!save_proposals_to_disk()) {
+        memcpy(&s_proposals[slot], &backup, sizeof(backup));
+        return CBM_STORE_PROP_PERSISTENCE_FAILED;
+    }
+    return CBM_STORE_PROP_OK;
 }
 
 static CbmFoundingProposal *find_proposal(const char *theme_id) {
@@ -934,13 +951,25 @@ char *handle_founding_propose(cbm_mcp_server_t *srv, const char *args_json) {
     }
 
     const char *theme_id = yyjson_get_str(v_tid);
-    if (!store_proposal(theme_id, yyjson_get_str(v_ns), yyjson_get_str(v_rat),
-                        yyjson_get_str(v_sess), (v_cur && yyjson_is_str(v_cur)) ? yyjson_get_str(v_cur) : "operator")) {
+    CbmStoreProposalResult sres = store_proposal(theme_id, yyjson_get_str(v_ns), yyjson_get_str(v_rat),
+                                                 yyjson_get_str(v_sess), (v_cur && yyjson_is_str(v_cur)) ? yyjson_get_str(v_cur) : "operator");
+    if (sres == CBM_STORE_PROP_FULL) {
         yyjson_doc_free(doc);
         cbm_refusal_emit(CBM_REFUSAL_BUDGET_EXHAUSTED, "founding_propose",
                          "proposal capacity exhausted; cannot store proposal");
         return json_error_result("PROPOSAL_STORE_FULL",
                                  "Proposal store capacity exhausted; cannot accept more proposals");
+    }
+    if (sres == CBM_STORE_PROP_PERSISTENCE_FAILED) {
+        yyjson_doc_free(doc);
+        cbm_refusal_emit(CBM_REFUSAL_BUDGET_EXHAUSTED, "founding_propose",
+                         "failed to persist founding proposal to disk");
+        return json_error_result("PERSISTENCE_FAILED",
+                                 "Failed to persist founding proposal to disk; proposal was not stored");
+    }
+    if (sres != CBM_STORE_PROP_OK) {
+        yyjson_doc_free(doc);
+        return json_error_result("INVALID_PARAMS", "failed to store proposal");
     }
 
     yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
@@ -1248,9 +1277,33 @@ char *handle_union_claim_resolve(cbm_mcp_server_t *srv, const char *args_json) {
     }
 
     yyjson_val *v_val = yyjson_obj_get(root, "validator_identity");
-    if (v_val && yyjson_is_str(v_val)) {
+    if (!v_val) v_val = yyjson_obj_get(root, "decided_by");
+    if (!v_val) v_val = yyjson_obj_get(root, "operator_identity");
+
+    yyjson_val *v_tok = yyjson_obj_get(root, "operator_token");
+    if (!v_tok) v_tok = yyjson_obj_get(root, "auth_token");
+    if (!v_tok) v_tok = yyjson_obj_get(root, "token");
+
+    yyjson_val *v_auto = yyjson_obj_get(root, "is_agent_autonomous");
+    bool autonomous = (v_auto && yyjson_is_bool(v_auto)) ? yyjson_get_bool(v_auto) : false;
+
+    if (v_val || v_tok) {
+        const char *val_id = (v_val && yyjson_is_str(v_val)) ? yyjson_get_str(v_val) : NULL;
+        const char *auth_tok = (v_tok && yyjson_is_str(v_tok)) ? yyjson_get_str(v_tok) : NULL;
+
+        if (autonomous || !cbm_mcp_server_verify_operator_authority(srv, val_id, auth_tok)) {
+            yyjson_doc_free(doc);
+            cbm_refusal_emit(CBM_REFUSAL_AUTO_FOUNDING_FORBIDDEN, "union_claim_resolve",
+                             "intent validation requires proven host operator authority; client self-declaration or autonomous adjudication is forbidden");
+            return json_error_result("AUTO_VALIDATION_FORBIDDEN",
+                                     "Intent validation requires proven host operator authority; client self-declaration or autonomous adjudication is forbidden");
+        }
+
+        const char *proven_op = cbm_mcp_server_get_operator_identity(srv);
+        const char *effective_validator = (proven_op && proven_op[0]) ? proven_op : (val_id && val_id[0] ? val_id : "operator");
+
         char val_reason[256] = {0};
-        CbmRefusalCode vrc = cbm_sweep_validate_intent(sweep_ctx, claim_id, yyjson_get_str(v_val), val_reason, sizeof(val_reason));
+        CbmRefusalCode vrc = cbm_sweep_validate_intent(sweep_ctx, claim_id, effective_validator, val_reason, sizeof(val_reason));
         if (vrc != CBM_REFUSAL_OK) {
             yyjson_doc_free(doc);
             return json_error_result(cbm_refusal_code_string(vrc), val_reason[0] ? val_reason : "intent validation failed");

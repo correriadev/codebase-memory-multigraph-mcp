@@ -385,8 +385,8 @@ TEST(test_w05_territory_and_founding) {
     free(dec_bad_res);
 
     /* 7. Founding decide: operator accepted */
-    cbm_mcp_server_set_operator_authority(srv, "operator", NULL);
-    const char *dec_good = "{\"suggested_theme_id\":\"@org/split-payment\",\"operator_accepted\":true,\"decided_by\":\"operator\",\"is_agent_autonomous\":false}";
+    cbm_mcp_server_set_operator_authority(srv, "operator", "auth_secret_territory_op");
+    const char *dec_good = "{\"suggested_theme_id\":\"@org/split-payment\",\"operator_accepted\":true,\"decided_by\":\"operator\",\"operator_token\":\"auth_secret_territory_op\",\"is_agent_autonomous\":false}";
     char *dec_good_res = handle_founding_decide(srv, dec_good);
     ASSERT(dec_good_res != NULL);
     doc = yyjson_read(dec_good_res, strlen(dec_good_res), 0);
@@ -578,7 +578,7 @@ TEST(test_w03_promote_blocked_without_session_and_invalidating) {
 TEST(test_w05_founding_decline_and_metadata_preservation) {
     cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
     ASSERT(srv != NULL);
-    cbm_mcp_server_set_operator_authority(srv, "operator", NULL);
+    cbm_mcp_server_set_operator_authority(srv, "operator", "operator_secret_123");
 
     /* 1. Propose theme with custom namespace and rationale */
     const char *prop_args = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"namespace\":\"architecture\",\"rationale\":\"actor pattern\",\"origin_session\":\"h_sess_99\",\"suggested_curator\":\"alice\"}";
@@ -594,7 +594,7 @@ TEST(test_w05_founding_decline_and_metadata_preservation) {
     free(prop_res);
 
     /* 2. Decline proposal -> must return status DECLINED and accepted false */
-    const char *dec_bad = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"operator_accepted\":false,\"decided_by\":\"operator\",\"is_agent_autonomous\":false}";
+    const char *dec_bad = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"operator_accepted\":false,\"decided_by\":\"operator\",\"operator_token\":\"operator_secret_123\",\"is_agent_autonomous\":false}";
     char *dec_bad_res = handle_founding_decide(srv, dec_bad);
     ASSERT(dec_bad_res != NULL);
     doc = yyjson_read(dec_bad_res, strlen(dec_bad_res), 0);
@@ -615,7 +615,7 @@ TEST(test_w05_founding_decline_and_metadata_preservation) {
     char *prop_res2 = handle_founding_propose(srv, prop_args);
     free(prop_res2);
 
-    const char *dec_good = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"operator_accepted\":true,\"decided_by\":\"operator\",\"is_agent_autonomous\":false}";
+    const char *dec_good = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"operator_accepted\":true,\"decided_by\":\"operator\",\"operator_token\":\"operator_secret_123\",\"is_agent_autonomous\":false}";
     char *dec_good_res = handle_founding_decide(srv, dec_good);
     ASSERT(dec_good_res != NULL);
     doc = yyjson_read(dec_good_res, strlen(dec_good_res), 0);
@@ -819,8 +819,8 @@ TEST(test_w05_founding_requires_proposal_and_operator_identity) {
     free(res_agent);
 
     /* 4. Decide with operator identity -> succeeds */
-    cbm_mcp_server_set_operator_authority(srv, "operator_chief", NULL);
-    const char *dec_ok = "{\"suggested_theme_id\":\"@org/strict-authority\",\"operator_accepted\":true,\"decided_by\":\"operator_chief\"}";
+    cbm_mcp_server_set_operator_authority(srv, "operator_chief", "chief_secret_pwd_777");
+    const char *dec_ok = "{\"suggested_theme_id\":\"@org/strict-authority\",\"operator_accepted\":true,\"decided_by\":\"operator_chief\",\"operator_token\":\"chief_secret_pwd_777\"}";
     char *res_ok = handle_founding_decide(srv, dec_ok);
     ASSERT(res_ok != NULL);
     doc = yyjson_read(res_ok, strlen(res_ok), 0);
@@ -989,6 +989,118 @@ TEST(test_w01_claims_outside_session_rejected) {
     PASS();
 }
 
+TEST(test_w01_claim_intent_validation_requires_host_proven_authority) {
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    ASSERT(srv != NULL);
+
+    /* Open session */
+    char *open_res = handle_union_session_open(srv, "{\"identity\":\"auditor\"}");
+    ASSERT(open_res != NULL);
+    yyjson_doc *doc = yyjson_read(open_res, strlen(open_res), 0);
+    ASSERT(doc != NULL);
+    yyjson_val *payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_hid = yyjson_obj_get(payload, "horizon_id");
+    ASSERT(v_hid && yyjson_is_str(v_hid));
+    char hid[64];
+    strncpy(hid, yyjson_get_str(v_hid), sizeof(hid) - 1);
+    hid[sizeof(hid) - 1] = '\0';
+    yyjson_doc_free(doc);
+    free(open_res);
+
+    /* Capture a DECISION claim */
+    char cap_args[256];
+    snprintf(cap_args, sizeof(cap_args),
+             "{\"horizon_id\":\"%s\",\"claim_id\":\"c_auth_test\",\"type\":\"DECISION\",\"predicate\":\"Enforce TLS 1.3 only.\",\"based_on_seq\":\"seq_1\"}",
+             hid);
+    char *res_cap = handle_union_claim_capture(srv, cap_args);
+    ASSERT(res_cap != NULL);
+    free(res_cap);
+
+    /* 1. Client attempts intent validation with self-declared validator_identity: 'operator' and NO token -> MUST fail */
+    char res_no_tok[256];
+    snprintf(res_no_tok, sizeof(res_no_tok),
+             "{\"horizon_id\":\"%s\",\"claim_id\":\"c_auth_test\",\"destination\":\"PROMOTED\",\"validator_identity\":\"operator\"}",
+             hid);
+    char *out_no_tok = handle_union_claim_resolve(srv, res_no_tok);
+    ASSERT(out_no_tok != NULL);
+    doc = yyjson_read(out_no_tok, strlen(out_no_tok), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "AUTO_VALIDATION_FORBIDDEN");
+    yyjson_doc_free(doc);
+    free(out_no_tok);
+
+    /* 2. Client attempts with wrong token -> MUST fail */
+    char res_bad_tok[256];
+    snprintf(res_bad_tok, sizeof(res_bad_tok),
+             "{\"horizon_id\":\"%s\",\"claim_id\":\"c_auth_test\",\"destination\":\"PROMOTED\",\"validator_identity\":\"operator\",\"operator_token\":\"wrong_token\"}",
+             hid);
+    char *out_bad_tok = handle_union_claim_resolve(srv, res_bad_tok);
+    ASSERT(out_bad_tok != NULL);
+    doc = yyjson_read(out_bad_tok, strlen(out_bad_tok), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "AUTO_VALIDATION_FORBIDDEN");
+    yyjson_doc_free(doc);
+    free(out_bad_tok);
+
+    /* 3. Host establishes operator authority without token (NULL) -> MUST NOT authenticate */
+    cbm_mcp_server_set_operator_authority(srv, "operator_lead", NULL);
+    char *out_null_tok = handle_union_claim_resolve(srv, res_no_tok);
+    ASSERT(out_null_tok != NULL);
+    doc = yyjson_read(out_null_tok, strlen(out_null_tok), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    yyjson_doc_free(doc);
+    free(out_null_tok);
+
+    /* 4. Host establishes operator authority with secret token */
+    cbm_mcp_server_set_operator_authority(srv, "operator_lead", "secret_host_key_456");
+
+    /* 5. Client provides valid host operator credentials -> SUCCEEDS */
+    char res_valid[256];
+    snprintf(res_valid, sizeof(res_valid),
+             "{\"horizon_id\":\"%s\",\"claim_id\":\"c_auth_test\",\"destination\":\"PROMOTED\",\"validator_identity\":\"operator_lead\",\"operator_token\":\"secret_host_key_456\"}",
+             hid);
+    char *out_valid = handle_union_claim_resolve(srv, res_valid);
+    ASSERT(out_valid != NULL);
+    doc = yyjson_read(out_valid, strlen(out_valid), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == false);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_res = yyjson_obj_get(payload, "resolved");
+    ASSERT(v_res && yyjson_get_bool(v_res) == true);
+    yyjson_doc_free(doc);
+    free(out_valid);
+
+    /* Verify claim in sweep context has proven operator as validated_by */
+    CbmSessionSweepContext *ctx = cbm_mcp_get_session_sweep_context(hid);
+    ASSERT(ctx != NULL);
+    CbmClaim *saved_claim = cbm_sweep_find_claim(ctx, "c_auth_test");
+    ASSERT(saved_claim != NULL);
+    ASSERT_STR_EQ(saved_claim->provenance.validated_by, "operator_lead");
+
+    /* Close session cleanly */
+    char close_args[128];
+    snprintf(close_args, sizeof(close_args), "{\"horizon_id\":\"%s\",\"reason\":\"NORMAL\"}", hid);
+    char *close_res = handle_union_session_close(srv, close_args);
+    ASSERT(close_res != NULL);
+    free(close_res);
+
+    cbm_mcp_server_free(srv);
+    PASS();
+}
+
 TEST(test_w05_founding_decide_requires_host_proven_authority) {
     cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
     ASSERT(srv != NULL);
@@ -1016,7 +1128,23 @@ TEST(test_w05_founding_decide_requires_host_proven_authority) {
     yyjson_doc_free(doc);
     free(res_unauth);
 
-    /* 3. Host establishes operator authority with an authentication token */
+    /* 3. Host establishes operator authority without token (NULL) -> MUST fail to authenticate and be rejected */
+    cbm_mcp_server_set_operator_authority(srv, "operator_lead", NULL);
+    const char *dec_null_tok = "{\"suggested_theme_id\":\"@org/auth-guard\",\"operator_accepted\":true,\"decided_by\":\"operator_lead\",\"operator_token\":\"secret_host_token_999\"}";
+    char *res_null_tok = handle_founding_decide(srv, dec_null_tok);
+    ASSERT(res_null_tok != NULL);
+    doc = yyjson_read(res_null_tok, strlen(res_null_tok), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "AUTO_FOUNDING_FORBIDDEN");
+    yyjson_doc_free(doc);
+    free(res_null_tok);
+
+    /* 4. Host establishes operator authority with an authentication token */
     cbm_mcp_server_set_operator_authority(srv, "operator_lead", "secret_host_token_999");
 
     /* 4. Client attempts with wrong token -> MUST fail with AUTO_FOUNDING_FORBIDDEN */
@@ -1199,7 +1327,7 @@ TEST(test_w01_full_lifecycle_over_mcp_transport) {
     /* 4. Resolve claim via JSON-RPC */
     char rpc_resolve[512];
     snprintf(rpc_resolve, sizeof(rpc_resolve),
-             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"union_claim_resolve\",\"arguments\":{\"horizon_id\":\"%s\",\"claim_id\":\"claim_rpc_01\",\"destination\":\"PROMOTED\",\"validator_identity\":\"operator\",\"owner_or_reason\":\"architecture\"}}}",
+             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"union_claim_resolve\",\"arguments\":{\"horizon_id\":\"%s\",\"claim_id\":\"claim_rpc_01\",\"destination\":\"PROMOTED\",\"validator_identity\":\"operator_host\",\"operator_token\":\"auth_pwd_777\",\"owner_or_reason\":\"architecture\"}}}",
              hid);
     char *resp_resolve = cbm_mcp_server_handle(srv, rpc_resolve);
     ASSERT(resp_resolve != NULL);
@@ -1285,6 +1413,7 @@ SUITE(union_workflow_e2e) {
     RUN_TEST(test_w01_session_lifecycle);
     RUN_TEST(test_w01_session_close_sweep_and_trace);
     RUN_TEST(test_w01_claims_outside_session_rejected);
+    RUN_TEST(test_w01_claim_intent_validation_requires_host_proven_authority);
     RUN_TEST(test_w01_full_lifecycle_over_mcp_transport);
     RUN_TEST(test_w02_action_gateway_restricted_mode);
     RUN_TEST(test_w03_promote_blocked_by_active_contest);

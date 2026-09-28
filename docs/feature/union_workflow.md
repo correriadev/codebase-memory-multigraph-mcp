@@ -109,7 +109,7 @@ union_session_close(horizon_id="h_01", reason="NORMAL")
 | `union_session_get` | `horizon_id` | Query session actions, refusals, budget. | — |
 | `union_session_close` | `horizon_id`, `reason` | Close session, verify sweep resolution, log trace. | `reason="NORMAL"` |
 | `union_claim_capture` | `horizon_id`, `claim_id`, `type`, `predicate`, `consequence`, `based_on_seq` | Capture claim into session as `PROPOSED`. | — |
-| `union_claim_resolve` | `horizon_id`, `claim_id`, `destination`, `owner_or_reason`, `validator_identity` | Assign destination (`PROMOTED`/`OPEN_QUESTION`/`DISCARDED`). | — |
+| `union_claim_resolve` | `horizon_id`, `claim_id`, `destination`, `owner_or_reason`, `validator_identity`, `operator_token` | Assign destination; intent validation requires operator credential. | — |
 | `union_record_action` | `horizon_id`, `action_name`, `effect_class`, `auth_id`, `idempotency_key` | Authorize action (`IDEMPOTENT`/`COMPENSABLE`/`IRREVERSIBLE`). | `effect_class="IDEMPOTENT"` |
 | `contest_verify` | `target_ref`, `target_horizon`, `severity`, `evidence` | Submit contestation (`INFORMATIVE`/`BLOCKING`/`INVALIDATING`). | `severity="BLOCKING"` |
 | `founding_propose` | `suggested_theme_id`, `namespace`, `rationale`, `origin_session` | Propose theme; disk-backed persistence. | — |
