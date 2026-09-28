@@ -385,7 +385,7 @@ TEST(test_w05_territory_and_founding) {
     free(dec_bad_res);
 
     /* 7. Founding decide: operator accepted */
-    const char *dec_good = "{\"suggested_theme_id\":\"@org/split-payment\",\"operator_accepted\":true,\"is_agent_autonomous\":false}";
+    const char *dec_good = "{\"suggested_theme_id\":\"@org/split-payment\",\"operator_accepted\":true,\"decided_by\":\"operator\",\"is_agent_autonomous\":false}";
     char *dec_good_res = handle_founding_decide(srv, dec_good);
     ASSERT(dec_good_res != NULL);
     doc = yyjson_read(dec_good_res, strlen(dec_good_res), 0);
@@ -592,7 +592,7 @@ TEST(test_w05_founding_decline_and_metadata_preservation) {
     free(prop_res);
 
     /* 2. Decline proposal -> must return status DECLINED and accepted false */
-    const char *dec_bad = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"operator_accepted\":false,\"is_agent_autonomous\":false}";
+    const char *dec_bad = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"operator_accepted\":false,\"decided_by\":\"operator\",\"is_agent_autonomous\":false}";
     char *dec_bad_res = handle_founding_decide(srv, dec_bad);
     ASSERT(dec_bad_res != NULL);
     doc = yyjson_read(dec_bad_res, strlen(dec_bad_res), 0);
@@ -613,7 +613,7 @@ TEST(test_w05_founding_decline_and_metadata_preservation) {
     char *prop_res2 = handle_founding_propose(srv, prop_args);
     free(prop_res2);
 
-    const char *dec_good = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"operator_accepted\":true,\"is_agent_autonomous\":false}";
+    const char *dec_good = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"operator_accepted\":true,\"decided_by\":\"operator\",\"is_agent_autonomous\":false}";
     char *dec_good_res = handle_founding_decide(srv, dec_good);
     ASSERT(dec_good_res != NULL);
     doc = yyjson_read(dec_good_res, strlen(dec_good_res), 0);
@@ -665,23 +665,38 @@ TEST(test_w01_session_close_sweep_and_trace) {
     yyjson_doc_free(doc);
     free(open_res);
 
-    /* 2. Retrieve sweep context and capture a claim */
-    CbmSessionSweepContext *sweep_ctx = cbm_mcp_get_session_sweep_context(h_id);
-    ASSERT(sweep_ctx != NULL);
+    /* 2. Record actions across effect classes: 1 IDEMPOTENT, 1 COMPENSABLE */
+    char act1[256];
+    snprintf(act1, sizeof(act1),
+             "{\"horizon_id\":\"%s\",\"action_name\":\"read_config\",\"effect_class\":\"IDEMPOTENT\"}", h_id);
+    char *res_act1 = handle_union_record_action(srv, act1);
+    ASSERT(res_act1 != NULL);
+    free(res_act1);
 
-    CbmClaim claim;
-    memset(&claim, 0, sizeof(claim));
-    strncpy(claim.id, "claim_unresolved_42", sizeof(claim.id) - 1);
-    strncpy(claim.predicate, "adopt event sourcing for order tracking.", sizeof(claim.predicate) - 1);
-    claim.type = CBM_CLAIM_DECISION;
-    claim.status = EPISTEMIC_PROPOSED;
-    strncpy(claim.consequence, "Data divergence if not audited", sizeof(claim.consequence) - 1);
-    strncpy(claim.based_on_seq, "seq_1", sizeof(claim.based_on_seq) - 1);
+    char act2[256];
+    snprintf(act2, sizeof(act2),
+             "{\"horizon_id\":\"%s\",\"action_name\":\"stage_patch\",\"effect_class\":\"COMPENSABLE\"}", h_id);
+    char *res_act2 = handle_union_record_action(srv, act2);
+    ASSERT(res_act2 != NULL);
+    free(res_act2);
 
-    CbmRefusalCode cap_rc = cbm_sweep_capture_claim(sweep_ctx, &claim, 1, NULL, 0);
-    ASSERT_EQ(cap_rc, CBM_REFUSAL_OK);
+    /* 3. Capture claim via pure MCP tool union_claim_capture */
+    char cap_args[512];
+    snprintf(cap_args, sizeof(cap_args),
+             "{\"horizon_id\":\"%s\",\"claim_id\":\"claim_unresolved_42\",\"type\":\"DECISION\",\"predicate\":\"adopt event sourcing for order tracking.\",\"consequence\":\"Data divergence if not audited\",\"based_on_seq\":\"seq_1\"}", h_id);
+    char *cap_res = handle_union_claim_capture(srv, cap_args);
+    ASSERT(cap_res != NULL);
+    doc = yyjson_read(cap_res, strlen(cap_res), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == false);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_cap = yyjson_obj_get(payload, "captured");
+    ASSERT(v_cap && yyjson_get_bool(v_cap) == true);
+    yyjson_doc_free(doc);
+    free(cap_res);
 
-    /* 3. Attempt to close session while claim is unresolved -> MUST fail with SWEEP_INCOMPLETE */
+    /* 4. Attempt to close session while claim is unresolved -> MUST fail with SWEEP_INCOMPLETE */
     char close_args[128];
     snprintf(close_args, sizeof(close_args), "{\"horizon_id\":\"%s\",\"reason\":\"NORMAL\"}", h_id);
     char *close_res = handle_union_session_close(srv, close_args);
@@ -700,13 +715,23 @@ TEST(test_w01_session_close_sweep_and_trace) {
     yyjson_doc_free(doc);
     free(close_res);
 
-    /* 4. Resolve claim by assigning destination DISCARDED with reason exploration */
-    CbmRefusalCode dest_rc = cbm_sweep_assign_destination(sweep_ctx, "claim_unresolved_42",
-                                                          CBM_SWEEP_DEST_DISCARDED, "exploration",
-                                                          NULL, 0);
-    ASSERT_EQ(dest_rc, CBM_REFUSAL_OK);
+    /* 5. Resolve claim via pure MCP tool union_claim_resolve with DISCARDED */
+    char res_args[256];
+    snprintf(res_args, sizeof(res_args),
+             "{\"horizon_id\":\"%s\",\"claim_id\":\"claim_unresolved_42\",\"destination\":\"DISCARDED\",\"owner_or_reason\":\"exploration\"}", h_id);
+    char *res_res = handle_union_claim_resolve(srv, res_args);
+    ASSERT(res_res != NULL);
+    doc = yyjson_read(res_res, strlen(res_res), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == false);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_res = yyjson_obj_get(payload, "resolved");
+    ASSERT(v_res && yyjson_get_bool(v_res) == true);
+    yyjson_doc_free(doc);
+    free(res_res);
 
-    /* 5. Close session now -> MUST succeed and include factual trace object */
+    /* 6. Close session now -> MUST succeed, log trace to host, and include factual trace object */
     close_res = handle_union_session_close(srv, close_args);
     ASSERT(close_res != NULL);
     doc = yyjson_read(close_res, strlen(close_res), 0);
@@ -725,6 +750,18 @@ TEST(test_w01_session_close_sweep_and_trace) {
     yyjson_val *v_tout = yyjson_obj_get(v_trace, "outcome");
     ASSERT(v_tout && yyjson_is_str(v_tout));
     ASSERT_STR_EQ(yyjson_get_str(v_tout), "NORMAL");
+
+    yyjson_val *v_acts = yyjson_obj_get(v_trace, "actions");
+    ASSERT(v_acts != NULL && yyjson_is_obj(v_acts));
+    yyjson_val *v_tot = yyjson_obj_get(v_acts, "total");
+    ASSERT(v_tot && yyjson_get_int(v_tot) == 2);
+    yyjson_val *v_idem = yyjson_obj_get(v_acts, "idempotent");
+    ASSERT(v_idem && yyjson_get_int(v_idem) == 1);
+    yyjson_val *v_comp = yyjson_obj_get(v_acts, "compensable");
+    ASSERT(v_comp && yyjson_get_int(v_comp) == 1);
+    yyjson_val *v_irrev = yyjson_obj_get(v_acts, "irreversible");
+    ASSERT(v_irrev && yyjson_get_int(v_irrev) == 0);
+
     yyjson_val *v_excl = yyjson_obj_get(v_trace, "exclusions");
     ASSERT(v_excl && yyjson_is_obj(v_excl));
     yyjson_val *v_decl = yyjson_obj_get(v_excl, "declared");
@@ -733,6 +770,125 @@ TEST(test_w01_session_close_sweep_and_trace) {
     ASSERT(v_oos && yyjson_get_int(v_oos) == 1);
     yyjson_doc_free(doc);
     free(close_res);
+
+    cbm_mcp_server_free(srv);
+    PASS();
+}
+
+TEST(test_w05_founding_requires_proposal_and_operator_identity) {
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    ASSERT(srv != NULL);
+    yyjson_val *payload = NULL;
+
+    /* 1. Decide without any prior proposal -> MUST return PROPOSAL_NOT_FOUND */
+    const char *dec_unproposed = "{\"suggested_theme_id\":\"@org/unproposed-theme\",\"operator_accepted\":true,\"decided_by\":\"operator\"}";
+    char *res_unprop = handle_founding_decide(srv, dec_unproposed);
+    ASSERT(res_unprop != NULL);
+    yyjson_doc *doc = yyjson_read(res_unprop, strlen(res_unprop), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "PROPOSAL_NOT_FOUND");
+    yyjson_doc_free(doc);
+    free(res_unprop);
+
+    /* 2. Submit proposal */
+    const char *prop_args = "{\"suggested_theme_id\":\"@org/strict-authority\",\"namespace\":\"core\",\"rationale\":\"strict operator check\",\"origin_session\":\"h_sess_auth\",\"suggested_curator\":\"lead\"}";
+    char *res_prop = handle_founding_propose(srv, prop_args);
+    ASSERT(res_prop != NULL);
+    free(res_prop);
+
+    /* 3. Decide with non-operator identity (e.g. agent) -> MUST fail with AUTO_FOUNDING_FORBIDDEN */
+    const char *dec_agent = "{\"suggested_theme_id\":\"@org/strict-authority\",\"operator_accepted\":true,\"decided_by\":\"agent_autonomous\"}";
+    char *res_agent = handle_founding_decide(srv, dec_agent);
+    ASSERT(res_agent != NULL);
+    doc = yyjson_read(res_agent, strlen(res_agent), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "AUTO_FOUNDING_FORBIDDEN");
+    yyjson_doc_free(doc);
+    free(res_agent);
+
+    /* 4. Decide with operator identity -> succeeds */
+    const char *dec_ok = "{\"suggested_theme_id\":\"@org/strict-authority\",\"operator_accepted\":true,\"decided_by\":\"operator_chief\"}";
+    char *res_ok = handle_founding_decide(srv, dec_ok);
+    ASSERT(res_ok != NULL);
+    doc = yyjson_read(res_ok, strlen(res_ok), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == false);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_dec = yyjson_obj_get(payload, "decided");
+    ASSERT(v_dec && yyjson_get_bool(v_dec) == true);
+    yyjson_doc_free(doc);
+    free(res_ok);
+
+    /* 5. Repeat decide on consumed proposal -> MUST return PROPOSAL_NOT_FOUND */
+    char *res_repeat = handle_founding_decide(srv, dec_ok);
+    ASSERT(res_repeat != NULL);
+    doc = yyjson_read(res_repeat, strlen(res_repeat), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "PROPOSAL_NOT_FOUND");
+    yyjson_doc_free(doc);
+    free(res_repeat);
+
+    cbm_mcp_server_free(srv);
+    PASS();
+}
+
+TEST(test_w07_contest_prefix_delimiter_isolation) {
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    ASSERT(srv != NULL);
+
+    /* 1. Submit BLOCKING contest against target "horizon_123_410" */
+    const char *contest_410 = "{\"target_ref\":\"horizon_123_410\",\"severity\":\"BLOCKING\",\"evidence\":[\"cbm://logs#audit_violation\"]}";
+    char *res_c = handle_contest_verify(srv, contest_410);
+    ASSERT(res_c != NULL);
+    yyjson_doc *doc = yyjson_read(res_c, strlen(res_c), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == false);
+    yyjson_doc_free(doc);
+    free(res_c);
+
+    /* 2. Check that target "horizon_123_41" is NOT blocked (prefix match without delimiter must not match!) */
+    size_t blocked_41 = cbm_contest_is_blocked(cbm_mcp_server_contest_registry(srv), "horizon_123_41");
+    ASSERT_EQ(blocked_41, 0);
+
+    /* 3. Check that "horizon_123_410" IS blocked */
+    size_t blocked_410 = cbm_contest_is_blocked(cbm_mcp_server_contest_registry(srv), "horizon_123_410");
+    ASSERT_EQ(blocked_410, 1);
+
+    /* 4. Submit BLOCKING contest against subpath with delimiter: "horizon_123_41/subpart" */
+    const char *contest_sub = "{\"target_ref\":\"horizon_123_41/subpart\",\"severity\":\"BLOCKING\",\"evidence\":[\"cbm://logs#subpart_flaw\"]}";
+    char *res_sub = handle_contest_verify(srv, contest_sub);
+    ASSERT(res_sub != NULL);
+    free(res_sub);
+
+    /* Now horizon_123_41 IS blocked because of delimiter '/' match */
+    size_t blocked_after_sub = cbm_contest_is_blocked(cbm_mcp_server_contest_registry(srv), "horizon_123_41");
+    ASSERT_EQ(blocked_after_sub, 1);
+
+    /* 5. Submit BLOCKING contest against a claim associated with an explicit target_horizon */
+    const char *contest_explicit = "{\"target_ref\":\"claim_iso_99\",\"target_horizon\":\"horizon_iso_explicit\",\"severity\":\"BLOCKING\",\"evidence\":[\"cbm://evidence#rule\"]}";
+    char *res_exp = handle_contest_verify(srv, contest_explicit);
+    ASSERT(res_exp != NULL);
+    free(res_exp);
+
+    /* The explicit horizon MUST be blocked */
+    size_t blocked_explicit = cbm_contest_is_blocked(cbm_mcp_server_contest_registry(srv), "horizon_iso_explicit");
+    ASSERT_EQ(blocked_explicit, 1);
 
     cbm_mcp_server_free(srv);
     PASS();
@@ -748,6 +904,8 @@ SUITE(union_workflow_e2e) {
     RUN_TEST(test_w04_routing_and_provenance_validation);
     RUN_TEST(test_w05_territory_and_founding);
     RUN_TEST(test_w05_founding_decline_and_metadata_preservation);
+    RUN_TEST(test_w05_founding_requires_proposal_and_operator_identity);
     RUN_TEST(test_w07_contest_blind_verify);
+    RUN_TEST(test_w07_contest_prefix_delimiter_isolation);
 }
 

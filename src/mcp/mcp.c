@@ -860,16 +860,36 @@ static const tool_def_t TOOLS[] = {
     {"founding_decide", "Operator decision on a founding proposal (accept into DRAFT theme or decline)",
      "{\"type\":\"object\",\"properties\":{\"suggested_theme_id\":{\"type\":\"string\",\"description\":"
      "\"Theme ID of the proposal\"},\"operator_accepted\":{\"type\":\"boolean\","
-     "\"description\":\"True to accept proposal into DRAFT, false to decline\"},\"is_agent_autonomous\":"
+     "\"description\":\"True to accept proposal into DRAFT, false to decline\"},\"decided_by\":"
+     "{\"type\":\"string\",\"description\":\"Identity of operator deciding the proposal (e.g. 'operator')\"},\"is_agent_autonomous\":"
      "{\"type\":\"boolean\",\"description\":\"True if caller is an agent (autonomous founding forbidden)\",\"default\":false}},"
      "\"required\":[\"suggested_theme_id\",\"operator_accepted\"]}"},
 
     {"contest_verify", "Submit a typed contestation with evidence against a target claim (caller-blind verification)",
      "{\"type\":\"object\",\"properties\":{\"target_ref\":{\"type\":\"string\",\"description\":"
-     "\"Target claim or horizon reference\"},\"severity\":{\"type\":\"string\","
+     "\"Target claim or horizon reference\"},\"target_horizon\":{\"type\":\"string\",\"description\":"
+     "\"Target session horizon ID containing the claim\"},\"severity\":{\"type\":\"string\","
      "\"enum\":[\"INFORMATIVE\",\"BLOCKING\",\"INVALIDATING\"],\"default\":\"BLOCKING\"},\"evidence\":"
      "{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Mandatory concrete evidence references\"}},"
      "\"required\":[\"target_ref\",\"evidence\"]}"},
+
+    {"union_claim_capture", "Capture a conversational claim into a session horizon as PROPOSED (Scope C03)",
+     "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":\"Target session horizon ID\"},"
+     "\"claim_id\":{\"type\":\"string\",\"description\":\"Unique claim ID\"},"
+     "\"type\":{\"type\":\"string\",\"enum\":[\"DECISION\",\"OPEN_QUESTION\",\"CONSTRAINT\",\"FACT\",\"VERDICT\"],\"description\":\"Claim epistemic type\"},"
+     "\"predicate\":{\"type\":\"string\",\"description\":\"Single self-contained declarative sentence ending with period\"},"
+     "\"consequence\":{\"type\":\"string\",\"description\":\"Consequence if ignored or unanswered\"},"
+     "\"based_on_seq\":{\"type\":\"string\",\"description\":\"Belief sequence baseline\"},"
+     "\"exchange_seq\":{\"type\":\"integer\",\"description\":\"Host log exchange sequence number\"}},"
+     "\"required\":[\"horizon_id\",\"claim_id\",\"type\",\"predicate\"]}"},
+
+    {"union_claim_resolve", "Assign a mandatory destination to a conversational claim before session closure (Scope C03)",
+     "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":\"Target session horizon ID\"},"
+     "\"claim_id\":{\"type\":\"string\",\"description\":\"Claim ID to resolve\"},"
+     "\"destination\":{\"type\":\"string\",\"enum\":[\"PROMOTED\",\"CONVERTED_OPEN_QUESTION\",\"DISCARDED\"],\"description\":\"Mandatory destination\"},"
+     "\"owner_or_reason\":{\"type\":\"string\",\"description\":\"Owner for OPEN_QUESTION or typed reason for DISCARDED (e.g. exploration, dead_end)\"},"
+     "\"validator_identity\":{\"type\":\"string\",\"description\":\"Operator identity if validating DECISION/OPEN_QUESTION intent\"}},"
+     "\"required\":[\"horizon_id\",\"claim_id\",\"destination\"]}"},
 };
 
 static const int TOOL_COUNT = sizeof(TOOLS) / sizeof(TOOLS[0]);
@@ -925,7 +945,10 @@ static const tool_annotation_def_t TOOL_ANNOTATIONS[] = {
     {"founding_propose", false, false, false, false},
     {"founding_decide", false, false, false, false},
     {"contest_verify", false, false, false, false},
+    {"union_claim_capture", false, false, false, false},
+    {"union_claim_resolve", false, false, false, false},
 };
+
 
 static const tool_annotation_def_t *mcp_tool_annotations(const char *name) {
     size_t count = sizeof(TOOL_ANNOTATIONS) / sizeof(TOOL_ANNOTATIONS[0]);
@@ -17551,6 +17574,12 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
     }
     if (strcmp(tool_name, "contest_verify") == 0) {
         return handle_contest_verify(srv, args_json);
+    }
+    if (strcmp(tool_name, "union_claim_capture") == 0) {
+        return handle_union_claim_capture(srv, args_json);
+    }
+    if (strcmp(tool_name, "union_claim_resolve") == 0) {
+        return handle_union_claim_resolve(srv, args_json);
     }
     char msg[CBM_SZ_256];
     snprintf(msg, sizeof(msg), "unknown tool: %s", tool_name);

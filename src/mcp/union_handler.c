@@ -68,6 +68,17 @@ static CbmFoundingProposal *find_proposal(const char *theme_id) {
     return NULL;
 }
 
+static void remove_proposal(const char *theme_id) {
+    if (!theme_id || !theme_id[0]) return;
+    for (size_t i = 0; i < MAX_STORED_PROPOSALS; i++) {
+        if (s_proposals[i].active && strcmp(s_proposals[i].proposal.suggested_theme_id, theme_id) == 0) {
+            s_proposals[i].active = false;
+            memset(&s_proposals[i], 0, sizeof(s_proposals[i]));
+            return;
+        }
+    }
+}
+
 static CbmSessionSweepContext s_sweep_contexts[CBM_SESSION_REGISTRY_CAP];
 static bool s_sweep_contexts_used[CBM_SESSION_REGISTRY_CAP];
 
@@ -94,6 +105,66 @@ static void release_sweep_context(const char *horizon_id) {
         if (s_sweep_contexts_used[i] && strcmp(s_sweep_contexts[i].horizon_id, horizon_id) == 0) {
             s_sweep_contexts_used[i] = false;
             memset(&s_sweep_contexts[i], 0, sizeof(s_sweep_contexts[i]));
+            return;
+        }
+    }
+}
+
+static const char *find_horizon_for_claim(const char *claim_id) {
+    if (!claim_id || !claim_id[0]) return NULL;
+    for (size_t i = 0; i < CBM_SESSION_REGISTRY_CAP; i++) {
+        if (s_sweep_contexts_used[i]) {
+            if (cbm_sweep_find_claim(&s_sweep_contexts[i], claim_id) != NULL) {
+                return s_sweep_contexts[i].horizon_id;
+            }
+        }
+    }
+    return NULL;
+}
+
+typedef struct {
+    char horizon_id[CBM_HORIZON_ID_MAX];
+    uint32_t idempotent;
+    uint32_t compensable;
+    uint32_t irreversible;
+} CbmSessionActionLedger;
+
+static CbmSessionActionLedger s_action_ledgers[CBM_SESSION_REGISTRY_CAP];
+
+static CbmSessionActionLedger *get_or_create_action_ledger(const char *horizon_id) {
+    if (!horizon_id || !horizon_id[0]) return NULL;
+    for (size_t i = 0; i < CBM_SESSION_REGISTRY_CAP; i++) {
+        if (s_action_ledgers[i].horizon_id[0] && strcmp(s_action_ledgers[i].horizon_id, horizon_id) == 0) {
+            return &s_action_ledgers[i];
+        }
+    }
+    for (size_t i = 0; i < CBM_SESSION_REGISTRY_CAP; i++) {
+        if (!s_action_ledgers[i].horizon_id[0]) {
+            strncpy(s_action_ledgers[i].horizon_id, horizon_id, sizeof(s_action_ledgers[i].horizon_id) - 1);
+            s_action_ledgers[i].idempotent = 0;
+            s_action_ledgers[i].compensable = 0;
+            s_action_ledgers[i].irreversible = 0;
+            return &s_action_ledgers[i];
+        }
+    }
+    return NULL;
+}
+
+static CbmSessionActionLedger *find_action_ledger(const char *horizon_id) {
+    if (!horizon_id || !horizon_id[0]) return NULL;
+    for (size_t i = 0; i < CBM_SESSION_REGISTRY_CAP; i++) {
+        if (s_action_ledgers[i].horizon_id[0] && strcmp(s_action_ledgers[i].horizon_id, horizon_id) == 0) {
+            return &s_action_ledgers[i];
+        }
+    }
+    return NULL;
+}
+
+static void release_action_ledger(const char *horizon_id) {
+    if (!horizon_id || !horizon_id[0]) return;
+    for (size_t i = 0; i < CBM_SESSION_REGISTRY_CAP; i++) {
+        if (s_action_ledgers[i].horizon_id[0] && strcmp(s_action_ledgers[i].horizon_id, horizon_id) == 0) {
+            memset(&s_action_ledgers[i], 0, sizeof(s_action_ledgers[i]));
             return;
         }
     }
@@ -300,7 +371,8 @@ char *handle_union_session_close(cbm_mcp_server_t *srv, const char *args_json) {
         yyjson_doc_free(doc);
         return json_error_result("INVALID_PARAMS", "horizon_id is required");
     }
-    const char *horizon_id = yyjson_get_str(v_id);
+    char horizon_id[CBM_HORIZON_ID_MAX] = {0};
+    strncpy(horizon_id, yyjson_get_str(v_id), sizeof(horizon_id) - 1);
 
     CbmSessionCloseReason reason = CBM_SESSION_CLOSE_NORMAL;
     yyjson_val *v_reason = root ? yyjson_obj_get(root, "reason") : NULL;
@@ -338,7 +410,16 @@ char *handle_union_session_close(cbm_mcp_server_t *srv, const char *args_json) {
     cbm_trace_init(&trace, sh->horizon_id, sh->identity, sh->contract_id);
     snprintf(trace.based_on_seq, sizeof(trace.based_on_seq), "%s", sh->based_on_seq);
     snprintf(trace.outcome, sizeof(trace.outcome), "%s", cbm_session_close_reason_string(reason));
-    trace.actions_total = sh->actions;
+    CbmSessionActionLedger *al = find_action_ledger(horizon_id);
+    if (al) {
+        trace.actions_idempotent = al->idempotent;
+        trace.actions_compensable = al->compensable;
+        trace.actions_irreversible = al->irreversible;
+        trace.actions_total = al->idempotent + al->compensable + al->irreversible;
+    } else {
+        trace.actions_total = sh->actions;
+        trace.actions_idempotent = sh->actions;
+    }
     trace.refusal_count = sh->refusals;
     if (sweep_ctx) {
         trace.exclusions.declared = (sweep_ctx->report.discarded_total_count > 0);
@@ -367,6 +448,12 @@ char *handle_union_session_close(cbm_mcp_server_t *srv, const char *args_json) {
 
     char trace_buf[1024] = {0};
     if (cbm_trace_format_evaluator_json(&trace, trace_buf, sizeof(trace_buf)) == 0) {
+        cbm_log(CBM_LOG_INFO, "union.session.trace",
+                "horizon_id", closure.horizon_id,
+                "identity", closure.identity,
+                "reason", closure.reason,
+                "trace", trace_buf, NULL);
+
         yyjson_doc *t_doc = yyjson_read(trace_buf, strlen(trace_buf), 0);
         if (t_doc) {
             yyjson_mut_val *t_val = yyjson_val_mut_copy(out_doc, yyjson_doc_get_root(t_doc));
@@ -377,7 +464,8 @@ char *handle_union_session_close(cbm_mcp_server_t *srv, const char *args_json) {
         }
     }
 
-    release_sweep_context(horizon_id);
+    release_sweep_context(closure.horizon_id);
+    release_action_ledger(closure.horizon_id);
     return result_from_mut_doc(out_doc, false);
 }
 
@@ -450,6 +538,12 @@ char *handle_union_record_action(cbm_mcp_server_t *srv, const char *args_json) {
     }
 
     cbm_session_record_action(sessions, horizon_id);
+    CbmSessionActionLedger *al = get_or_create_action_ledger(horizon_id);
+    if (al) {
+        if (effect_class == CBM_EFFECT_COMPENSABLE) al->compensable++;
+        else if (effect_class == CBM_EFFECT_IRREVERSIBLE) al->irreversible++;
+        else al->idempotent++;
+    }
     yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *out_root = yyjson_mut_obj(out_doc);
     yyjson_mut_doc_set_root(out_doc, out_root);
@@ -759,27 +853,40 @@ char *handle_founding_decide(cbm_mcp_server_t *srv, const char *args_json) {
         return json_error_result("INVALID_PARAMS", "suggested_theme_id and operator_accepted (bool) are required");
     }
 
-    const char *theme_id = yyjson_get_str(v_tid);
+    char theme_id[CBM_THEME_ID_MAX] = {0};
+    strncpy(theme_id, yyjson_get_str(v_tid), sizeof(theme_id) - 1);
     CbmFoundingProposal *stored = find_proposal(theme_id);
-    CbmFoundingProposal prop;
-    memset(&prop, 0, sizeof(prop));
-
-    if (stored) {
-        memcpy(&prop, stored, sizeof(prop));
-    } else {
-        strncpy(prop.suggested_theme_id, theme_id, sizeof(prop.suggested_theme_id) - 1);
-        strncpy(prop.namespace, "craft", sizeof(prop.namespace) - 1);
-        strncpy(prop.suggested_curator, "operator", sizeof(prop.suggested_curator) - 1);
+    if (!stored) {
+        yyjson_doc_free(doc);
+        return json_error_result("PROPOSAL_NOT_FOUND", "No active founding proposal found for suggested_theme_id");
     }
 
-    bool accepted = yyjson_get_bool(v_acc);
+    /* Verify operator authority: must have decided_by or operator_identity starting with 'operator' */
+    yyjson_val *v_dec_by = root ? yyjson_obj_get(root, "decided_by") : NULL;
+    if (!v_dec_by) v_dec_by = root ? yyjson_obj_get(root, "operator_identity") : NULL;
+    const char *decided_by = (v_dec_by && yyjson_is_str(v_dec_by)) ? yyjson_get_str(v_dec_by) : NULL;
+
     bool autonomous = (v_auto && yyjson_is_bool(v_auto)) ? yyjson_get_bool(v_auto) : false;
+    if (autonomous || !decided_by || strncmp(decided_by, "operator", 8) != 0) {
+        yyjson_doc_free(doc);
+        cbm_refusal_emit(CBM_REFUSAL_AUTO_FOUNDING_FORBIDDEN, "founding_decide",
+                         "founding decisions require proven operator authority; autonomous or non-operator adjudication is forbidden");
+        return json_error_result("AUTO_FOUNDING_FORBIDDEN",
+                                 "Founding decisions require proven operator authority; autonomous or non-operator adjudication is forbidden");
+    }
+
+    CbmFoundingProposal prop;
+    memcpy(&prop, stored, sizeof(prop));
+    bool accepted = yyjson_get_bool(v_acc);
 
     CbmClosureExclusions excl;
     memset(&excl, 0, sizeof(excl));
 
-    CbmRefusalCode rc = cbm_founding_adjudicate(get_themes(srv), &prop, accepted, autonomous, &excl);
+    CbmRefusalCode rc = cbm_founding_adjudicate(get_themes(srv), &prop, accepted, false, &excl);
     yyjson_doc_free(doc);
+
+    /* Consume proposal so it cannot be re-adjudicated */
+    remove_proposal(theme_id);
 
     if (rc != CBM_REFUSAL_OK) {
         return json_error_result(cbm_refusal_code_string(rc), "founding decision rejected or declined");
@@ -820,6 +927,16 @@ char *handle_contest_verify(cbm_mcp_server_t *srv, const char *args_json) {
     strncpy(contest.target_ref, yyjson_get_str(v_tgt), sizeof(contest.target_ref) - 1);
     strncpy(contest.submitter_identity, "blind_reviser", sizeof(contest.submitter_identity) - 1);
 
+    yyjson_val *v_th = root ? yyjson_obj_get(root, "target_horizon") : NULL;
+    if (v_th && yyjson_is_str(v_th)) {
+        strncpy(contest.target_horizon, yyjson_get_str(v_th), sizeof(contest.target_horizon) - 1);
+    } else {
+        const char *h_id = find_horizon_for_claim(contest.target_ref);
+        if (h_id) {
+            strncpy(contest.target_horizon, h_id, sizeof(contest.target_horizon) - 1);
+        }
+    }
+
     contest.severity = CBM_CONTEST_BLOCKING;
     yyjson_val *v_sev = yyjson_obj_get(root, "severity");
     if (v_sev && yyjson_is_str(v_sev)) {
@@ -851,6 +968,163 @@ char *handle_contest_verify(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_mut_obj_add_bool(out_doc, out_root, "contested", true);
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "contest_id", contest.contest_id);
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "target_ref", contest.target_ref);
+    if (contest.target_horizon[0]) {
+        yyjson_mut_obj_add_strcpy(out_doc, out_root, "target_horizon", contest.target_horizon);
+    }
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "severity", cbm_contest_severity_string(contest.severity));
+    return result_from_mut_doc(out_doc, false);
+}
+
+/* W01 / Scope C03: union_claim_capture */
+char *handle_union_claim_capture(cbm_mcp_server_t *srv, const char *args_json) {
+    (void)srv;
+    if (!args_json) {
+        return json_error_result("INVALID_PARAMS", "missing arguments");
+    }
+    yyjson_doc *doc = yyjson_read(args_json, strlen(args_json), 0);
+    if (!doc) {
+        return json_error_result("INVALID_PARAMS", "malformed JSON arguments");
+    }
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    yyjson_val *v_hid = root ? yyjson_obj_get(root, "horizon_id") : NULL;
+    yyjson_val *v_cid = root ? yyjson_obj_get(root, "claim_id") : NULL;
+    yyjson_val *v_type = root ? yyjson_obj_get(root, "type") : NULL;
+    yyjson_val *v_pred = root ? yyjson_obj_get(root, "predicate") : NULL;
+
+    if (!v_hid || !yyjson_is_str(v_hid) ||
+        !v_cid || !yyjson_is_str(v_cid) ||
+        !v_type || !yyjson_is_str(v_type) ||
+        !v_pred || !yyjson_is_str(v_pred)) {
+        yyjson_doc_free(doc);
+        return json_error_result("INVALID_PARAMS", "horizon_id, claim_id, type, and predicate are required");
+    }
+
+    char horizon_id[CBM_HORIZON_ID_MAX] = {0};
+    strncpy(horizon_id, yyjson_get_str(v_hid), sizeof(horizon_id) - 1);
+    CbmSessionSweepContext *sweep_ctx = cbm_mcp_get_session_sweep_context(horizon_id);
+    if (!sweep_ctx) {
+        yyjson_doc_free(doc);
+        return json_error_result("INTERNAL_ERROR", "unable to allocate or find sweep context for horizon");
+    }
+
+    CbmClaim claim;
+    memset(&claim, 0, sizeof(claim));
+    strncpy(claim.id, yyjson_get_str(v_cid), sizeof(claim.id) - 1);
+    strncpy(claim.predicate, yyjson_get_str(v_pred), sizeof(claim.predicate) - 1);
+    claim.type = cbm_claim_type_from_string(yyjson_get_str(v_type));
+
+    yyjson_val *v_cons = yyjson_obj_get(root, "consequence");
+    if (v_cons && yyjson_is_str(v_cons)) {
+        strncpy(claim.consequence, yyjson_get_str(v_cons), sizeof(claim.consequence) - 1);
+    }
+    yyjson_val *v_seq = yyjson_obj_get(root, "based_on_seq");
+    if (v_seq && yyjson_is_str(v_seq)) {
+        strncpy(claim.based_on_seq, yyjson_get_str(v_seq), sizeof(claim.based_on_seq) - 1);
+    }
+    uint64_t exchange_seq = 1;
+    yyjson_val *v_eseq = yyjson_obj_get(root, "exchange_seq");
+    if (v_eseq && yyjson_is_int(v_eseq)) {
+        exchange_seq = (uint64_t)yyjson_get_uint(v_eseq);
+    }
+
+    char reason[256] = {0};
+    CbmRefusalCode rc = cbm_sweep_capture_claim(sweep_ctx, &claim, exchange_seq, reason, sizeof(reason));
+    yyjson_doc_free(doc);
+
+    if (rc != CBM_REFUSAL_OK) {
+        return json_error_result(cbm_refusal_code_string(rc), reason[0] ? reason : "failed to capture claim");
+    }
+
+    yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *out_root = yyjson_mut_obj(out_doc);
+    yyjson_mut_doc_set_root(out_doc, out_root);
+    yyjson_mut_obj_add_bool(out_doc, out_root, "captured", true);
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "horizon_id", horizon_id);
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "claim_id", claim.id);
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "type", cbm_claim_type_string(claim.type));
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "status", "PROPOSED");
+    return result_from_mut_doc(out_doc, false);
+}
+
+/* W01 / Scope C03: union_claim_resolve */
+char *handle_union_claim_resolve(cbm_mcp_server_t *srv, const char *args_json) {
+    (void)srv;
+    if (!args_json) {
+        return json_error_result("INVALID_PARAMS", "missing arguments");
+    }
+    yyjson_doc *doc = yyjson_read(args_json, strlen(args_json), 0);
+    if (!doc) {
+        return json_error_result("INVALID_PARAMS", "malformed JSON arguments");
+    }
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    yyjson_val *v_hid = root ? yyjson_obj_get(root, "horizon_id") : NULL;
+    yyjson_val *v_cid = root ? yyjson_obj_get(root, "claim_id") : NULL;
+    yyjson_val *v_dest = root ? yyjson_obj_get(root, "destination") : NULL;
+
+    if (!v_hid || !yyjson_is_str(v_hid) ||
+        !v_cid || !yyjson_is_str(v_cid) ||
+        !v_dest || !yyjson_is_str(v_dest)) {
+        yyjson_doc_free(doc);
+        return json_error_result("INVALID_PARAMS", "horizon_id, claim_id, and destination are required");
+    }
+
+    char horizon_id[CBM_HORIZON_ID_MAX] = {0};
+    char claim_id[CBM_CLAIM_ID_MAX] = {0};
+    char dest_str[64] = {0};
+    strncpy(horizon_id, yyjson_get_str(v_hid), sizeof(horizon_id) - 1);
+    strncpy(claim_id, yyjson_get_str(v_cid), sizeof(claim_id) - 1);
+    strncpy(dest_str, yyjson_get_str(v_dest), sizeof(dest_str) - 1);
+
+    CbmSessionSweepContext *sweep_ctx = cbm_mcp_get_session_sweep_context(horizon_id);
+    if (!sweep_ctx) {
+        yyjson_doc_free(doc);
+        return json_error_result("NOT_FOUND", "sweep context not found for horizon");
+    }
+
+    CbmSweepDestination dest = CBM_SWEEP_DEST_UNRESOLVED;
+    if (strcmp(dest_str, "PROMOTED") == 0) {
+        dest = CBM_SWEEP_DEST_PROMOTED;
+    } else if (strcmp(dest_str, "CONVERTED_OPEN_QUESTION") == 0) {
+        dest = CBM_SWEEP_DEST_CONVERTED_OPEN_QUESTION;
+    } else if (strcmp(dest_str, "DISCARDED") == 0) {
+        dest = CBM_SWEEP_DEST_DISCARDED;
+    } else {
+        yyjson_doc_free(doc);
+        return json_error_result("INVALID_PARAMS", "invalid destination enum");
+    }
+
+    yyjson_val *v_val = yyjson_obj_get(root, "validator_identity");
+    if (v_val && yyjson_is_str(v_val)) {
+        char val_reason[256] = {0};
+        CbmRefusalCode vrc = cbm_sweep_validate_intent(sweep_ctx, claim_id, yyjson_get_str(v_val), val_reason, sizeof(val_reason));
+        if (vrc != CBM_REFUSAL_OK) {
+            yyjson_doc_free(doc);
+            return json_error_result(cbm_refusal_code_string(vrc), val_reason[0] ? val_reason : "intent validation failed");
+        }
+    }
+
+    char owner_or_reason_buf[128] = {0};
+    const char *owner_or_reason = NULL;
+    yyjson_val *v_or = yyjson_obj_get(root, "owner_or_reason");
+    if (v_or && yyjson_is_str(v_or)) {
+        strncpy(owner_or_reason_buf, yyjson_get_str(v_or), sizeof(owner_or_reason_buf) - 1);
+        owner_or_reason = owner_or_reason_buf;
+    }
+
+    char reason[256] = {0};
+    CbmRefusalCode rc = cbm_sweep_assign_destination(sweep_ctx, claim_id, dest, owner_or_reason, reason, sizeof(reason));
+    yyjson_doc_free(doc);
+
+    if (rc != CBM_REFUSAL_OK) {
+        return json_error_result(cbm_refusal_code_string(rc), reason[0] ? reason : "failed to assign destination");
+    }
+
+    yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *out_root = yyjson_mut_obj(out_doc);
+    yyjson_mut_doc_set_root(out_doc, out_root);
+    yyjson_mut_obj_add_bool(out_doc, out_root, "resolved", true);
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "horizon_id", horizon_id);
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "claim_id", claim_id);
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "destination", dest_str);
     return result_from_mut_doc(out_doc, false);
 }

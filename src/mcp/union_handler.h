@@ -33,6 +33,8 @@ char *handle_binding_claim(cbm_mcp_server_t *srv, const char *args_json);
 char *handle_founding_propose(cbm_mcp_server_t *srv, const char *args_json);
 char *handle_founding_decide(cbm_mcp_server_t *srv, const char *args_json);
 char *handle_contest_verify(cbm_mcp_server_t *srv, const char *args_json);
+char *handle_union_claim_capture(cbm_mcp_server_t *srv, const char *args_json);
+char *handle_union_claim_resolve(cbm_mcp_server_t *srv, const char *args_json);
 
 CbmSessionSweepContext *cbm_mcp_get_session_sweep_context(const char *horizon_id);
 

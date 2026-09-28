@@ -70,8 +70,17 @@ size_t cbm_contest_is_blocked(const CbmContestRegistry *reg, const char *target_
                                 reg->contests[i].severity == CBM_CONTEST_INVALIDATING);
             if (is_blocking) {
                 const char *c_target = reg->contests[i].target_ref;
-                if (strcmp(c_target, target_ref) == 0 ||
-                    strncmp(c_target, target_ref, ref_len) == 0) {
+                const char *c_horizon = reg->contests[i].target_horizon;
+                bool match = false;
+                if (c_horizon[0] && strcmp(c_horizon, target_ref) == 0) {
+                    match = true;
+                } else if (strcmp(c_target, target_ref) == 0) {
+                    match = true;
+                } else if (strncmp(c_target, target_ref, ref_len) == 0 &&
+                           (c_target[ref_len] == '/' || c_target[ref_len] == '#' || c_target[ref_len] == ':')) {
+                    match = true;
+                }
+                if (match) {
                     count++;
                 }
             }

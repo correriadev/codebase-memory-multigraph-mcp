@@ -35,6 +35,7 @@ typedef struct {
     char submitter_identity[CBM_CONTEST_ID_MAX];
     char source_horizon[CBM_CONTEST_ID_MAX];
     char target_ref[CBM_CONTEST_EVIDENCE_LEN];
+    char target_horizon[CBM_CONTEST_ID_MAX];
     CbmContestSeverity severity;
 
     char evidence[CBM_CONTEST_EVIDENCE_CAP][CBM_CONTEST_EVIDENCE_LEN];
