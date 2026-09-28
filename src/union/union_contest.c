@@ -63,11 +63,18 @@ CbmRefusalCode cbm_contest_submit(CbmContestRegistry *reg,
 size_t cbm_contest_is_blocked(const CbmContestRegistry *reg, const char *target_ref) {
     if (!reg || !target_ref || !target_ref[0]) return 0;
     size_t count = 0;
+    size_t ref_len = strlen(target_ref);
     for (size_t i = 0; i < reg->count; i++) {
-        if (!reg->contests[i].resolved &&
-            reg->contests[i].severity == CBM_CONTEST_BLOCKING &&
-            strcmp(reg->contests[i].target_ref, target_ref) == 0) {
-            count++;
+        if (!reg->contests[i].resolved) {
+            bool is_blocking = (reg->contests[i].severity == CBM_CONTEST_BLOCKING ||
+                                reg->contests[i].severity == CBM_CONTEST_INVALIDATING);
+            if (is_blocking) {
+                const char *c_target = reg->contests[i].target_ref;
+                if (strcmp(c_target, target_ref) == 0 ||
+                    strncmp(c_target, target_ref, ref_len) == 0) {
+                    count++;
+                }
+            }
         }
     }
     return count;

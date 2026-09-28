@@ -28,18 +28,19 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
     CbmSessionRegistry *sessions = srv ? cbm_mcp_server_sessions(srv) : NULL;
     CbmContestRegistry *contests = srv ? cbm_mcp_server_contest_registry(srv) : NULL;
 
+    if (contests && cbm_contest_is_blocked(contests, horizon_id) > 0) {
+        cbm_refusal_emit(CBM_REFUSAL_CONTEST_UNPROVEN, horizon_id, "promotion blocked by active blocking contestation");
+        char err_resp[512];
+        snprintf(err_resp, sizeof(err_resp),
+                 "{\"isError\":true,\"code\":\"CONTEST_BLOCKED\",\"message\":\"Promotion blocked by active blocking contestation\"}");
+        free(horizon_id);
+        return cbm_mcp_text_result(err_resp, true);
+    }
+
     const CbmSessionHorizon *sh = sessions ? cbm_session_get(sessions, horizon_id) : NULL;
     if (!sh) {
-        cbm_log(CBM_LOG_INFO, "union.promotion_bypass_session horizon_id=%s reason=legacy_or_federation_call", horizon_id);
+        cbm_log(CBM_LOG_INFO, "union.promotion_bypass_session", "horizon_id", horizon_id, "reason", "legacy_or_federation_call", NULL);
     } else {
-        if (contests && cbm_contest_is_blocked(contests, horizon_id) > 0) {
-            cbm_refusal_emit(CBM_REFUSAL_CONTEST_UNPROVEN, horizon_id, "promotion blocked by active blocking contestation");
-            char err_resp[512];
-            snprintf(err_resp, sizeof(err_resp),
-                     "{\"isError\":true,\"code\":\"CONTEST_BLOCKED\",\"message\":\"Promotion blocked by active blocking contestation\"}");
-            free(horizon_id);
-            return cbm_mcp_text_result(err_resp, true);
-        }
         if (sh->refusals > 0) {
             cbm_refusal_emit(CBM_REFUSAL_SCOPE_EXCEEDED, horizon_id, "promotion blocked by uncompensated gateway refusal");
             char err_resp[512];

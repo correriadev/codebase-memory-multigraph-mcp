@@ -533,12 +533,221 @@ TEST(test_w07_contest_blind_verify) {
     PASS();
 }
 
+TEST(test_w03_promote_blocked_without_session_and_invalidating) {
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    ASSERT(srv != NULL);
+
+    const char *h_id = "h_orphan_contest_target";
+
+    /* 1. Register INVALIDATING contest against horizon without open session */
+    char contest_args[256];
+    snprintf(contest_args, sizeof(contest_args),
+             "{\"target_ref\":\"%s\",\"severity\":\"INVALIDATING\",\"evidence\":[\"critical_security_flaw\"]}", h_id);
+    char *contest_res = handle_contest_verify(srv, contest_args);
+    ASSERT(contest_res != NULL);
+    yyjson_doc *doc = yyjson_read(contest_res, strlen(contest_res), 0);
+    ASSERT(doc != NULL);
+    yyjson_val *payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_c = yyjson_obj_get(payload, "contested");
+    ASSERT(v_c && yyjson_get_bool(v_c) == true);
+    yyjson_doc_free(doc);
+    free(contest_res);
+
+    /* 2. Promote horizon directly without session -> MUST be blocked by contest */
+    char prom_args[256];
+    snprintf(prom_args, sizeof(prom_args), "{\"horizon_id\":\"%s\"}", h_id);
+    char *prom_res = handle_promote_horizon(srv, prom_args, cbm_mcp_server_horizon_pool(srv), NULL);
+    ASSERT(prom_res != NULL);
+    doc = yyjson_read(prom_res, strlen(prom_res), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "CONTEST_BLOCKED");
+    yyjson_doc_free(doc);
+    free(prom_res);
+
+    cbm_mcp_server_free(srv);
+    PASS();
+}
+
+TEST(test_w05_founding_decline_and_metadata_preservation) {
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    ASSERT(srv != NULL);
+
+    /* 1. Propose theme with custom namespace and rationale */
+    const char *prop_args = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"namespace\":\"architecture\",\"rationale\":\"actor pattern\",\"origin_session\":\"h_sess_99\",\"suggested_curator\":\"alice\"}";
+    char *prop_res = handle_founding_propose(srv, prop_args);
+    ASSERT(prop_res != NULL);
+    yyjson_doc *doc = yyjson_read(prop_res, strlen(prop_res), 0);
+    ASSERT(doc != NULL);
+    yyjson_val *payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_prop = yyjson_obj_get(payload, "proposed");
+    ASSERT(v_prop && yyjson_get_bool(v_prop) == true);
+    yyjson_doc_free(doc);
+    free(prop_res);
+
+    /* 2. Decline proposal -> must return status DECLINED and accepted false */
+    const char *dec_bad = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"operator_accepted\":false,\"is_agent_autonomous\":false}";
+    char *dec_bad_res = handle_founding_decide(srv, dec_bad);
+    ASSERT(dec_bad_res != NULL);
+    doc = yyjson_read(dec_bad_res, strlen(dec_bad_res), 0);
+    ASSERT(doc != NULL);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_dec = yyjson_obj_get(payload, "decided");
+    ASSERT(v_dec && yyjson_get_bool(v_dec) == true);
+    yyjson_val *v_acc = yyjson_obj_get(payload, "accepted");
+    ASSERT(v_acc && yyjson_get_bool(v_acc) == false);
+    yyjson_val *v_st = yyjson_obj_get(payload, "status");
+    ASSERT(v_st && yyjson_is_str(v_st));
+    ASSERT_STR_EQ(yyjson_get_str(v_st), "DECLINED");
+    yyjson_doc_free(doc);
+    free(dec_bad_res);
+
+    /* 3. Re-propose and accept -> must preserve namespace 'architecture' */
+    char *prop_res2 = handle_founding_propose(srv, prop_args);
+    free(prop_res2);
+
+    const char *dec_good = "{\"suggested_theme_id\":\"@org/custom-pattern\",\"operator_accepted\":true,\"is_agent_autonomous\":false}";
+    char *dec_good_res = handle_founding_decide(srv, dec_good);
+    ASSERT(dec_good_res != NULL);
+    doc = yyjson_read(dec_good_res, strlen(dec_good_res), 0);
+    ASSERT(doc != NULL);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_acc2 = yyjson_obj_get(payload, "accepted");
+    ASSERT(v_acc2 && yyjson_get_bool(v_acc2) == true);
+    yyjson_val *v_st2 = yyjson_obj_get(payload, "status");
+    ASSERT(v_st2 && yyjson_is_str(v_st2));
+    ASSERT_STR_EQ(yyjson_get_str(v_st2), "DRAFT");
+    yyjson_doc_free(doc);
+    free(dec_good_res);
+
+    /* 4. Lookup theme -> namespace must be preserved as 'architecture' */
+    char *look_res = handle_theme_lookup(srv, "{\"theme_id\":\"@org/custom-pattern\"}");
+    ASSERT(look_res != NULL);
+    doc = yyjson_read(look_res, strlen(look_res), 0);
+    ASSERT(doc != NULL);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_ns = yyjson_obj_get(payload, "namespace");
+    ASSERT(v_ns && yyjson_is_str(v_ns));
+    ASSERT_STR_EQ(yyjson_get_str(v_ns), "architecture");
+    yyjson_doc_free(doc);
+    free(look_res);
+
+    cbm_mcp_server_free(srv);
+    PASS();
+}
+
+TEST(test_w01_session_close_sweep_and_trace) {
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    ASSERT(srv != NULL);
+
+    /* 1. Open session */
+    const char *open_args = "{\"identity\":\"architect_lead\"}";
+    char *open_res = handle_union_session_open(srv, open_args);
+    ASSERT(open_res != NULL);
+    yyjson_doc *doc = yyjson_read(open_res, strlen(open_res), 0);
+    ASSERT(doc != NULL);
+    yyjson_val *payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_hid = yyjson_obj_get(payload, "horizon_id");
+    ASSERT(v_hid && yyjson_is_str(v_hid));
+    char h_id[64];
+    strncpy(h_id, yyjson_get_str(v_hid), sizeof(h_id) - 1);
+    h_id[sizeof(h_id) - 1] = '\0';
+    yyjson_doc_free(doc);
+    free(open_res);
+
+    /* 2. Retrieve sweep context and capture a claim */
+    CbmSessionSweepContext *sweep_ctx = cbm_mcp_get_session_sweep_context(h_id);
+    ASSERT(sweep_ctx != NULL);
+
+    CbmClaim claim;
+    memset(&claim, 0, sizeof(claim));
+    strncpy(claim.id, "claim_unresolved_42", sizeof(claim.id) - 1);
+    strncpy(claim.predicate, "adopt event sourcing for order tracking.", sizeof(claim.predicate) - 1);
+    claim.type = CBM_CLAIM_DECISION;
+    claim.status = EPISTEMIC_PROPOSED;
+    strncpy(claim.consequence, "Data divergence if not audited", sizeof(claim.consequence) - 1);
+    strncpy(claim.based_on_seq, "seq_1", sizeof(claim.based_on_seq) - 1);
+
+    CbmRefusalCode cap_rc = cbm_sweep_capture_claim(sweep_ctx, &claim, 1, NULL, 0);
+    ASSERT_EQ(cap_rc, CBM_REFUSAL_OK);
+
+    /* 3. Attempt to close session while claim is unresolved -> MUST fail with SWEEP_INCOMPLETE */
+    char close_args[128];
+    snprintf(close_args, sizeof(close_args), "{\"horizon_id\":\"%s\",\"reason\":\"NORMAL\"}", h_id);
+    char *close_res = handle_union_session_close(srv, close_args);
+    ASSERT(close_res != NULL);
+    doc = yyjson_read(close_res, strlen(close_res), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_code = yyjson_obj_get(payload, "code");
+    ASSERT(v_code && yyjson_is_str(v_code));
+    ASSERT_STR_EQ(yyjson_get_str(v_code), "SWEEP_INCOMPLETE");
+    yyjson_val *v_msg = yyjson_obj_get(payload, "message");
+    ASSERT(v_msg && yyjson_is_str(v_msg));
+    ASSERT(strstr(yyjson_get_str(v_msg), "claim_unresolved_42") != NULL);
+    yyjson_doc_free(doc);
+    free(close_res);
+
+    /* 4. Resolve claim by assigning destination DISCARDED with reason exploration */
+    CbmRefusalCode dest_rc = cbm_sweep_assign_destination(sweep_ctx, "claim_unresolved_42",
+                                                          CBM_SWEEP_DEST_DISCARDED, "exploration",
+                                                          NULL, 0);
+    ASSERT_EQ(dest_rc, CBM_REFUSAL_OK);
+
+    /* 5. Close session now -> MUST succeed and include factual trace object */
+    close_res = handle_union_session_close(srv, close_args);
+    ASSERT(close_res != NULL);
+    doc = yyjson_read(close_res, strlen(close_res), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == false);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_ok = yyjson_obj_get(payload, "success");
+    ASSERT(v_ok && yyjson_get_bool(v_ok) == true);
+
+    yyjson_val *v_trace = yyjson_obj_get(payload, "trace");
+    ASSERT(v_trace != NULL && yyjson_is_obj(v_trace));
+    yyjson_val *v_thid = yyjson_obj_get(v_trace, "horizon_id");
+    ASSERT(v_thid && yyjson_is_str(v_thid));
+    ASSERT_STR_EQ(yyjson_get_str(v_thid), h_id);
+    yyjson_val *v_tout = yyjson_obj_get(v_trace, "outcome");
+    ASSERT(v_tout && yyjson_is_str(v_tout));
+    ASSERT_STR_EQ(yyjson_get_str(v_tout), "NORMAL");
+    yyjson_val *v_excl = yyjson_obj_get(v_trace, "exclusions");
+    ASSERT(v_excl && yyjson_is_obj(v_excl));
+    yyjson_val *v_decl = yyjson_obj_get(v_excl, "declared");
+    ASSERT(v_decl && yyjson_get_bool(v_decl) == true);
+    yyjson_val *v_oos = yyjson_obj_get(v_excl, "out_of_scope");
+    ASSERT(v_oos && yyjson_get_int(v_oos) == 1);
+    yyjson_doc_free(doc);
+    free(close_res);
+
+    cbm_mcp_server_free(srv);
+    PASS();
+}
+
 SUITE(union_workflow_e2e) {
     RUN_TEST(test_w01_session_lifecycle);
+    RUN_TEST(test_w01_session_close_sweep_and_trace);
     RUN_TEST(test_w02_action_gateway_restricted_mode);
     RUN_TEST(test_w03_promote_blocked_by_active_contest);
     RUN_TEST(test_w03_promote_blocked_by_gateway_refusal);
+    RUN_TEST(test_w03_promote_blocked_without_session_and_invalidating);
     RUN_TEST(test_w04_routing_and_provenance_validation);
     RUN_TEST(test_w05_territory_and_founding);
+    RUN_TEST(test_w05_founding_decline_and_metadata_preservation);
     RUN_TEST(test_w07_contest_blind_verify);
 }
+

@@ -26,6 +26,79 @@ static HorizonConnectionPool s_fallback_pool;
 static bool s_fallback_inited = false;
 static uint64_t s_contest_seq = 0;
 
+#define MAX_STORED_PROPOSALS 64
+typedef struct {
+    bool active;
+    CbmFoundingProposal proposal;
+} CbmStoredProposal;
+
+static CbmStoredProposal s_proposals[MAX_STORED_PROPOSALS];
+
+static void store_proposal(const char *theme_id, const char *namespace, const char *rationale,
+                           const char *origin_session, const char *curator) {
+    if (!theme_id || !theme_id[0]) return;
+    int slot = -1;
+    for (size_t i = 0; i < MAX_STORED_PROPOSALS; i++) {
+        if (s_proposals[i].active && strcmp(s_proposals[i].proposal.suggested_theme_id, theme_id) == 0) {
+            slot = (int)i;
+            break;
+        }
+        if (!s_proposals[i].active && slot == -1) {
+            slot = (int)i;
+        }
+    }
+    if (slot >= 0) {
+        s_proposals[slot].active = true;
+        memset(&s_proposals[slot].proposal, 0, sizeof(CbmFoundingProposal));
+        strncpy(s_proposals[slot].proposal.suggested_theme_id, theme_id, sizeof(s_proposals[slot].proposal.suggested_theme_id) - 1);
+        if (namespace) strncpy(s_proposals[slot].proposal.namespace, namespace, sizeof(s_proposals[slot].proposal.namespace) - 1);
+        if (rationale) strncpy(s_proposals[slot].proposal.rationale, rationale, sizeof(s_proposals[slot].proposal.rationale) - 1);
+        if (origin_session) strncpy(s_proposals[slot].proposal.origin_session, origin_session, sizeof(s_proposals[slot].proposal.origin_session) - 1);
+        if (curator) strncpy(s_proposals[slot].proposal.suggested_curator, curator, sizeof(s_proposals[slot].proposal.suggested_curator) - 1);
+    }
+}
+
+static CbmFoundingProposal *find_proposal(const char *theme_id) {
+    if (!theme_id || !theme_id[0]) return NULL;
+    for (size_t i = 0; i < MAX_STORED_PROPOSALS; i++) {
+        if (s_proposals[i].active && strcmp(s_proposals[i].proposal.suggested_theme_id, theme_id) == 0) {
+            return &s_proposals[i].proposal;
+        }
+    }
+    return NULL;
+}
+
+static CbmSessionSweepContext s_sweep_contexts[CBM_SESSION_REGISTRY_CAP];
+static bool s_sweep_contexts_used[CBM_SESSION_REGISTRY_CAP];
+
+CbmSessionSweepContext *cbm_mcp_get_session_sweep_context(const char *horizon_id) {
+    if (!horizon_id || !horizon_id[0]) return NULL;
+    for (size_t i = 0; i < CBM_SESSION_REGISTRY_CAP; i++) {
+        if (s_sweep_contexts_used[i] && strcmp(s_sweep_contexts[i].horizon_id, horizon_id) == 0) {
+            return &s_sweep_contexts[i];
+        }
+    }
+    for (size_t i = 0; i < CBM_SESSION_REGISTRY_CAP; i++) {
+        if (!s_sweep_contexts_used[i]) {
+            s_sweep_contexts_used[i] = true;
+            cbm_sweep_init(&s_sweep_contexts[i], horizon_id, horizon_id);
+            return &s_sweep_contexts[i];
+        }
+    }
+    return NULL;
+}
+
+static void release_sweep_context(const char *horizon_id) {
+    if (!horizon_id || !horizon_id[0]) return;
+    for (size_t i = 0; i < CBM_SESSION_REGISTRY_CAP; i++) {
+        if (s_sweep_contexts_used[i] && strcmp(s_sweep_contexts[i].horizon_id, horizon_id) == 0) {
+            s_sweep_contexts_used[i] = false;
+            memset(&s_sweep_contexts[i], 0, sizeof(s_sweep_contexts[i]));
+            return;
+        }
+    }
+}
+
 static void ensure_fallback_init(void) {
     if (!s_fallback_inited) {
         cbm_session_registry_init(&s_fallback_sessions);
@@ -156,6 +229,8 @@ char *handle_union_session_open(cbm_mcp_server_t *srv, const char *args_json) {
         return json_error_result("SESSION_OPEN_FAILED", err_buf[0] ? err_buf : "failed to open session");
     }
 
+    cbm_mcp_get_session_sweep_context(horizon.horizon_id);
+
     yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *out_root = yyjson_mut_obj(out_doc);
     yyjson_mut_doc_set_root(out_doc, out_root);
@@ -235,9 +310,44 @@ char *handle_union_session_close(cbm_mcp_server_t *srv, const char *args_json) {
         else if (strcmp(r_str, "EMPTY") == 0) reason = CBM_SESSION_CLOSE_EMPTY;
     }
 
+    CbmSessionRegistry *sessions = get_sessions(srv);
+    const CbmSessionHorizon *sh = cbm_session_get(sessions, horizon_id);
+    if (!sh) {
+        yyjson_doc_free(doc);
+        return json_error_result("SESSION_NOT_FOUND", "failed to close session: not found");
+    }
+
+    /* Check sweep context: if claims exist, perform sweep */
+    CbmSessionSweepContext *sweep_ctx = cbm_mcp_get_session_sweep_context(horizon_id);
+    if (sweep_ctx && sweep_ctx->claim_count > 0) {
+        char unresolved_list[512] = {0};
+        char sweep_reason[256] = {0};
+        CbmRefusalCode sweep_rc = cbm_sweep_close_session(sweep_ctx, NULL, unresolved_list, sizeof(unresolved_list),
+                                                         sweep_reason, sizeof(sweep_reason));
+        if (sweep_rc != CBM_REFUSAL_OK) {
+            cbm_refusal_emit(sweep_rc, horizon_id, sweep_reason[0] ? sweep_reason : "sweep incomplete: unresolved claims remain");
+            char err_msg[1024];
+            snprintf(err_msg, sizeof(err_msg), "Session closure blocked: sweep incomplete. Unresolved claims: %s", unresolved_list);
+            yyjson_doc_free(doc);
+            return json_error_result(cbm_refusal_code_string(sweep_rc), err_msg);
+        }
+    }
+
+    /* Build session trace before destroying session horizon */
+    CbmSessionTrace trace;
+    cbm_trace_init(&trace, sh->horizon_id, sh->identity, sh->contract_id);
+    snprintf(trace.based_on_seq, sizeof(trace.based_on_seq), "%s", sh->based_on_seq);
+    snprintf(trace.outcome, sizeof(trace.outcome), "%s", cbm_session_close_reason_string(reason));
+    trace.actions_total = sh->actions;
+    trace.refusal_count = sh->refusals;
+    if (sweep_ctx) {
+        trace.exclusions.declared = (sweep_ctx->report.discarded_total_count > 0);
+        trace.exclusions.counts[CBM_EXCLUSION_OUT_OF_SCOPE] = (uint32_t)sweep_ctx->report.discarded_total_count;
+    }
+
     CbmSessionClosure closure;
     char err_buf[256] = {0};
-    CbmSessionResult rc = cbm_session_close(get_sessions(srv), get_pool(srv), horizon_id, reason, &closure, err_buf, sizeof(err_buf));
+    CbmSessionResult rc = cbm_session_close(sessions, get_pool(srv), horizon_id, reason, &closure, err_buf, sizeof(err_buf));
     yyjson_doc_free(doc);
 
     if (rc != CBM_SESSION_OK) {
@@ -254,6 +364,20 @@ char *handle_union_session_close(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_mut_obj_add_uint(out_doc, out_root, "duration_sec", (uint64_t)closure.duration_sec);
     yyjson_mut_obj_add_uint(out_doc, out_root, "actions", closure.actions);
     yyjson_mut_obj_add_uint(out_doc, out_root, "refusals", closure.refusals);
+
+    char trace_buf[1024] = {0};
+    if (cbm_trace_format_evaluator_json(&trace, trace_buf, sizeof(trace_buf)) == 0) {
+        yyjson_doc *t_doc = yyjson_read(trace_buf, strlen(trace_buf), 0);
+        if (t_doc) {
+            yyjson_mut_val *t_val = yyjson_val_mut_copy(out_doc, yyjson_doc_get_root(t_doc));
+            if (t_val) {
+                yyjson_mut_obj_add_val(out_doc, out_root, "trace", t_val);
+            }
+            yyjson_doc_free(t_doc);
+        }
+    }
+
+    release_sweep_context(horizon_id);
     return result_from_mut_doc(out_doc, false);
 }
 
@@ -592,6 +716,7 @@ char *handle_founding_propose(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_val *v_ns = root ? yyjson_obj_get(root, "namespace") : NULL;
     yyjson_val *v_rat = root ? yyjson_obj_get(root, "rationale") : NULL;
     yyjson_val *v_sess = root ? yyjson_obj_get(root, "origin_session") : NULL;
+    yyjson_val *v_cur = root ? yyjson_obj_get(root, "suggested_curator") : NULL;
 
     if (!v_tid || !yyjson_is_str(v_tid) || !v_ns || !yyjson_is_str(v_ns) ||
         !v_rat || !yyjson_is_str(v_rat) || !v_sess || !yyjson_is_str(v_sess)) {
@@ -599,11 +724,15 @@ char *handle_founding_propose(cbm_mcp_server_t *srv, const char *args_json) {
         return json_error_result("INVALID_PARAMS", "suggested_theme_id, namespace, rationale, and origin_session are required");
     }
 
+    const char *theme_id = yyjson_get_str(v_tid);
+    store_proposal(theme_id, yyjson_get_str(v_ns), yyjson_get_str(v_rat),
+                   yyjson_get_str(v_sess), (v_cur && yyjson_is_str(v_cur)) ? yyjson_get_str(v_cur) : "operator");
+
     yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *out_root = yyjson_mut_obj(out_doc);
     yyjson_mut_doc_set_root(out_doc, out_root);
     yyjson_mut_obj_add_bool(out_doc, out_root, "proposed", true);
-    yyjson_mut_obj_add_strcpy(out_doc, out_root, "suggested_theme_id", yyjson_get_str(v_tid));
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "suggested_theme_id", theme_id);
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "namespace", yyjson_get_str(v_ns));
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "origin_session", yyjson_get_str(v_sess));
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "status", "WAITING_HUMAN");
@@ -630,11 +759,18 @@ char *handle_founding_decide(cbm_mcp_server_t *srv, const char *args_json) {
         return json_error_result("INVALID_PARAMS", "suggested_theme_id and operator_accepted (bool) are required");
     }
 
+    const char *theme_id = yyjson_get_str(v_tid);
+    CbmFoundingProposal *stored = find_proposal(theme_id);
     CbmFoundingProposal prop;
     memset(&prop, 0, sizeof(prop));
-    strncpy(prop.suggested_theme_id, yyjson_get_str(v_tid), sizeof(prop.suggested_theme_id) - 1);
-    strncpy(prop.namespace, "craft", sizeof(prop.namespace) - 1);
-    strncpy(prop.suggested_curator, "operator", sizeof(prop.suggested_curator) - 1);
+
+    if (stored) {
+        memcpy(&prop, stored, sizeof(prop));
+    } else {
+        strncpy(prop.suggested_theme_id, theme_id, sizeof(prop.suggested_theme_id) - 1);
+        strncpy(prop.namespace, "craft", sizeof(prop.namespace) - 1);
+        strncpy(prop.suggested_curator, "operator", sizeof(prop.suggested_curator) - 1);
+    }
 
     bool accepted = yyjson_get_bool(v_acc);
     bool autonomous = (v_auto && yyjson_is_bool(v_auto)) ? yyjson_get_bool(v_auto) : false;
@@ -653,8 +789,9 @@ char *handle_founding_decide(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_mut_val *out_root = yyjson_mut_obj(out_doc);
     yyjson_mut_doc_set_root(out_doc, out_root);
     yyjson_mut_obj_add_bool(out_doc, out_root, "decided", true);
+    yyjson_mut_obj_add_bool(out_doc, out_root, "accepted", accepted);
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "suggested_theme_id", prop.suggested_theme_id);
-    yyjson_mut_obj_add_strcpy(out_doc, out_root, "status", "DRAFT");
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "status", accepted ? "DRAFT" : "DECLINED");
     return result_from_mut_doc(out_doc, false);
 }
 
