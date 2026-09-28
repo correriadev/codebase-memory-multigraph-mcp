@@ -3,16 +3,16 @@ doc_type: feature
 domain: multi_graph_federation
 stack: [C, SQLite, Python, JSON-RPC]
 node_id: "feature:multi-graph-federation"
-tags: [federation, horizons, kway-merge, admission-gate]
+tags: [federation, horizons, kway-merge, admission-gate, two-tier-anchors]
 edges:
   - relation: implements
     target: "adr:architecture"
   - relation: tested_by
     target: "adr:tests"
-updated: 2026-09-20
+updated: 2026-09-28
 ---
-# Multi-Graph Federation
-Coordinates ephemeral cognitive horizon overlays and multi-graph federation over the persistent base graph.
+# Multi-Graph Federation & Cognitive Horizons
+Coordinates ephemeral cognitive horizon overlays, speculative graph modeling, AST anchor verification, and admission gate promotion over the persistent base graph.
 
 ```graph
 {
@@ -21,17 +21,16 @@ Coordinates ephemeral cognitive horizon overlays and multi-graph federation over
   "implements": ["adr:architecture"],
   "tested_by": ["adr:tests"],
   "entrypoints": [
-    "src/mcp/mcp.c"
+    "src/mcp/horizon_handler.c"
   ],
   "registration_files": [
-    "src/mcp/handlers.c",
-    "src/mcp/horizon_handler.c",
-    "src/mcp/mcp_internal.h",
+    "src/mcp/horizon_sync_handler.c",
+    "src/mcp/horizon_sync_handler.h",
     "src/mcp/promote_handler.c"
   ],
   "reference_files": [
-    "src/core/cbm_uri.c",
-    "src/core/cbm_uri.h"
+    "src/core/horizon_pool.c",
+    "src/core/horizon_pool.h"
   ],
   "code_files": [
     "src/admission/admission_gate.c",
@@ -40,8 +39,6 @@ Coordinates ephemeral cognitive horizon overlays and multi-graph federation over
     "src/admission/anchor_checker.h",
     "src/admission/recall_engine.c",
     "src/admission/recall_engine.h",
-    "src/core/horizon_pool.c",
-    "src/core/horizon_pool.h",
     "src/core/symbolic_node.c",
     "src/core/symbolic_node.h",
     "src/core/visited_set.h",
@@ -64,94 +61,97 @@ Coordinates ephemeral cognitive horizon overlays and multi-graph federation over
 ```
 
 ## OVERVIEW
-Multi-Graph Federation enables speculative overlays on top of the immutable Base Graph. It isolates uncommitted cognitive horizons in separate SQLite databases, provides streaming K-way merge queries, enforces two-tier anchor admission checks, and propagates reverse epistemic recall when anchors drift.
-
-## ARCHITECTURE & WORKFLOW
-
-### Architectural Components
-- **Addressing & Identity**: Uses canonical `cbm://<repo>/<path>#<symbol>` URIs hashed with 64-bit FNV-1a.
-- **Connection Management**: `HorizonConnectionPool` bounds open SQLite file descriptors to 16 using LRU eviction.
-- **Query Federation**: Streaming `KWayMergeContext` merges ordered streams using a min-heap with $O(K)$ memory footprint.
-- **Admission Gate**: `AdmissionGate` verifies source code stability before merging horizon state into persistent Base Graph (`<cache_dir>/<project>.db`), dynamically attaching target project DB and parsing symbol names from URI fragments.
-- **Epistemic Recall**: `EpistemicRecallService` computes reverse dependency closures ($deps^{-1}$) up to depth 5.
-- **Orphan Reclamation**: `HorizonReaperService` unlinks stale horizon databases exceeding 1-hour TTL when client PID terminates.
-
-### Operational Workflow
-1. Initialize horizon database via `cbm_create_horizon` with client PID ownership.
-2. Insert proposed symbolic nodes and virtual edges into the horizon overlay.
-3. Query federation via `active_horizons[]` in `query_graph`, `search_graph`, and `trace_path`.
-4. Validate filesystem anchors via `cbm_verify_two_tier_anchor` before promoting.
-5. On drift, execute `cbm_trigger_recall` to mark affected symbols as contested.
+Multi-Graph Federation allows agents to deliberate in isolated, speculative overlays on top of the immutable Base Graph. It exposes MCP tools to create ephemeral horizons, compile tactical markdown specifications into graph nodes, validate scope connectivity, and admit verified state via two-tier AST anchors.
 
 ## FOLDER STRUCTURE
 <folder_structure>
 ```
 src/
-├── core/                   # CBM-URI parser, horizon connection pool LRU, symbolic node CRUD
-├── query/                  # Streaming K-way merge iterator and min-heap ordering
-├── admission/              # Two-tier anchor validation, admission gate, and reverse recall engine
-├── daemon/                 # Horizon reaper background worker and PID liveness validation
-├── db/                     # Horizon SQLite schema DDL and indexes
-└── mcp/                    # MCP JSON-RPC handlers for federated query and promotion
+├── core/                   # CBM-URI addressing, LRU connection pool, and symbolic nodes
+├── admission/              # Two-tier AST anchor verification and promotion admission gate
+├── query/                  # Streaming K-way merge iterator for federated queries
+├── daemon/                 # Horizon reaper service for PID liveness and TTL cleanup
+└── mcp/                    # Horizon MCP handlers for lifecycle, spec sync, and promotion
 ```
 </folder_structure>
 
-## KEY INTERFACES
+## MAIN CONCEPTS
 
-### Horizon Acquisition & Query
+### Cognitive Horizons in Novos Paradigmas
+In the `novos-paradgimas` workflow (ADR_V1 §2, §3, AUDIT-WORKFLOW §1, §6):
+- **Speculative Deliberation**: Agents must never mutate the Base Graph directly while exploring hypotheses. Horizons isolate uncommitted symbolic nodes and virtual edges in dedicated SQLite databases.
+- **Federated Discovery**: Passing `active_horizons` to `search_graph`, `query_graph`, and `trace_path` transparently overlays speculative definitions onto base code.
+- **Two-Tier AST Anchors**: Anchors pin source code locations using byte offsets with AST hash fallbacks. Promotion succeeds only if the underlying source code remains unchanged.
+- **Scope Connectivity**: Strict connectivity checks reject orphan or disconnected speculative nodes before admission.
+
+## HOW TO EXECUTE COGNITIVE HORIZONS
+
+### Prerequisites
+1. Ensure the base project is indexed and accessible in the pool directory.
+2. Formulate speculative changes or prepare tactical markdown specifications.
+
+### Execution Flow
+1. Create or update an ephemeral horizon overlay using `create_horizon` or `sync_horizon_spec`.
+2. Inspect federated state by passing `active_horizons=[horizon_id]` to discovery tools.
+3. Validate structural consistency using `validate_scope_horizon`.
+4. Admit the horizon into the Base Graph via `promote_horizon` with concrete Two-Tier anchors.
+
 <code_example>
-# CORRECT: Retrieve horizon SQLite handle via LRU bounded connection pool
-sqlite3 *h_db = NULL;
-if (cbm_horizon_pool_get(&pool, horizon_id, &h_db) == CBM_URI_OK) {
-    cbm_symbolic_node_find(h_db, uri_str, &node, snippet, sizeof(snippet));
-}
+# CORRECT: Ephemeral horizon creation, validation, and anchor-gated promotion
+create_horizon(
+    horizon_id="h_payment_split",
+    project="cbm-core",
+    nodes=[{"cbm_uri": "cbm://core/payment.c#split_fee", "label": "Function", "epistemic_status": "PROPOSED"}],
+    edges=[{"source_uri": "cbm://core/payment.c#split_fee", "target_uri": "cbm://core/math.c#calc_ratio", "edge_type": "CALLS"}]
+)
+validate_scope_horizon(horizon_id="h_payment_split", strict_connectivity=true)
+promote_horizon(
+    horizon_id="h_payment_split",
+    anchors=[{"file_path": "src/payment.c", "symbol_name": "split_fee", "byte_start": 1024, "byte_len": 128, "ast_signature_hash": 987654321}]
+)
 
-# WRONG: Direct SQLite connection bypassing connection pool LRU ceiling
-sqlite3 *h_db = NULL;
-sqlite3_open_v2("horizon.db", &h_db, SQLITE_OPEN_READWRITE, NULL);
-</code_example>
-
-### Admission & Anchor Verification
-<code_example>
-# CORRECT: Verify two-tier anchors before executing horizon promotion
-bool ok = false;
-cbm_verify_two_tier_anchor(root_dir, &anchor, &ok);
-if (ok) {
-    cbm_promote_horizon(&gate, &pool, root_dir, horizon_id, &anchor, 1, err, sizeof(err));
-}
-
-# WRONG: Promote speculative horizon without two-tier anchor verification
-cbm_promote_horizon_state(&pool, horizon_id);
+# WRONG: Direct mutation of base graph or promotion without anchor verification
+promote_horizon(horizon_id="h_payment_split", anchors=[]) // Bypasses drift verification
 </code_example>
 
 ## PARAMETERS / CONFIGURATIONS
 
-| Parameter | Type | Default | Description |
+| Tool | Parameters | Description | Default |
 |---|---|---|---|
-| `CBM_MAX_HORIZON_FDS` | int | 16 | Maximum simultaneous open SQLite handles in connection pool |
-| `CBM_HORIZON_TTL_SECONDS` | int | 3600 | TTL duration before orphan horizons with dead PIDs are reaped |
-| `CBM_MAX_TRAVERSAL_DEPTH` | int | 5 | Maximum traversal depth for reverse recall and BFS graph exploration |
-| `CBM_VISITED_CAP` | int | 2048 | Maximum capacity of VisitedSet 64-bit FNV-1a hash array |
-| `CBM_MAX_MERGE_STREAMS` | int | 32 | Maximum simultaneous cursors merged in KWayMergeContext |
+| `create_horizon` | `horizon_id`, `project`, `nodes`, `edges` | Allocate or update an ephemeral cognitive horizon with speculative nodes (`cbm_uri`, `label`, `epistemic_status`, `is_dangling`, `code_snippet`) and virtual edges (`source_uri`, `target_uri`, `edge_type`). | — |
+| `sync_horizon_spec` | `horizon_id`, `file_path`, `content`, `project` | Sync and compile tactical markdown specifications directly into ephemeral horizon graph nodes. | — |
+| `validate_scope_horizon` | `horizon_id`, `strict_connectivity` | Validate scope adjacency and detect isolated dangling nodes in a horizon overlay. | `strict_connectivity=true` |
+| `promote_horizon` | `horizon_id`, `anchors` | Validate Two-Tier AST anchors and admit a cognitive horizon into the persistent Base Graph. Anchors verify `file_path`, `symbol_name`, byte boundaries, and AST signature hash. | — |
 
 ## BEST PRACTICES
-REQUIRED: Bound all horizon SQLite access through `HorizonConnectionPool` to prevent OS file descriptor exhaustion.
-REQUIRED: Execute two-tier anchor checks (byte offset with AST hash fallback) prior to promoting any horizon.
-REQUIRED: Guard all graph traversals with `VisitedSet` to prune cycles and prevent infinite loops.
-FORBIDDEN: Mutating the Base Graph directly during speculative horizon exploration.
-FORBIDDEN: Admitting horizons with drifted anchors or unverified symbols.
+REQUIRED: Bind all speculative proposals to a named `horizon_id` before modifying shared architectural components.
+REQUIRED: Run `validate_scope_horizon` with `strict_connectivity=true` prior to promotion to avoid introducing dangling graph edges.
+REQUIRED: Supply concrete Two-Tier AST anchors with `ast_signature_hash` when calling `promote_horizon`.
+PROHIBITED: Bypassing Two-Tier anchor verification during horizon promotion.
+PROHIBITED: Leaving speculative horizons active indefinitely without promotion or session closure.
+
+## TIPS
+Use `sync_horizon_spec` to automatically translate written architectural markdown specs into queryable speculative graph nodes before writing implementation code.
+
+<code_tip>
+// Compiling a tactical spec into an ephemeral horizon for validation
+sync_horizon_spec(horizon_id="h_spec_review", file_path="docs/PRD/specs/SCOPE-A01.md")
+validate_scope_horizon(horizon_id="h_spec_review", strict_connectivity=true)
+</code_tip>
 
 ## DOCUMENT MAP
 
 ```mermaid
 graph TD
-    THIS["Multi-Graph Federation"] -->|implements| ARCH["Architecture ADR"]
-    THIS -->|tested_by| TESTS["Testing Protocol ADR"]
+    THIS["Multi-Graph Federation & Horizons"] -->|implements| ARCH["Project Architecture"]
+    THIS -->|tested_by| TESTS["Testing Protocol"]
     click ARCH "../adr/ARCHITECTURE.md"
     click TESTS "../adr/TESTS.md"
 ```
 
 ## REFERENCES
 
-- [**ARCHITECTURE.md**](../adr/ARCHITECTURE.md): Multi-graph federation architecture, layers, and storage models.
-- [**TESTS.md**](../adr/TESTS.md): Test execution protocol, unit suites, and federation regression harness.
+- [**ARCHITECTURE.md**](../adr/ARCHITECTURE.md): Multi-graph federation architecture, connection pools, and admission gate.
+- [**TESTS.md**](../adr/TESTS.md): Test harness execution, anchor checker tests, and E2E federation suite.
+- [**code_discovery.md**](./code_discovery.md): Discovery tools supporting `active_horizons` speculative overlay.
+- [**union_workflow.md**](./union_workflow.md): Cognitive session horizons, effect gateways, and caller-blind contestations.

@@ -7,7 +7,7 @@ tags: [architecture, design-patterns, multi-graph-federation, union-workflows]
 edges:
   - relation: references
     target: "adr:tests"
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 # Project Architecture
 
@@ -37,7 +37,7 @@ Layered architecture providing persistent codebase knowledge indexing, multi-gra
 </folder_structure>
 
 ## LAYERS
-- **Transport / Protocol**: MCP JSON-RPC stdio server dispatching tool invocations with `active_horizons` and union workflow endpoints.
+- **Transport / Protocol**: MCP JSON-RPC stdio server dispatching 33 tool endpoints across discovery, governance, horizons, and union workflows.
 - **Epistemic Authority & Gateways**: `CbmGateway` effect classification, `CbmContractRegistry`, and `CbmSessionRegistry`.
 - **Thematic Knowledge & Doc Plane**: `CbmThemeRegistry`, `CbmBindingLedger`, and `CbmContestRegistry`.
 - **Federation & Admission**: `AdmissionGate`, `TwoTierAnchor` verification against AST, and `EpistemicRecallService`.
@@ -111,3 +111,7 @@ cbm_admission_gate_admit(gate, horizon_id, anchors, count); // Ignores contested
 
 - [**README.md**](../README.md): Main documentation index.
 - [**TESTS.md**](./TESTS.md): Testing strategies, test suites, and execution commands.
+- [**code_discovery.md**](../feature/code_discovery.md): Symbol discovery, Cypher query, and call-chain tracing tools.
+- [**index_governance.md**](../feature/index_governance.md): Repository indexing, path coverage, and change detection tools.
+- [**multi_graph_federation.md**](../feature/multi_graph_federation.md): Cognitive horizons and speculative overlay tools.
+- [**union_workflow.md**](../feature/union_workflow.md): Epistemic authority, session horizons, and craft theme tools.
