@@ -1,8 +1,14 @@
 # SCOPE B02 — `horizon-deliberator` (DELIBERATE station)
 
 > **Track:** B — New harness-kit skills · **Station:** DELIBERATE (ADR_V1 §3.1)
-> **Status:** REVIEW · **Mark:** [E] · **Deps:** A01, A03, D02, D03, D04 · **Codes in:** harness-kit (not in this implementation cycle)
+> **Status:** REVIEW · **Mark:** [B/E] · **Deps:** A01, A03, D02, D03, D04 · **Codes in:** harness-kit
 > **Provenance:** ADR_V1 §3.1; PRD_V2 Station 3 (Differentiation, speculative form); PRD_V3 §3, §4 (Two-fork provenance & Deviation governance)
+
+## Compatibility with CBM (2026-09-28)
+
+`union_session_open`, `union_session_get`, `union_claim_capture`, `union_claim_resolve`, `validate_provenance`, and `union_record_action` are public tools. `create_horizon` is a separate legacy entry point; B02 must open a Union session when it needs identity, contract, sweep, and trace semantics. An unknown contract opens in restricted mode, so the skill must inspect `restricted` and `open_refusal`. `union_claim_capture` captures a conversational claim as `PROPOSED`; it is not a generic API to author arbitrary nodes with `canon_citation` fields. Keep the full typed speculative model as a future engine requirement. For today's workflow, record claim IDs, provenance validation results, open questions, and unresolved assumptions in a reviewable artifact and resolve captured claims before normal closure.
+
+**Scope decision:** retain deliberation, but split acceptance into current tool orchestration and future typed graph authorship. Do not claim zero base writes solely from a successful `union_session_open`.
 
 ## Problem
 
@@ -30,6 +36,8 @@ The system must be able to think without believing its thoughts (ADR_V1 Level 2)
 - Concretization (the CONCRETIZE station is the invoking skill's work).
 
 ## Acceptance criteria (testable in isolation)
+
+**Staging:** current tools support session opening, claim capture/resolution, and provenance checks. AC 1-6 require the proposed typed-node and question schema before they can be asserted as written. AC 7 applies only to refusals actually returned by the host.
 
 1. **Given** a deliberation session, **When** it completes, **Then** the host log shows zero base-graph writes and all authored nodes carry `PROPOSED` status inside the session horizon.
 2. **Given** a specialty decision generated during deliberation, **When** emitted, **Then** it carries either an exact `canon_citation` or `declared_invention: true` with rationale — and no decision enters the horizon without provenance.

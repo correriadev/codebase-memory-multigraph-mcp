@@ -1,8 +1,12 @@
 # SCOPE B04 — Refusal-Handling Discipline (embedded in every skill)
 
 > **Track:** B — New harness-kit skills · **Station:** cross-cutting (no single station owns it)
-> **Status:** REVIEW · **Mark:** [E] · **Deps:** A04 · **Codes in:** harness-kit (not in this implementation cycle)
+> **Status:** REVIEW · **Mark:** [B/E] · **Deps:** A04 · **Codes in:** harness-kit
 > **Provenance:** ADR_V1 §3.4 (Typed Refusals as API); PRD_V2 §7.2 (Typing of Refusal)
+
+## Compatibility with CBM (2026-09-28)
+
+Union handlers now emit typed refusals. The matrix below is a behavioral policy, not an exhaustive list of all runtime codes: the engine also returns session, contract, sweep, gateway, and parameter failures. Dispatch on the returned code and tool context; preserve unknown codes as visible failures and stop automatic retries. The `CbmSkillContract` stores an acknowledged-refusals bitmask, not a per-code behavior map. Until a public contract registration API and machine-readable behavior mapping exist, keep the skill-side matrix versioned alongside its definition and verify it with host tool responses. Do not promise host-enforced `RETRY_IDENTICAL` for every tool.
 
 ## Problem
 
@@ -40,6 +44,8 @@ A refusal is curriculum, not error. A skill that treats a typed refusal as a tra
 - Conformance certification of third-party clients (out of both cycles).
 
 ## Acceptance criteria (testable in isolation)
+
+**Staging:** exercise only codes a public tool can emit, plus a synthetic unknown-code case. Contract-registry validation in AC 3 is deferred until a public contract endpoint exists; the skill may lint the bitmask offline now.
 
 1. **Given** each refusal code in the matrix, **When** the scripted scenario triggers it against a Track-B skill, **Then** the host log shows the mandated behavior and no identical re-submission (per code, one AC).
 2. **Given** a `RETRY_IDENTICAL` event, **When** logged against a skill, **Then** the skill halts that line of work and records the violation — the discipline treats its own violation as a finding, not a retry.

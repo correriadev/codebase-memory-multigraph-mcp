@@ -1,8 +1,14 @@
 # SCOPE B03 — `adversarial-traverser` (CONTEST station)
 
 > **Track:** B — New harness-kit skills · **Station:** CONTEST (ADR_V1 §3.1)
-> **Status:** REVIEW · **Mark:** [E] · **Deps:** A03, A10, D02, D03, D04 · **Codes in:** harness-kit (not in this implementation cycle)
+> **Status:** REVIEW · **Mark:** [B/E] · **Deps:** A03, A10, D02, D03, D04 · **Codes in:** harness-kit
 > **Provenance:** ADR_V1 §3.1; PRD_V2 Station 7 (Shadow-work); PRD_V1 §3.6 (the Critic's anti-inflation clause); PRD_V3 §3, §4 (Tradition auditing & collision contestation)
+
+## Compatibility with CBM (2026-09-28)
+
+`contest_verify` is exposed and requires `target_ref`, `target_horizon`, severity, and evidence. Discovery tools can inspect the target with `active_horizons`. The skill must supply a concrete target and independently checked evidence; it cannot treat a submitted contest as a final host verdict. The current tool surface does not expose a full target-claim listing or a reviewer budget ledger. Identity-independent outcomes and promotion blocking remain integration acceptance tests, not guarantees of this skill alone. An evidence-free review ends with no finding or a clearly labeled question, never a fabricated contest.
+
+**Scope decision:** keep B03 as risk-triggered review, with the trigger selected by the invoking workflow. Defer automated all-claim traversal and budget accounting until the host exposes them.
 
 ## Problem
 
@@ -28,6 +34,8 @@ The adversarial peer must traverse a sibling horizon's claims and speak through 
 - Verdict computation (the host judges; the traverser only submits).
 
 ## Acceptance criteria (testable in isolation)
+
+**Staging:** current `contest_verify` supports evidence-backed submissions (AC 1-3 in part) and no-finding reports owned by the skill (AC 4). AC 5 and 7 require independent identity-isolation and budget-ledger evidence. AC 6 is a skill behavior test.
 
 1. **Given** a target horizon containing a specialty decision without canon citation and without declared invention, **When** the traverser runs, **Then** a contest naming `PROVENANCE_UNDECLARED` with exact artifact ref and concrete impact is submitted.
 2. **Given** code departing from a bound normative theme rule without an explicit `type=DEVIATION` claim, **When** traversed, **Then** a contest for unrecorded deviation is submitted citing the violated theme rule.

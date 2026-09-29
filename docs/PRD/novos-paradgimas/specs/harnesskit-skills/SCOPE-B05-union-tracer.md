@@ -1,8 +1,14 @@
 # SCOPE B05 — `union-tracer` (TRACE station)
 
 > **Track:** B — New harness-kit skills · **Station:** TRACE (ADR_V1 §3.1)
-> **Status:** REVIEW · **Mark:** [E] · **Deps:** A09, D03, D06 · **Codes in:** harness-kit (not in this implementation cycle)
+> **Status:** REVIEW · **Mark:** [B/E] · **Deps:** A09, D03, D06 · **Codes in:** harness-kit
 > **Provenance:** ADR_V1 §3.1; PRD_V2 Station 10; PRD_V1 §3.13 (Ouroboros); PRD_V3 §7 (Success criterion 7 & D06)
+
+## Compatibility with CBM (2026-09-28)
+
+`union_session_close` already returns an evaluator-safe trace and logs `union.session.trace`. It currently records identity, contract, base sequence, action counts, refusal count, exclusions, and outcome. It does not provide references for every grounding read, cited theme, deviation, or provenance ratio. B05 should collect those only from actual tool responses or host events, mark unavailable metrics `unknown`, and reconcile only fields the host exposes. It must not replace or rewrite the host trace. The skill's useful near-term output is an external verification report keyed to `horizon_id`; richer A09 telemetry is a separate engine dependency. A blocked `SWEEP_INCOMPLETE` close is not a completed trace.
+
+**Scope decision:** narrow B05 from trace producer to trace verifier/enricher. Keep per-event references and founding metrics as deferred acceptance conditions.
 
 ## Problem
 
@@ -28,6 +34,8 @@ At horizon closure, the session must leave a factual trace that a verifier can d
 - Trace collection for non-union (legacy) sessions.
 
 ## Acceptance criteria (testable in isolation)
+
+**Staging:** current CBM permits schema checks for the returned trace and reconciliation of exposed counters. AC 1-4 and 6 require additional host event references for their full assertions. AC 5 can be checked against the current evaluator JSON.
 
 1. **Given** a closed session horizon, **When** the tracer runs, **Then** the trace matches the A09 schema and every field carries a resolvable host-log reference.
 2. **Given** a specialty session, **When** traced, **Then** the trace explicitly records the counts of `CITED_CANON` vs `DECLARED_INVENTION` judgments and any admitted `DEVIATION` claims.

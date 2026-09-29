@@ -1,8 +1,14 @@
 # SCOPE B06 — `skill-contract-attestor`
 
 > **Track:** B — New harness-kit skills · **Station:** cross-cutting (the union's physician)
-> **Status:** REVIEW · **Mark:** [E] · **Deps:** A02, B04 · **Codes in:** harness-kit (not in this implementation cycle)
+> **Status:** REVIEW · **Mark:** [B/E] · **Deps:** A02, B04 · **Codes in:** harness-kit
 > **Provenance:** ADR_V1 §3.3 (Skill Contract); PRD_V1 §3.9 (persona inflation warning); PRD_V3 §1, §8 (Decomposition of specialist skills into universal mechanics + externalized canon)
+
+## Compatibility with CBM (2026-09-28)
+
+The engine has `CbmSkillContract` validation and an in-memory registry, but no public MCP tool to submit, list, or supersede contracts. `union_session_open` can therefore report `CONTRACT_UNKNOWN` and restricted mode for a valid skill. B06 can lint a draft contract offline against the current C struct fields (`identity`, `territory`, `effect_class`, `acknowledged_refusals_mask`, trace/exclusion obligations, `provenance`) and compare known territory declarations. It cannot admit a contract or promise an authoritative overlap report through today's tool surface. Craft-pollution detection is a review diagnostic, not a host refusal.
+
+**Scope decision:** keep B06 as offline attestation now; make registry submission and admission dependent on a public contract API. Acceptance criterion 4 below is deferred until that API exists.
 
 ## Problem
 
@@ -26,6 +32,8 @@ Skills must author and validate their contracts against the registry (A02), and 
 - Skill *implementation* quality — the attestor reads declarations, not behavior.
 
 ## Acceptance criteria (testable in isolation)
+
+**Staging:** AC 1-2 can be checked as local lint rules. AC 3-6 need a public registry endpoint and admission authority before they can pass end to end.
 
 1. **Given** a draft contract that embeds specific domain technology standards (e.g., "React Specialist Skill"), **When** the attestor validates, **Then** a diagnostic is returned pointing that craft standards belong in a Theme Graph (`D01`), guiding refactoring toward universal mechanics.
 2. **Given** a draft contract whose `refusal_matrix` omits mandatory codes it can encounter (e.g. `PROVENANCE_UNDECLARED` or `STALE_BASE`), **When** validated, **Then** the diagnostic specifies the missing codes and blocks submission.

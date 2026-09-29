@@ -1,8 +1,14 @@
 # SCOPE B07 — `constellation-individuator` (Level 5)
 
 > **Track:** B — New harness-kit skills · **Station:** REFLEXION, genesis form (ADR_V1 §4, Level 5)
-> **Status:** REVIEW · **Mark:** [A/E] — **this scope is deliberately last and deliberately unrefined** · **Deps:** A09, B05, D06 · **Codes in:** harness-kit (not in this implementation cycle)
+> **Status:** DEFERRED · **Mark:** [A/E] · **Deps:** A07, A08, A09, A10, B05, B06, D06 · **Codes in:** harness-kit (future)
 > **Provenance:** ADR_V1 §4 (Individuating); PRD_V1 §3.13; PRD_V2 §5 (Level-5 gate rule); PRD_V3 §1, §5, §10 (D06: Craft Theme vs Procedural Skill)
+
+## Compatibility with CBM (2026-09-28)
+
+The current closure trace is too coarse to mine recurring procedural patterns with reliable evidence. `founding_propose` already exists for candidate themes, but it must not be used as a skill-admission channel. Contract admission and supersession are not public workflow operations. A trace miner would therefore turn incomplete counts into unjustified new skill personas.
+
+**Scope decision:** defer executable B07. Its next deliverable is an offline, human-reviewed candidate format and an evidence sufficiency test over several factual traces. No candidate proceeds to B08 from the current trace schema alone.
 
 ## Problem
 

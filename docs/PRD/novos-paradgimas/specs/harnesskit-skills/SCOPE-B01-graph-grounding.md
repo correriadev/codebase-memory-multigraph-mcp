@@ -1,8 +1,14 @@
 # SCOPE B01 — `graph-grounding` (GROUND station)
 
 > **Track:** B — New harness-kit skills · **Station:** GROUND (ADR_V1 §3.1)
-> **Status:** REVIEW · **Mark:** [E] · **Deps:** A03, D01, D02, D03 · **Codes in:** harness-kit (not in this implementation cycle)
+> **Status:** REVIEW · **Mark:** [B/E] · **Deps:** A03, D01, D02, D03 · **Codes in:** harness-kit
 > **Provenance:** ADR_V1 §3.1; PRD_V2 Station 2 (Interrogation, grounded form); PRD_V3 §5 (The routing moment, D03)
+
+## Compatibility with CBM (2026-09-28)
+
+The Realization Plane already exposes `search_graph`, `search_code`, `query_graph`, `trace_path`, `get_code_snippet`, `get_file_outline`, `get_graph_schema`, and `get_architecture`. Union exposes `classify_activity`, `theme_lookup`, `binding_claim`, and `validate_provenance`. The skill's remaining work is orchestration and an evidence report, not new graph APIs. `binding_claim` creates a binding; it is not a read API for enumerating existing bindings. A specialty preflight must use only queryable evidence and declare an unknown binding state when it cannot inspect one. Do not create a binding just to discover it. Check `index_status`/`check_index_coverage` before treating a missing symbol as evidence of absence. Use `active_horizons` for speculative code reads.
+
+**Scope decision:** keep B01 as a reusable grounding procedure; defer any criterion requiring an unimplemented binding-list API or per-read trace references until the CBM exposes them. A raw source read remains valid to verify exact bytes after graph localization.
 
 ## Problem
 
@@ -29,6 +35,8 @@ The first act of a graph-native skill is to ground: read admitted context throug
 - Cache management (the graph is the jurisdiction; the skill holds no private cache — cache possession, ADR_V1 §5.1).
 
 ## Acceptance criteria (testable in isolation)
+
+**Staging:** AC 1-2 are executable with current tools when the theme and project are known. AC 3-5 and 7 require binding discovery or richer trace fields; retain them as engine integration criteria. AC 6 is testable only for refusals actually emitted by the called tool.
 
 1. **Given** a consultative request ("explain flow X in module Y"), **When** the skill grounds, **Then** the host log shows queries confined strictly to project planes and zero external theme lookups.
 2. **Given** a specialty request ("scaffold domain aggregate under clean-arch"), **When** the skill grounds, **Then** the host log shows Phase 1 project grounding followed by Phase 2 theme grounding via KnowledgeBase registry (`D01`).

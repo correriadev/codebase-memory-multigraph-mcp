@@ -1,8 +1,14 @@
 # SCOPE B08 — `level-graduator` (rebirth / non-regression gate)
 
 > **Track:** B — New harness-kit skills · **Station:** cross-cutting (the temenos of the spiral)
-> **Status:** REVIEW · **Mark:** [A/E] · **Deps:** B07, D05 · **Codes in:** harness-kit (not in this implementation cycle)
+> **Status:** DEFERRED · **Mark:** [A/E] · **Deps:** A02, A07, A08, A10, B06, B07, D05 · **Codes in:** harness-kit (future)
 > **Provenance:** ADR_V1 §4 (level transition as promotion); PRD_V2 Emendation III (recall, scar); ADR_V1 §4 ("no rebirth without a corpse; no corpse without a record"); PRD_V3 §4 (Separation of procedural graduation from theme drift)
+
+## Compatibility with CBM (2026-09-28)
+
+The public CBM workflow has no atomic skill-contract supersession, recall, or admission ceremony. `promote_horizon` promotes graph state, not a new skill version. Theme drift is a separate data concern. A skill cannot safely mark its predecessor stale or claim a rollback merely by writing a trace or promoting a horizon.
+
+**Scope decision:** defer executable B08 until contract versioning, operator authorization, non-regression evidence, and recall are exposed as host operations. For now, B08 can specify a review checklist and test fixture; it must not mutate the registry.
 
 ## Problem
 
