@@ -71,6 +71,14 @@ The third territory (Tradition) of PRD_V3: external craft themes, indirect bindi
 | [D05](knowledge-base/SCOPE-D05-theme-drift-propagation.md) | Theme Drift Propagation & Orphan Binding ECG Queries | [E] | C06, C07, D01, D02 | REVIEW |
 | [D06](knowledge-base/SCOPE-D06-founding-proposals.md) | Closure Sweep Founding Proposals | [E] | C03, D01, D03 | REVIEW |
 
+## Track E — Lifecycle & Epistemic Seam (`docs/specs/`)
+
+The respiration gate separating Diastole (unrestricted read/inquiry) from Systole (disciplined mutation): Antigravity `PreToolUse` lifecycle hooks guarding file writes, just-in-time grounding, and zero graph pollution during consultative interaction.
+
+| Scope | Capability | Mark | Deps | Status |
+| --- | --- | --- | --- | --- |
+| [E01](../../../specs/SCOPE-E01-cognitive-respiration-mutation-seam.md) | Cognitive Respiration & Mutation Seam (Antigravity Hooks Gate) | [E] | A01, A03, A04, B01, D01, D02, D03 | REVIEW |
+
 ## Review order (suggested)
 
 ```text

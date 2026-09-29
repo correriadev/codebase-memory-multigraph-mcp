@@ -250,6 +250,9 @@ bool cbm_hook_path_contains_for_testing(const char *root, const char *candidate,
                                         bool case_insensitive);
 const char *cbm_hook_no_project_index_guidance_for_testing(const char *event);
 bool cbm_hook_augment_parse_bash_pattern_for_testing(const char *cmd, char *out, size_t out_sz);
+bool cbm_hook_mutation_parse_single_patch_for_testing(const char *patch, char *path_out,
+                                                      size_t path_out_size,
+                                                      const char **operation_name_out);
 bool cbm_mcp_command_path_probe_safe_for_testing(const char *command, bool windows);
 void cbm_set_mcp_command_path_probe_counter_for_testing(int *counter);
 int cbm_install_editor_mcp_with_previous_for_testing(const char *binary_path,
@@ -278,6 +281,10 @@ int cbm_remove_opencode_mcp_owned(const char *binary_path, const char *config_pa
 /* Antigravity: upsert MCP entry in ~/.gemini/config/mcp_config.json.
  * Returns 0 on success. */
 int cbm_upsert_antigravity_mcp(const char *binary_path, const char *config_path);
+/* Install/remove the fail-closed E01 PreToolUse hook in Antigravity's
+ * customization-root hooks.json. The command includes its verified dialect. */
+int cbm_upsert_antigravity_mutation_hook(const char *hooks_path, const char *command);
+int cbm_remove_antigravity_mutation_hook(const char *hooks_path);
 
 /* Remove CMM MCP entry from antigravity mcp_config.json. Returns 0 on success. */
 int cbm_remove_antigravity_mcp(const char *config_path);
@@ -526,6 +533,9 @@ char *cbm_hook_augment_lifecycle_json_for(const char *input, const char *forced_
 /* Thin daemon frontend support: preserve the hook's bounded stdin read and
  * hard fail-open deadline without constructing a local MCP/store instance. */
 void cbm_hook_augment_arm_deadline(void);
+/* E01 mutation hooks emit a host-specific denial if their in-process work
+ * exceeds the host hook timeout; this timer never exits with an empty result. */
+void cbm_hook_augment_arm_mutation_deadline(const char *dialect_name);
 
 /* The in-process deadline in milliseconds, as CBM_HOOK_DEADLINE_MS resolves it.
  * Exposed so a test can check what an unreadable value falls back to. POSIX
@@ -560,9 +570,15 @@ const char *cbm_hook_admission_notice(cbm_hook_admission_t reason, const char *h
 char *cbm_hook_augment_process(cbm_mcp_server_t *srv, const char *input_json);
 
 /* Dialect-aware daemon entry. forced_event and dialect_name are borrowed and
- * may be NULL for the ordinary event dialect. Unsupported combinations fail
- * open with NULL, matching the direct hook command. */
+ * may be NULL for the ordinary event dialect. Ordinary augmentation returns
+ * NULL on unsupported input; E01 mutation dialects return a denial envelope. */
 bool cbm_hook_augment_invocation_supported(const char *forced_event, const char *dialect_name);
+/* E01 pre-tool adapters use documented host denial envelopes and fail closed
+ * when the daemon or its mutation authority is unavailable. */
+bool cbm_hook_mutation_invocation_supported(const char *forced_event,
+                                           const char *dialect_name);
+char *cbm_hook_mutation_deny_response_for_dialect(const char *dialect_name,
+                                                  const char *reason);
 char *cbm_hook_augment_process_for(cbm_mcp_server_t *srv, const char *input_json,
                                    const char *forced_event, const char *dialect_name);
 

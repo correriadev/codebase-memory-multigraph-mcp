@@ -13,6 +13,7 @@
 
 #include "union_contract.h"
 #include "union_refusal.h"
+#include "mutation_gate.h"
 
 #include "../core/horizon_pool.h"
 
@@ -30,7 +31,10 @@ typedef enum {
     CBM_SESSION_ERR_NULL = -1,
     CBM_SESSION_ERR_POOL = -2,       /* horizon creation failed */
     CBM_SESSION_ERR_FULL = -3,       /* session registry exhausted */
-    CBM_SESSION_ERR_NOT_FOUND = -4   /* close/query on unknown session */
+    CBM_SESSION_ERR_NOT_FOUND = -4,  /* close/query on unknown session */
+    CBM_SESSION_ERR_INVALID_CONTEXT = -5,
+    CBM_SESSION_ERR_CONTEXT_ALREADY_BOUND = -6,
+    CBM_SESSION_ERR_JOURNAL = -7
 } CbmSessionResult;
 
 typedef enum {
@@ -41,13 +45,17 @@ typedef enum {
 
 const char *cbm_session_close_reason_string(CbmSessionCloseReason reason);
 
-typedef struct {
+typedef struct CbmSessionHorizon {
     char horizon_id[CBM_HORIZON_ID_MAX];
     char identity[CBM_SESSION_IDENTITY_MAX];
     char contract_id[CBM_CONTRACT_ID_MAX];
     bool restricted; /* no registered contract: irreversible-class gating */
     CbmRefusalCode open_refusal; /* CBM_REFUSAL_OK, or CONTRACT_UNKNOWN when restricted */
     char based_on_seq[CBM_SESSION_BASED_ON_SEQ_MAX];
+    CbmHostWorkContext host_context;
+    CbmChangeGrounding change_grounding;
+    bool has_bound_context;
+    bool has_change_grounding;
     uint64_t opened_at_unix;
     uint32_t actions;
     uint32_t refusals;
@@ -62,7 +70,7 @@ typedef struct {
     uint32_t refusals;
 } CbmSessionClosure;
 
-typedef struct {
+typedef struct CbmSessionRegistry {
     CbmSessionHorizon sessions[CBM_SESSION_REGISTRY_CAP];
     size_t count;
 } CbmSessionRegistry;
@@ -92,6 +100,18 @@ CbmSessionResult cbm_session_open(CbmSessionRegistry *sessions,
  * reconstructible; this reads live state, the host log reconstructs). */
 const CbmSessionHorizon *cbm_session_get(const CbmSessionRegistry *sessions,
                                          const char *horizon_id);
+
+/* Bind an open session once to a host-issued work-context identity and its
+ * active change grounding. Rebinding to another context is rejected. */
+CbmSessionResult cbm_session_bind_mutation_context(CbmSessionRegistry *sessions,
+                                                   const char *horizon_id,
+                                                   const CbmHostWorkContext *host_context,
+                                                   const CbmChangeGrounding *grounding,
+                                                   char *out_error, size_t err_sz);
+
+/* Find the live session bound to exactly this host context. */
+const CbmSessionHorizon *cbm_session_find_bound_context(
+    const CbmSessionRegistry *sessions, const CbmHostWorkContext *host_context);
 
 /* Record an action against the session ledger (counters only — the budget
  * ledger is SCOPE-A06). */

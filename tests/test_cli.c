@@ -9647,6 +9647,9 @@ TEST(cli_codex_session_hook_issue330) {
     ASSERT(strstr(d, "[[hooks.SessionStart.hooks]]") != NULL);
     ASSERT(strstr(d, "[[hooks.SubagentStart]]") != NULL);
     ASSERT(strstr(d, "[[hooks.SubagentStart.hooks]]") != NULL);
+    ASSERT(strstr(d, "[[hooks.PreToolUse]]") != NULL);
+    ASSERT(strstr(d, "--dialect codex-mutation") != NULL);
+    ASSERT(strstr(d, "timeout = 30") != NULL);
     ASSERT(strstr(d, "hook-augment") != NULL);
     ASSERT(strstr(d, "timeout = 5") != NULL);
     ASSERT(strstr(d, "command_windows") != NULL);
@@ -9662,6 +9665,7 @@ TEST(cli_codex_session_hook_issue330) {
     d = read_test_file(cfg);
     ASSERT_NULL(strstr(d, "hooks.SessionStart"));
     ASSERT_NULL(strstr(d, "hooks.SubagentStart"));
+    ASSERT_NULL(strstr(d, "hooks.PreToolUse"));
     ASSERT(strstr(d, "[mcp_servers.other]") != NULL); /* still preserved after removal */
 
     /* #1432: Codex may normalize the owned reminder to an inline assignment
@@ -9680,6 +9684,47 @@ TEST(cli_codex_session_hook_issue330) {
     ASSERT_NOT_NULL(strstr(d, "[[hooks.SessionStart]]"));
     ASSERT_EQ(test_count_substring(d, "[[hooks.SessionStart]]"), 1U);
 
+    test_rmdir_r(tmpdir);
+    PASS();
+}
+
+TEST(cli_antigravity_mutation_hook_owned_upsert_and_remove) {
+    char tmpdir[256];
+    snprintf(tmpdir, sizeof(tmpdir), "/tmp/cli-antigravity-mutation-XXXXXX");
+    if (!cbm_mkdtemp(tmpdir)) FAIL("cbm_mkdtemp failed");
+
+    char path[512];
+    snprintf(path, sizeof(path), "%s/hooks.json", tmpdir);
+    ASSERT_EQ(write_test_file(path, "{\"other\":true,\"foreign\":{\"keep\":1}}"), 0);
+    const char *command =
+        "/usr/local/bin/codebase-memory-mcp hook-augment --event PreToolUse "
+        "--dialect antigravity-mutation";
+    ASSERT_EQ(cbm_upsert_antigravity_mutation_hook(path, command), 0);
+    char *first = read_test_file_alloc(path);
+    ASSERT_NOT_NULL(first);
+    ASSERT_NOT_NULL(strstr(first, "codebase-memory-mutation-gate"));
+    ASSERT_NOT_NULL(strstr(first, "PreToolUse"));
+    ASSERT_NOT_NULL(strstr(first, "--dialect antigravity-mutation"));
+    ASSERT_NOT_NULL(strstr(first, "\"other\":true"));
+    ASSERT_NOT_NULL(strstr(first, "\"foreign\""));
+
+    ASSERT_EQ(cbm_upsert_antigravity_mutation_hook(path, command), 0);
+    char *second = read_test_file_alloc(path);
+    ASSERT_NOT_NULL(second);
+    ASSERT_STR_EQ(second, first);
+
+    char *changed = strstr(second, "\"timeout\": 30");
+    ASSERT_NOT_NULL(changed);
+    changed[strlen("\"timeout\": 30") - 1U] = '1';
+    ASSERT_EQ(write_test_file(path, second), 0);
+    ASSERT_EQ(cbm_remove_antigravity_mutation_hook(path), -1);
+    char *still_changed = read_test_file_alloc(path);
+    ASSERT_NOT_NULL(still_changed);
+    ASSERT_STR_EQ(still_changed, second);
+
+    free(first);
+    free(second);
+    free(still_changed);
     test_rmdir_r(tmpdir);
     PASS();
 }
@@ -10703,9 +10748,12 @@ TEST(cli_codex_migrates_to_single_hook_representation) {
     char *toml = read_test_file_alloc(config_path);
     char *hooks = read_test_file_alloc(hooks_path);
     bool lifecycle_ok = first_rc == 0 && repeat_rc == 0 && dry_rc == 0 && first && repeated &&
-                        after_dry && strcmp(first, repeated) == 0 && strcmp(first, after_dry) == 0;
+                        after_dry && strstr(first, "[[hooks.PreToolUse]]") &&
+                        strstr(first, "--dialect codex-mutation") &&
+                        strcmp(first, repeated) == 0 && strcmp(first, after_dry) == 0;
     bool migrated = migration_rc == 0 && toml && !strstr(toml, "SessionStart") && hooks &&
-                    strstr(hooks, "SessionStart") && strstr(hooks, "SubagentStart");
+                    strstr(hooks, "SessionStart") && strstr(hooks, "SubagentStart") &&
+                    strstr(hooks, "PreToolUse") && strstr(hooks, "codex-mutation");
     free(first);
     free(repeated);
     free(after_dry);
@@ -10983,6 +11031,139 @@ TEST(cli_hook_augment_context_tracks_search_json_shape) {
     PASS();
 }
 
+TEST(cli_mutation_hook_adapters_fail_closed_and_keep_reads_side_effect_free) {
+    ASSERT_TRUE(cbm_hook_mutation_invocation_supported("PreToolUse", "codex-mutation"));
+    ASSERT_TRUE(cbm_hook_mutation_invocation_supported("PreToolUse", "antigravity-mutation"));
+    ASSERT_FALSE(cbm_hook_mutation_invocation_supported("SessionStart", "codex-mutation"));
+    ASSERT_FALSE(cbm_hook_mutation_invocation_supported("PostToolUse", "antigravity-mutation"));
+
+    char tmpdir[256];
+    snprintf(tmpdir, sizeof(tmpdir), "/tmp/cli-mutation-hook-XXXXXX");
+    if (!cbm_mkdtemp(tmpdir)) FAIL("cbm_mkdtemp failed");
+    char cache_dir[512];
+    snprintf(cache_dir, sizeof(cache_dir), "%s/cache-not-created", tmpdir);
+    char *saved_cache = save_test_env("CBM_CACHE_DIR");
+    cbm_setenv("CBM_CACHE_DIR", cache_dir, 1);
+
+    const char *read_input =
+        "{\"conversationId\":\"conversation-1\","
+        "\"toolCall\":{\"name\":\"read_file\",\"args\":{\"file_path\":\"/tmp/read-only.txt\"}}}";
+    char *output = cbm_hook_augment_process_for(NULL, read_input, "PreToolUse",
+                                                "antigravity-mutation");
+    ASSERT_NULL(output);
+    output = cbm_hook_augment_process_for(
+        NULL,
+        "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"session-read\","
+        "\"tool_name\":\"mcp__codebase-memory-mcp__search_graph\",\"tool_input\":{}}",
+        "PreToolUse", "codex-mutation");
+    ASSERT_NULL(output);
+    struct stat cache_state;
+    ASSERT_NEQ(stat(cache_dir, &cache_state), 0);
+
+    output = cbm_hook_augment_process_for(NULL, "{}", "PreToolUse", "codex-mutation");
+    ASSERT_NOT_NULL(output);
+    ASSERT_NOT_NULL(strstr(output, "permissionDecision\":\"deny"));
+    free(output);
+
+    output = cbm_hook_augment_process_for(
+        NULL,
+        "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"session-3\","
+        "\"cwd\":\"/repo\",\"tool_name\":\"mcp__untrusted__read_file\","
+        "\"tool_input\":{\"file_path\":\"/repo/secret.txt\"}}",
+        "PreToolUse", "codex-mutation");
+    ASSERT_NOT_NULL(output);
+    ASSERT_NOT_NULL(strstr(output, "permissionDecision\":\"deny"));
+    free(output);
+
+    cbm_mcp_server_t *mutation_srv = cbm_mcp_server_new(NULL);
+    ASSERT_NOT_NULL(mutation_srv);
+    output = cbm_hook_augment_process_for(
+        mutation_srv,
+        "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"session-2\","
+        "\"cwd\":\"/repo\","
+        "\"tool_name\":\"write_to_file\","
+        "\"tool_input\":{\"file_path\":\"/repo/spec.md\"}}",
+        "PreToolUse", "codex-mutation");
+    ASSERT_NOT_NULL(output);
+    ASSERT_NOT_NULL(strstr(output, "permissionDecision\":\"deny"));
+    ASSERT_NOT_NULL(strstr(output, "session-2"));
+    ASSERT_NOT_NULL(strstr(output, "union_session_open"));
+    free(output);
+    cbm_mcp_server_free(mutation_srv);
+
+    output = cbm_hook_augment_process_for(
+        NULL,
+        "{\"conversationId\":\"conversation-2\",\"workspacePaths\":[\"/repo\"],"
+        "\"toolCall\":{\"name\":\"write_to_file\","
+        "\"args\":{\"file_path\":\"/repo/spec.md\"}}}",
+        "PreToolUse", "antigravity-mutation");
+    ASSERT_NOT_NULL(output);
+    ASSERT_NOT_NULL(strstr(output, "\"decision\":\"deny"));
+    free(output);
+
+    restore_test_env("CBM_CACHE_DIR", saved_cache);
+    test_rmdir_r(tmpdir);
+    PASS();
+}
+
+TEST(cli_mutation_hook_allows_proven_codex_scratch_write_without_union_session) {
+    char tmpdir[256];
+    snprintf(tmpdir, sizeof(tmpdir), "/tmp/cli-mutation-scratch-XXXXXX");
+    if (!cbm_mkdtemp(tmpdir)) FAIL("cbm_mkdtemp failed");
+    char repo[512];
+    char scratch[512];
+    char cache[512];
+    char project_db[640];
+    snprintf(repo, sizeof(repo), "%s/repo", tmpdir);
+    snprintf(scratch, sizeof(scratch), "%s/scratch.txt", tmpdir);
+    snprintf(cache, sizeof(cache), "%s/cache", tmpdir);
+    snprintf(project_db, sizeof(project_db), "%s/repo.db", cache);
+    if (test_mkdirp(repo) != 0 || test_mkdirp(cache) != 0) {
+        test_rmdir_r(tmpdir);
+        FAIL("failed to create scratch scope fixture");
+    }
+
+    cbm_store_t *store = cbm_store_open_path(project_db);
+    if (!store || cbm_store_upsert_project(store, "repo", repo) != CBM_STORE_OK) {
+        cbm_store_close(store);
+        test_rmdir_r(tmpdir);
+        FAIL("failed to register indexed repository root");
+    }
+    cbm_store_close(store);
+    char *saved_cache = save_test_env("CBM_CACHE_DIR");
+    cbm_setenv("CBM_CACHE_DIR", cache, 1);
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    if (!srv) {
+        restore_test_env("CBM_CACHE_DIR", saved_cache);
+        test_rmdir_r(tmpdir);
+        FAIL("failed to create in-memory MCP server");
+    }
+
+    char input[2048];
+    int written = snprintf(input, sizeof(input),
+                           "{\"hook_event_name\":\"PreToolUse\",\"cwd\":\"%s\","
+                           "\"tool_name\":\"write_to_file\",\"tool_input\":{"
+                           "\"file_path\":\"%s\"}}",
+                           repo, scratch);
+    if (written <= 0 || (size_t)written >= sizeof(input)) {
+        cbm_mcp_server_free(srv);
+        restore_test_env("CBM_CACHE_DIR", saved_cache);
+        test_rmdir_r(tmpdir);
+        FAIL("scratch mutation hook input overflowed");
+    }
+    char *output = cbm_hook_augment_process_for(srv, input, "PreToolUse",
+                                                "codex-mutation");
+    bool allowed_without_session = output == NULL;
+    free(output);
+    cbm_mcp_server_free(srv);
+    restore_test_env("CBM_CACHE_DIR", saved_cache);
+    test_rmdir_r(tmpdir);
+    if (!allowed_without_session) {
+        FAIL("a write proven outside the indexed repository must pass without Union authority");
+    }
+    PASS();
+}
+
 /* Exercise the real PreToolUse + Bash route instead of calling only the
  * tokenizer seam. This pins the event guard and the graph lookup path together.
  */
@@ -11081,6 +11262,38 @@ TEST(cli_hook_augment_bash_pattern_extractor) {
                                                                 out, sizeof(out)));
     ASSERT_STR_EQ(out, "CreateStripeCheckout");
 
+    PASS();
+}
+
+TEST(cli_mutation_apply_patch_requires_one_file) {
+    char path[128] = {0};
+    const char *operation = NULL;
+    const char *single_update =
+        "*** Begin Patch\n*** Update File: src/parser.c\n@@\n-old\n+new\n*** End Patch";
+    ASSERT_TRUE(cbm_hook_mutation_parse_single_patch_for_testing(
+        single_update, path, sizeof(path), &operation));
+    ASSERT_STR_EQ(path, "src/parser.c");
+    ASSERT_STR_EQ(operation, "modify");
+
+    const char *single_add =
+        "*** Begin Patch\n*** Add File: docs/new.md\n+content\n*** End Patch\n";
+    ASSERT_TRUE(cbm_hook_mutation_parse_single_patch_for_testing(
+        single_add, path, sizeof(path), &operation));
+    ASSERT_STR_EQ(path, "docs/new.md");
+    ASSERT_STR_EQ(operation, "create");
+
+    const char *multiple_files =
+        "*** Begin Patch\n*** Update File: src/a.c\n@@\n-a\n+b\n"
+        "*** Update File: src/b.c\n@@\n-c\n+d\n*** End Patch";
+    ASSERT_FALSE(cbm_hook_mutation_parse_single_patch_for_testing(
+        multiple_files, path, sizeof(path), &operation));
+    const char *move_file =
+        "*** Begin Patch\n*** Update File: src/a.c\n*** Move to: src/b.c\n*** End Patch";
+    ASSERT_FALSE(cbm_hook_mutation_parse_single_patch_for_testing(
+        move_file, path, sizeof(path), &operation));
+    ASSERT_FALSE(cbm_hook_mutation_parse_single_patch_for_testing(
+        "*** Begin Patch\n*** Update File: src/a.c\n@@\n-old\n+new", path,
+        sizeof(path), &operation));
     PASS();
 }
 TEST(cli_hook_augment_coverage_requests_machine_json) {
@@ -15149,6 +15362,7 @@ SUITE(cli) {
     RUN_TEST(cli_hook_metadata_rejects_truncated_utf8_without_oob);
     RUN_TEST(cli_aider_config_loads_installed_conventions);
     RUN_TEST(cli_codex_session_hook_issue330);
+    RUN_TEST(cli_antigravity_mutation_hook_owned_upsert_and_remove);
     RUN_TEST(cli_gemini_session_hook_parity);
     RUN_TEST(cli_claude_subagent_hook);
     RUN_TEST(cli_claude_hook_mutation_converges_mixed_owned_duplicates);
@@ -15172,6 +15386,9 @@ SUITE(cli) {
     RUN_TEST(cli_codex_preflight_reports_heading_and_reason);
 #endif
     RUN_TEST(cli_hook_augment_context_tracks_search_json_shape);
+    RUN_TEST(cli_mutation_hook_adapters_fail_closed_and_keep_reads_side_effect_free);
+    RUN_TEST(cli_mutation_apply_patch_requires_one_file);
+    RUN_TEST(cli_mutation_hook_allows_proven_codex_scratch_write_without_union_session);
     RUN_TEST(cli_hook_augment_bash_pretooluse_reaches_augmenter);
     RUN_TEST(cli_hook_augment_bash_pattern_extractor);
     RUN_TEST(cli_hook_augment_coverage_requests_machine_json);

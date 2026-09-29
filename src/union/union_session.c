@@ -2,6 +2,7 @@
  * union_session.c — Session Horizon Protocol (Scope A01).
  */
 #include "union_session.h"
+#include "mutation_journal.h"
 
 #include "../foundation/log.h"
 
@@ -36,6 +37,73 @@ static CbmSessionHorizon *find_session(CbmSessionRegistry *sessions, const char 
 const CbmSessionHorizon *cbm_session_get(const CbmSessionRegistry *sessions,
                                         const char *horizon_id) {
     return find_session((CbmSessionRegistry *)sessions, horizon_id);
+}
+
+static bool session_context_matches(const CbmHostWorkContext *left,
+                                    const CbmHostWorkContext *right) {
+    return left && right && left->host == right->host &&
+           strcmp(left->context_id, right->context_id) == 0;
+}
+
+static bool session_grounding_matches(const CbmChangeGrounding *left,
+                                      const CbmChangeGrounding *right) {
+    return left && right && left->kind == right->kind &&
+           strcmp(left->intent_key, right->intent_key) == 0 &&
+           strcmp(left->reference, right->reference) == 0 &&
+           strcmp(left->rationale, right->rationale) == 0;
+}
+
+CbmSessionResult cbm_session_bind_mutation_context(CbmSessionRegistry *sessions,
+                                                   const char *horizon_id,
+                                                   const CbmHostWorkContext *host_context,
+                                                   const CbmChangeGrounding *grounding,
+                                                   char *out_error, size_t err_sz) {
+    CbmSessionHorizon *session = find_session(sessions, horizon_id);
+    if (!session) {
+        if (out_error && err_sz > 0) snprintf(out_error, err_sz, "SESSION_NOT_FOUND");
+        return CBM_SESSION_ERR_NOT_FOUND;
+    }
+    if (!cbm_host_work_context_is_valid(host_context) ||
+        !cbm_change_grounding_is_valid(grounding)) {
+        if (out_error && err_sz > 0) snprintf(out_error, err_sz, "INVALID_MUTATION_CONTEXT");
+        return CBM_SESSION_ERR_INVALID_CONTEXT;
+    }
+    if (session->has_bound_context) {
+        if (session_context_matches(&session->host_context, host_context) &&
+            session->has_change_grounding &&
+            session_grounding_matches(&session->change_grounding, grounding)) {
+            return CBM_SESSION_OK;
+        }
+        if (out_error && err_sz > 0) snprintf(out_error, err_sz, "SESSION_CONTEXT_ALREADY_BOUND");
+        return CBM_SESSION_ERR_CONTEXT_ALREADY_BOUND;
+    }
+
+    session->host_context = *host_context;
+    session->change_grounding = *grounding;
+    session->has_bound_context = true;
+    session->has_change_grounding = true;
+    cbm_log_info("union.session.context_bound",
+                 "horizon_id", session->horizon_id,
+                 "host", session->host_context.host == CBM_MUTATION_HOST_CODEX
+                             ? "codex" : "antigravity",
+                 "context_id", session->host_context.context_id,
+                 "intent_key", session->change_grounding.intent_key,
+                 NULL);
+    if (out_error && err_sz > 0) out_error[0] = '\0';
+    return CBM_SESSION_OK;
+}
+
+const CbmSessionHorizon *cbm_session_find_bound_context(
+    const CbmSessionRegistry *sessions, const CbmHostWorkContext *host_context) {
+    if (!sessions || !cbm_host_work_context_is_valid(host_context)) return NULL;
+    for (size_t i = 0; i < sessions->count; i++) {
+        const CbmSessionHorizon *session = &sessions->sessions[i];
+        if (session->has_bound_context && session->has_change_grounding &&
+            session_context_matches(&session->host_context, host_context)) {
+            return session;
+        }
+    }
+    return NULL;
 }
 
 CbmSessionResult cbm_session_open(CbmSessionRegistry *sessions,
@@ -134,6 +202,12 @@ CbmSessionResult cbm_session_close(CbmSessionRegistry *sessions,
     if (!pool) {
         if (out_error && err_sz > 0) snprintf(out_error, err_sz, "NULL_ARGUMENT");
         return CBM_SESSION_ERR_NULL;
+    }
+    if (s->has_bound_context &&
+        cbm_mutation_journal_mark_default_session_unknown(s->horizon_id) !=
+            CBM_MUTATION_JOURNAL_OK) {
+        if (out_error && err_sz > 0) snprintf(out_error, err_sz, "MUTATION_JOURNAL_UNAVAILABLE");
+        return CBM_SESSION_ERR_JOURNAL;
     }
 
     uint64_t now = (uint64_t)time(NULL);

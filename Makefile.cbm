@@ -348,6 +348,8 @@ FEDERATION_SRCS = \
 
 # Union module (Track A: Scopes A01, A02, A04, A05, A06, A07, A08, A09, A10)
 UNION_SRCS = \
+    src/union/mutation_gate.c \
+    src/union/mutation_journal.c \
     src/union/union_refusal.c \
     src/union/union_contract.c \
     src/union/union_session.c \

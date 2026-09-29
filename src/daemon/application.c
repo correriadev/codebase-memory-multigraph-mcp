@@ -19,6 +19,7 @@
 #include "mcp/mcp.h"
 #include "mcp/mcp_internal.h"
 #include "pipeline/pipeline.h"
+#include "union/mutation_journal.h"
 #include "ui/config.h"
 #include "watcher/watcher.h"
 
@@ -2950,6 +2951,11 @@ void cbm_daemon_application_set_permanent(cbm_daemon_application_t *application,
 
 cbm_daemon_application_t *cbm_daemon_application_new(
     const cbm_daemon_application_config_t *config) {
+    if (cbm_mutation_journal_recover_default_if_present() != CBM_MUTATION_JOURNAL_OK) {
+        cbm_log_error("union.mutation_journal.recovery_failed", "reason",
+                      "pending write intents could not be marked outcome_unknown");
+        return NULL;
+    }
     cbm_daemon_application_t *application = calloc(1, sizeof(*application));
     if (!application) {
         return NULL;

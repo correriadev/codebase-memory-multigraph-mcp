@@ -2,10 +2,14 @@
  * test_union_workflow_e2e.c — End-to-end integration suite for Union Workflow (Track W: W01-W05, W07, W09).
  */
 #include "test_framework.h"
+#include "test_helpers.h"
 #include "../src/mcp/union_handler.h"
 #include "../src/mcp/mcp.h"
 #include "../src/mcp/mcp_internal.h"
 #include "../src/admission/admission_gate.h"
+#include "../src/union/mutation_gate.h"
+#include "../src/foundation/compat.h"
+#include "../src/foundation/compat_fs.h"
 #include <yyjson/yyjson.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +34,95 @@ static bool get_is_error(yyjson_doc *doc) {
         if (v_err_sc && yyjson_get_bool(v_err_sc)) return true;
     }
     return false;
+}
+
+TEST(test_union_session_open_requires_and_registers_exact_intent_scope) {
+    char temp_dir[256];
+    snprintf(temp_dir, sizeof(temp_dir), "/tmp/cbm_union_scope_XXXXXX");
+    if (!cbm_mkdtemp(temp_dir)) FAIL("temporary directory creation failed");
+    char cache_dir[512];
+    snprintf(cache_dir, sizeof(cache_dir), "%s/cache", temp_dir);
+    char *old_cache = getenv("CBM_CACHE_DIR") ? strdup(getenv("CBM_CACHE_DIR")) : NULL;
+    if (cbm_setenv("CBM_CACHE_DIR", cache_dir, 1) != 0) {
+        free(old_cache);
+        th_rmtree(temp_dir);
+        FAIL("could not isolate mutation journal cache");
+    }
+
+    char target_request[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char target_path[CBM_MUTATION_TARGET_PATH_MAX];
+    int written = snprintf(target_request, sizeof(target_request), "%s/target.c", temp_dir);
+    if (written <= 0 || (size_t)written >= sizeof(target_request) ||
+        !cbm_mutation_canonicalize_path(target_request, target_path, sizeof(target_path))) {
+        if (old_cache) cbm_setenv("CBM_CACHE_DIR", old_cache, 1);
+        else cbm_unsetenv("CBM_CACHE_DIR");
+        free(old_cache);
+        th_rmtree(temp_dir);
+        FAIL("could not canonicalize intent target");
+    }
+
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    if (!srv) {
+        if (old_cache) cbm_setenv("CBM_CACHE_DIR", old_cache, 1);
+        else cbm_unsetenv("CBM_CACHE_DIR");
+        free(old_cache);
+        th_rmtree(temp_dir);
+        FAIL("MCP server creation failed");
+    }
+
+    char *bad = handle_union_session_open(
+        srv, "{\"identity\":\"developer\",\"host\":\"codex\","
+             "\"context_id\":\"scope-parser-bad\",\"grounding_kind\":\"declared_invention\","
+             "\"intent_key\":\"edit target\",\"rationale\":\"requested\"}");
+    ASSERT_NOT_NULL(bad);
+    yyjson_doc *bad_doc = yyjson_read(bad, strlen(bad), 0);
+    ASSERT_TRUE(get_is_error(bad_doc));
+    yyjson_doc_free(bad_doc);
+    free(bad);
+
+    yyjson_mut_doc *args_doc = yyjson_mut_doc_new(NULL);
+    ASSERT_NOT_NULL(args_doc);
+    yyjson_mut_val *args = yyjson_mut_obj(args_doc);
+    yyjson_mut_doc_set_root(args_doc, args);
+    yyjson_mut_obj_add_strcpy(args_doc, args, "identity", "developer");
+    yyjson_mut_obj_add_strcpy(args_doc, args, "host", "codex");
+    yyjson_mut_obj_add_strcpy(args_doc, args, "context_id", "scope-parser-good");
+    yyjson_mut_obj_add_strcpy(args_doc, args, "grounding_kind", "declared_invention");
+    yyjson_mut_obj_add_strcpy(args_doc, args, "intent_key", "edit target");
+    yyjson_mut_obj_add_strcpy(args_doc, args, "rationale", "requested");
+    yyjson_mut_val *scope = yyjson_mut_arr(args_doc);
+    yyjson_mut_val *target = yyjson_mut_obj(args_doc);
+    yyjson_mut_obj_add_strcpy(args_doc, target, "path", target_path);
+    yyjson_mut_obj_add_strcpy(args_doc, target, "operation", "modify");
+    yyjson_mut_arr_add_val(scope, target);
+    yyjson_mut_obj_add_val(args_doc, args, "intent_scope", scope);
+    char *args_json = yyjson_mut_write(args_doc, 0, NULL);
+    yyjson_mut_doc_free(args_doc);
+    ASSERT_NOT_NULL(args_json);
+
+    char *opened = handle_union_session_open(srv, args_json);
+    free(args_json);
+    ASSERT_NOT_NULL(opened);
+    yyjson_doc *opened_doc = yyjson_read(opened, strlen(opened), 0);
+    ASSERT_FALSE(get_is_error(opened_doc));
+    yyjson_val *opened_payload = get_payload(opened_doc);
+    yyjson_val *horizon_id = opened_payload ? yyjson_obj_get(opened_payload, "horizon_id") : NULL;
+    ASSERT_TRUE(horizon_id && yyjson_is_str(horizon_id));
+    char close_args[256];
+    snprintf(close_args, sizeof(close_args), "{\"horizon_id\":\"%s\"}",
+             yyjson_get_str(horizon_id));
+    yyjson_doc_free(opened_doc);
+    free(opened);
+    char *closed = handle_union_session_close(srv, close_args);
+    ASSERT_NOT_NULL(closed);
+    free(closed);
+
+    cbm_mcp_server_free(srv);
+    if (old_cache) cbm_setenv("CBM_CACHE_DIR", old_cache, 1);
+    else cbm_unsetenv("CBM_CACHE_DIR");
+    free(old_cache);
+    th_rmtree(temp_dir);
+    PASS();
 }
 
 TEST(test_w01_session_lifecycle) {
@@ -1410,6 +1503,7 @@ TEST(test_w01_full_lifecycle_over_mcp_transport) {
 }
 
 SUITE(union_workflow_e2e) {
+    RUN_TEST(test_union_session_open_requires_and_registers_exact_intent_scope);
     RUN_TEST(test_w01_session_lifecycle);
     RUN_TEST(test_w01_session_close_sweep_and_trace);
     RUN_TEST(test_w01_claims_outside_session_rejected);
@@ -1428,4 +1522,3 @@ SUITE(union_workflow_e2e) {
     RUN_TEST(test_w07_contest_blind_verify);
     RUN_TEST(test_w07_contest_prefix_delimiter_isolation);
 }
-

@@ -1811,6 +1811,12 @@ static char *main_hook_cwd(const char *input_json) {
     yyjson_val *root = document ? yyjson_doc_get_root(document) : NULL;
     yyjson_val *cwd_value = yyjson_is_obj(root) ? yyjson_obj_get(root, "cwd") : NULL;
     const char *cwd = yyjson_is_str(cwd_value) ? yyjson_get_str(cwd_value) : NULL;
+    if (!cwd && yyjson_is_obj(root)) {
+        yyjson_val *workspace_paths = yyjson_obj_get(root, "workspacePaths");
+        yyjson_val *first = workspace_paths && yyjson_is_arr(workspace_paths)
+                                ? yyjson_arr_get(workspace_paths, 0U) : NULL;
+        cwd = yyjson_is_str(first) ? yyjson_get_str(first) : NULL;
+    }
     char *copy = NULL;
     if (cwd && cbm_hook_path_is_abs(cwd)) {
         size_t length = strlen(cwd);
@@ -1892,10 +1898,23 @@ static void main_hook_report_conflicted_daemon(const char *hook_dialect) {
     }
 }
 
+static void main_hook_emit_mutation_denial(const char *hook_event, const char *hook_dialect,
+                                           const char *reason) {
+    if (!cbm_hook_mutation_invocation_supported(hook_event, hook_dialect)) return;
+    char *denial = cbm_hook_mutation_deny_response_for_dialect(hook_dialect, reason);
+    if (denial) {
+        (void)fputs(denial, stdout);
+        (void)fflush(stdout);
+    }
+    free(denial);
+}
+
 static int main_run_hook_frontend(cbm_daemon_runtime_client_t *client, const char *hook_event,
                                   const char *hook_dialect) {
     char *input = cbm_hook_augment_read_stdin();
     if (!input) {
+        main_hook_emit_mutation_denial(hook_event, hook_dialect,
+                                       "Hook input was unavailable; repository writes are blocked.");
         return 0;
     }
     char *hook_cwd = main_hook_cwd(input);
@@ -1904,6 +1923,9 @@ static int main_run_hook_frontend(cbm_daemon_runtime_client_t *client, const cha
                                 hook_dialect, MAIN_HOOK_CONNECT_TIMEOUT_MS);
     free(hook_cwd);
     if (!context_set) {
+        main_hook_emit_mutation_denial(
+            hook_event, hook_dialect,
+            "The active CBM session could not be identified; repository writes are blocked.");
         free(input);
         return 0;
     }
@@ -1912,12 +1934,19 @@ static int main_run_hook_frontend(cbm_daemon_runtime_client_t *client, const cha
     cbm_daemon_runtime_application_status_t status = cbm_daemon_application_client_hook_augment(
         client, input, &response, &response_length, MAIN_HOOK_REQUEST_TIMEOUT_MS);
     free(input);
-    if (status == CBM_DAEMON_RUNTIME_APPLICATION_OK && response && response_length > 0) {
-        (void)fwrite(response, 1, response_length, stdout);
-        (void)fflush(stdout);
+    if (status == CBM_DAEMON_RUNTIME_APPLICATION_OK &&
+        (response_length == 0 || response)) {
+        if (response_length > 0) {
+            (void)fwrite(response, 1, response_length, stdout);
+            (void)fflush(stdout);
+        }
+    } else if (cbm_hook_mutation_invocation_supported(hook_event, hook_dialect)) {
+        main_hook_emit_mutation_denial(
+            hook_event, hook_dialect,
+            "Union authority could not be checked; repository writes are blocked.");
     }
     free(response);
-    return 0; /* hooks always fail open */
+    return 0; /* augmentation passes through; mutation hooks emit denial on failure */
 }
 
 static bool main_hook_options(int argc, char **argv, const char **event_out,
@@ -1946,7 +1975,8 @@ static bool main_hook_options(int argc, char **argv, const char **event_out,
             return false;
         }
     }
-    return cbm_hook_augment_invocation_supported(*event_out, *dialect_out);
+    return cbm_hook_mutation_invocation_supported(*event_out, *dialect_out) ||
+           cbm_hook_augment_invocation_supported(*event_out, *dialect_out);
 }
 
 enum {
@@ -2706,16 +2736,21 @@ int main(int argc, char **argv) {
         return EXIT_SUCCESS; /* hook adapters are contractually fail-open */
     }
 
-    /* Hook augmentation is contractually fail-open and time-bounded. It is
+    /* Hook augmentation is contractually fail-open and time-bounded. E01
+     * mutation dialects use explicit denial responses when authority is missing. It is
      * daemon-backed but CONNECT-ONLY: a hook never spawns a daemon (a cold
      * spawn cannot fit the fail-open budget and livelocks against the
      * last-client-exit teardown), it recycles whichever daemon an MCP
      * session or `daemon start` already brought up. Arm the deadline before
      * hashing and IPC. */
     if (role == CBM_DAEMON_PROCESS_HOOK_CLIENT) {
+        if (cbm_hook_mutation_invocation_supported(hook_event, hook_dialect)) {
+            cbm_hook_augment_arm_mutation_deadline(hook_dialect);
+        } else {
 #ifndef _WIN32
-        cbm_hook_augment_arm_deadline();
+            cbm_hook_augment_arm_deadline();
 #endif
+        }
         /* Read stdin now and bail before executable-identity hashing when the
          * event can never produce output (an un-forced PreToolUse Bash call
          * that is not a search). The identity hash costs ~1.1 s of user CPU
@@ -2911,6 +2946,9 @@ int main(int argc, char **argv) {
         (void)fprintf(stderr,
                       "codebase-memory-mcp: exact executable identity could not be verified "
                       "(executable-path)\n");
+        main_hook_emit_mutation_denial(
+            hook_event, hook_dialect,
+            "Executable identity could not be verified; repository writes are blocked.");
         return role == CBM_DAEMON_PROCESS_HOOK_CLIENT ? EXIT_SUCCESS : EXIT_FAILURE;
     }
     main_build_identity_status_t identity_status = main_build_identity(&identity);
@@ -2921,6 +2959,9 @@ int main(int argc, char **argv) {
                       "(%s)%s%s\n",
                       main_build_identity_status_name(identity_status),
                       validation_detail[0] ? " - " : "", validation_detail);
+        main_hook_emit_mutation_denial(
+            hook_event, hook_dialect,
+            "Executable identity could not be verified; repository writes are blocked.");
         return role == CBM_DAEMON_PROCESS_HOOK_CLIENT ? EXIT_SUCCESS : EXIT_FAILURE;
     }
     cbm_http_server_set_binary_path(executable_path);
@@ -3077,6 +3118,9 @@ int main(int argc, char **argv) {
         (void)snprintf(message, sizeof(message), "secure daemon endpoint could not be created%s%s",
                        (why && why[0]) ? ": " : "", (why && why[0]) ? why : "");
         main_report_client_failure(role, message);
+        main_hook_emit_mutation_denial(
+            hook_event, hook_dialect,
+            "The secure CBM daemon endpoint is unavailable; repository writes are blocked.");
         return EXIT_FAILURE;
     }
 
@@ -3139,6 +3183,9 @@ int main(int argc, char **argv) {
             client_cohort_status == CBM_VERSION_COHORT_CONFLICT) {
             main_hook_report_conflicted_daemon(hook_dialect);
         }
+        main_hook_emit_mutation_denial(
+            hook_event, hook_dialect,
+            "The active CBM daemon build could not be verified; repository writes are blocked.");
         (void)main_version_cohort_close(&client_cohort_lease, &client_cohort_manager);
         cbm_daemon_ipc_endpoint_free(endpoint);
         return role == CBM_DAEMON_PROCESS_HOOK_CLIENT ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -3161,13 +3208,18 @@ int main(int argc, char **argv) {
             } else {
                 main_hook_report_absent_daemon(hook_dialect);
             }
+            main_hook_emit_mutation_denial(
+                hook_event, hook_dialect,
+                "No reachable CBM daemon can verify the grounded session; repository writes are blocked.");
             (void)main_version_cohort_close(&client_cohort_lease, &client_cohort_manager);
             return EXIT_SUCCESS;
         }
 #ifdef _WIN32
         /* Windows keeps the upstream fixed augmentation budget, armed only
          * after the authenticated connection. */
-        cbm_hook_augment_arm_deadline();
+        if (!cbm_hook_mutation_invocation_supported(hook_event, hook_dialect)) {
+            cbm_hook_augment_arm_deadline();
+        }
 #endif
         /* Fail-open: a hook must never block the caller's tool use, so the
          * exit code is EXIT_SUCCESS even when augmentation failed — the

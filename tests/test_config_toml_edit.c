@@ -43,7 +43,14 @@ static const char *CTE_CODEX_BLOCK =
     "[[hooks.SubagentStart]]\nmatcher = \"*\"\n\n"
     "[[hooks.SubagentStart.hooks]]\n"
     "type = \"command\"\ncommand = \"/opt/codebase-memory-mcp hook-augment\"\n"
-    "command_windows = \"& C:\\\\bin\\\\codebase-memory-mcp.exe hook-augment\"\ntimeout = 5\n";
+    "command_windows = \"& C:\\\\bin\\\\codebase-memory-mcp.exe hook-augment\"\ntimeout = 5\n\n"
+    "[[hooks.PreToolUse]]\nmatcher = \"*\"\n\n"
+    "[[hooks.PreToolUse.hooks]]\n"
+    "type = \"command\"\n"
+    "command = \"/opt/codebase-memory-mcp hook-augment --event PreToolUse --dialect "
+    "codex-mutation\"\n"
+    "command_windows = \"& C:\\\\bin\\\\codebase-memory-mcp.exe hook-augment --event "
+    "PreToolUse --dialect codex-mutation\"\ntimeout = 30\n";
 
 static int cte_codex_edit(const char *path, cbm_toml_codex_hook_action_t action, int check_only) {
     return cbm_toml_reconcile_codex_hooks(path, CTE_CODEX_BEGIN, CTE_CODEX_END, CTE_CODEX_COMMAND,
@@ -1172,6 +1179,7 @@ TEST(config_toml_codex_accepts_v0102_managed_windows_crlf) {
     char path[CTE_PATH_CAP];
     char before[CTE_FILE_CAP];
     char actual[CTE_FILE_CAP];
+    char migrated[CTE_FILE_CAP];
     char invalid[2][CTE_FILE_CAP];
     ASSERT_EQ(cte_fixture(dir, sizeof(dir), path, sizeof(path)), 0);
     ASSERT_EQ(th_write_file(path, original), 0);
@@ -1189,7 +1197,10 @@ TEST(config_toml_codex_accepts_v0102_managed_windows_crlf) {
                                                CBM_TOML_CODEX_HOOK_UPSERT, 0, &failure),
               0);
     ASSERT_EQ(cte_read(path, actual, sizeof(actual)), 0);
-    ASSERT_STR_EQ(actual, before);
+    ASSERT_STR_NEQ(actual, before);
+    ASSERT_EQ(cte_occurrences(actual, "[[hooks.PreToolUse]]"), 1);
+    ASSERT_NOT_NULL(strstr(actual, "--dialect codex-mutation"));
+    snprintf(migrated, sizeof(migrated), "%s", actual);
     ASSERT_EQ(cte_occurrences(actual, CTE_CODEX_BEGIN), 1);
     ASSERT_EQ(cte_occurrences(actual, "[[hooks.SessionStart]]"), 1);
     ASSERT_EQ(cte_occurrences(actual, "[[hooks.SubagentStart]]"), 1);
@@ -1205,7 +1216,7 @@ TEST(config_toml_codex_accepts_v0102_managed_windows_crlf) {
                                                CBM_TOML_CODEX_HOOK_UPSERT, 0, &failure),
               0);
     ASSERT_EQ(cte_read(path, actual, sizeof(actual)), 0);
-    ASSERT_STR_EQ(actual, before);
+    ASSERT_STR_EQ(actual, migrated);
 
     ASSERT_EQ(cte_codex_edit_commands_detailed(path, command, command_windows,
                                                CBM_TOML_CODEX_HOOK_REMOVE, 0, &failure),

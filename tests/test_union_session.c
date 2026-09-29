@@ -6,6 +6,8 @@
  */
 #include "test_framework.h"
 #include "test_helpers.h"
+#include "../src/union/mutation_gate.h"
+#include "../src/union/mutation_journal.h"
 #include "../src/union/union_session.h"
 #include "../src/foundation/compat.h"
 
@@ -52,6 +54,23 @@ static int session_fixture_init(SessionFixture *fx) {
 static void session_fixture_cleanup(SessionFixture *fx) {
     cbm_horizon_pool_close_all(&fx->pool);
     th_rmtree(fx->dir);
+}
+
+static bool session_test_set_target(SessionFixture *fx, CbmMutationAttempt *attempt,
+                                    CbmChangeGrounding *grounding,
+                                    CbmMutationOperation operation, const char *leaf) {
+    char requested[CBM_MUTATION_CANONICAL_PATH_MAX];
+    int written = snprintf(requested, sizeof(requested), "%s/%s", fx->dir, leaf);
+    if (written <= 0 || (size_t)written >= sizeof(requested) ||
+        !cbm_mutation_canonicalize_path(requested, attempt->target_path,
+                                        sizeof(attempt->target_path))) {
+        return false;
+    }
+    grounding->target_count = 1U;
+    grounding->targets[0].operation = operation;
+    snprintf(grounding->targets[0].path, sizeof(grounding->targets[0].path), "%s",
+             attempt->target_path);
+    return strlen(attempt->target_path) < sizeof(grounding->targets[0].path);
 }
 
 /* AC1: registered identity opens full-mode; the host log records identity,
@@ -249,6 +268,284 @@ TEST(test_session_registry_full) {
     PASS();
 }
 
+TEST(test_mutation_effect_classification) {
+    ASSERT_EQ(cbm_mutation_classify(CBM_MUTATION_OPERATION_READ,
+                                    CBM_MUTATION_SCOPE_UNKNOWN),
+              CBM_MUTATION_EFFECT_READ);
+    ASSERT_EQ(cbm_mutation_classify(CBM_MUTATION_OPERATION_CREATE,
+                                    CBM_MUTATION_SCOPE_REPOSITORY),
+              CBM_MUTATION_EFFECT_REPOSITORY_WRITE);
+    ASSERT_EQ(cbm_mutation_classify(CBM_MUTATION_OPERATION_MODIFY,
+                                    CBM_MUTATION_SCOPE_REPOSITORY),
+              CBM_MUTATION_EFFECT_REPOSITORY_WRITE);
+    ASSERT_EQ(cbm_mutation_classify(CBM_MUTATION_OPERATION_DELETE,
+                                    CBM_MUTATION_SCOPE_REPOSITORY),
+              CBM_MUTATION_EFFECT_REPOSITORY_WRITE);
+    ASSERT_EQ(cbm_mutation_classify(CBM_MUTATION_OPERATION_RENAME,
+                                    CBM_MUTATION_SCOPE_REPOSITORY),
+              CBM_MUTATION_EFFECT_REPOSITORY_WRITE);
+    ASSERT_EQ(cbm_mutation_classify(CBM_MUTATION_OPERATION_CREATE,
+                                    CBM_MUTATION_SCOPE_OUTSIDE),
+              CBM_MUTATION_EFFECT_OUTSIDE_REPOSITORY);
+    ASSERT_EQ(cbm_mutation_classify(CBM_MUTATION_OPERATION_UNKNOWN,
+                                    CBM_MUTATION_SCOPE_REPOSITORY),
+              CBM_MUTATION_EFFECT_AMBIGUOUS);
+    ASSERT_EQ(cbm_mutation_classify(CBM_MUTATION_OPERATION_MODIFY,
+                                    CBM_MUTATION_SCOPE_UNKNOWN),
+              CBM_MUTATION_EFFECT_AMBIGUOUS);
+    PASS();
+}
+
+TEST(test_mutation_host_context_requires_stable_identity) {
+    CbmHostWorkContext context = {0};
+    context.host = CBM_MUTATION_HOST_CODEX;
+    ASSERT_FALSE(cbm_host_work_context_is_valid(&context));
+
+    snprintf(context.context_id, sizeof(context.context_id), "turn_42");
+    ASSERT_TRUE(cbm_host_work_context_is_valid(&context));
+
+    context.host = CBM_MUTATION_HOST_UNKNOWN;
+    ASSERT_FALSE(cbm_host_work_context_is_valid(&context));
+    PASS();
+}
+
+TEST(test_change_grounding_requires_intent_and_provenance) {
+    SessionFixture fx;
+    if (session_fixture_init(&fx) != 0) FAIL("fixture init");
+    CbmChangeGrounding grounding = {0};
+    CbmMutationAttempt attempt = {0};
+    attempt.operation = CBM_MUTATION_OPERATION_MODIFY;
+    grounding.kind = CBM_GROUNDING_CANON_CITATION;
+    snprintf(grounding.intent_key, sizeof(grounding.intent_key), "change_1");
+    ASSERT_FALSE(cbm_change_grounding_is_valid(&grounding));
+
+    snprintf(grounding.reference, sizeof(grounding.reference), "@inst/clean-arch#rule-1");
+    ASSERT_TRUE(session_test_set_target(&fx, &attempt, &grounding,
+                                        CBM_MUTATION_OPERATION_MODIFY, "parser.c"));
+    ASSERT_TRUE(cbm_change_grounding_is_valid(&grounding));
+    snprintf(grounding.rationale, sizeof(grounding.rationale), "Must choose one provenance.");
+    ASSERT_FALSE(cbm_change_grounding_is_valid(&grounding));
+
+    memset(&grounding, 0, sizeof(grounding));
+    grounding.kind = CBM_GROUNDING_DECLARED_INVENTION;
+    snprintf(grounding.intent_key, sizeof(grounding.intent_key), "change_2");
+    snprintf(grounding.rationale, sizeof(grounding.rationale), "Operator requested this design.");
+    ASSERT_TRUE(session_test_set_target(&fx, &attempt, &grounding,
+                                        CBM_MUTATION_OPERATION_MODIFY, "parser.c"));
+    ASSERT_TRUE(cbm_change_grounding_is_valid(&grounding));
+
+    grounding.rationale[0] = '\0';
+    ASSERT_FALSE(cbm_change_grounding_is_valid(&grounding));
+    session_fixture_cleanup(&fx);
+    PASS();
+}
+
+TEST(test_session_mutation_context_is_bound_and_not_replayable) {
+    SessionFixture fx;
+    if (session_fixture_init(&fx) != 0) FAIL("fixture init");
+
+    CbmSessionHorizon session;
+    char err[CBM_CONTRACT_ERROR_MAX] = {0};
+    ASSERT_EQ(cbm_session_open(&fx.sessions, &fx.contracts, &fx.pool, 4242,
+                              "graph_grounding", "graph_grounding", "seq_41",
+                              &session, err, sizeof(err)), CBM_SESSION_OK);
+
+    CbmHostWorkContext context = {0};
+    context.host = CBM_MUTATION_HOST_CODEX;
+    snprintf(context.context_id, sizeof(context.context_id), "thread_42");
+    CbmChangeGrounding grounding = {0};
+    grounding.kind = CBM_GROUNDING_DECLARED_INVENTION;
+    snprintf(grounding.intent_key, sizeof(grounding.intent_key), "change_42");
+    snprintf(grounding.rationale, sizeof(grounding.rationale), "Requested new behavior.");
+    CbmMutationAttempt scoped_attempt = {0};
+    scoped_attempt.operation = CBM_MUTATION_OPERATION_MODIFY;
+    ASSERT_TRUE(session_test_set_target(&fx, &scoped_attempt, &grounding,
+                                        CBM_MUTATION_OPERATION_MODIFY, "change.c"));
+    ASSERT_EQ(cbm_session_bind_mutation_context(&fx.sessions, session.horizon_id,
+                                                &context, &grounding, err, sizeof(err)),
+              CBM_SESSION_OK);
+
+    const CbmSessionHorizon *bound = cbm_session_find_bound_context(&fx.sessions, &context);
+    ASSERT_NOT_NULL(bound);
+    ASSERT_STR_EQ(bound->horizon_id, session.horizon_id);
+    ASSERT_TRUE(bound->has_bound_context);
+    ASSERT_TRUE(bound->has_change_grounding);
+
+    CbmHostWorkContext replay = context;
+    snprintf(replay.context_id, sizeof(replay.context_id), "thread_99");
+    ASSERT_NULL(cbm_session_find_bound_context(&fx.sessions, &replay));
+    ASSERT_EQ(cbm_session_bind_mutation_context(&fx.sessions, session.horizon_id,
+                                                &replay, &grounding, err, sizeof(err)),
+              CBM_SESSION_ERR_CONTEXT_ALREADY_BOUND);
+
+    ASSERT_EQ(cbm_session_close(&fx.sessions, &fx.pool, session.horizon_id,
+                                CBM_SESSION_CLOSE_NORMAL, NULL, err, sizeof(err)),
+              CBM_SESSION_OK);
+    ASSERT_NULL(cbm_session_find_bound_context(&fx.sessions, &context));
+    session_fixture_cleanup(&fx);
+    PASS();
+}
+
+TEST(test_mutation_journal_is_durable_and_outcomes_are_idempotent) {
+    SessionFixture fx;
+    if (session_fixture_init(&fx) != 0) FAIL("fixture init");
+
+    char journal_path[256];
+    snprintf(journal_path, sizeof(journal_path), "%s/mutation.sqlite", fx.dir);
+    CbmMutationJournal journal = {0};
+    ASSERT_EQ(cbm_mutation_journal_open(&journal, journal_path), CBM_MUTATION_JOURNAL_OK);
+
+    CbmMutationAttempt attempt = {0};
+    attempt.host_context.host = CBM_MUTATION_HOST_ANTIGRAVITY;
+    snprintf(attempt.host_context.context_id, sizeof(attempt.host_context.context_id), "conversation_7");
+    attempt.operation = CBM_MUTATION_OPERATION_MODIFY;
+    attempt.scope = CBM_MUTATION_SCOPE_REPOSITORY;
+    snprintf(attempt.attempt_id, sizeof(attempt.attempt_id), "attempt_1");
+    CbmChangeGrounding grounding = {0};
+    grounding.kind = CBM_GROUNDING_CANON_CITATION;
+    snprintf(grounding.intent_key, sizeof(grounding.intent_key), "edit_parser");
+    snprintf(grounding.reference, sizeof(grounding.reference), "@inst/architecture#parser");
+    ASSERT_TRUE(session_test_set_target(&fx, &attempt, &grounding,
+                                        CBM_MUTATION_OPERATION_MODIFY, "parser.c"));
+
+    ASSERT_EQ(cbm_mutation_journal_register_session(&journal, "horizon_1",
+                                                    &attempt.host_context, &grounding),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(cbm_mutation_journal_register_session(&journal, "horizon_1",
+                                                    &attempt.host_context, &grounding),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(cbm_mutation_journal_register_session(&journal, "horizon_2",
+                                                    &attempt.host_context, &grounding),
+              CBM_MUTATION_JOURNAL_ERR_STORAGE);
+
+    char write_id[CBM_MUTATION_WRITE_ID_MAX] = {0};
+    ASSERT_EQ(cbm_mutation_journal_commit_intent(&journal, "horizon_1", &attempt,
+                                                 &grounding, write_id, sizeof(write_id)),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_TRUE(write_id[0] != '\0');
+    CbmMutationOutcome outcome = CBM_MUTATION_OUTCOME_NONE;
+    ASSERT_EQ(cbm_mutation_journal_get_outcome(&journal, write_id, &outcome),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(outcome, CBM_MUTATION_OUTCOME_PENDING);
+
+    ASSERT_EQ(cbm_mutation_journal_observe(&journal, write_id,
+                                           CBM_MUTATION_OUTCOME_OBSERVED_APPLIED),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(cbm_mutation_journal_observe(&journal, write_id,
+                                           CBM_MUTATION_OUTCOME_OBSERVED_APPLIED),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(cbm_mutation_journal_observe(&journal, write_id,
+                                           CBM_MUTATION_OUTCOME_OBSERVED_FAILED),
+              CBM_MUTATION_JOURNAL_ERR_OUTCOME_CONFLICT);
+
+    snprintf(attempt.attempt_id, sizeof(attempt.attempt_id), "attempt_2");
+    char unresolved_id[CBM_MUTATION_WRITE_ID_MAX] = {0};
+    ASSERT_EQ(cbm_mutation_journal_commit_intent(&journal, "horizon_1", &attempt,
+                                                 &grounding, unresolved_id,
+                                                 sizeof(unresolved_id)),
+              CBM_MUTATION_JOURNAL_OK);
+    cbm_mutation_journal_close(&journal);
+
+    ASSERT_EQ(cbm_mutation_journal_open(&journal, journal_path), CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(cbm_mutation_journal_recover_pending(&journal), CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(cbm_mutation_journal_get_outcome(&journal, unresolved_id, &outcome),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(outcome, CBM_MUTATION_OUTCOME_UNKNOWN);
+    CbmMutationSessionBinding binding = {0};
+    bool other_context = false;
+    ASSERT_EQ(cbm_mutation_journal_find_session(&journal, &attempt.host_context,
+                                                &binding, &other_context),
+              CBM_MUTATION_JOURNAL_ERR_NOT_FOUND);
+    ASSERT_FALSE(other_context);
+    cbm_mutation_journal_close(&journal);
+    session_fixture_cleanup(&fx);
+    PASS();
+}
+
+TEST(test_mutation_authorization_requires_session_and_committed_intent) {
+    SessionFixture fx;
+    if (session_fixture_init(&fx) != 0) FAIL("fixture init");
+    CbmSessionHorizon session;
+    char err[CBM_CONTRACT_ERROR_MAX] = {0};
+    ASSERT_EQ(cbm_session_open(&fx.sessions, &fx.contracts, &fx.pool, 4242,
+                              "graph_grounding", "graph_grounding", "seq_41",
+                              &session, err, sizeof(err)), CBM_SESSION_OK);
+
+    CbmMutationAttempt attempt = {0};
+    attempt.host_context.host = CBM_MUTATION_HOST_CODEX;
+    snprintf(attempt.host_context.context_id, sizeof(attempt.host_context.context_id), "thread_42");
+    attempt.operation = CBM_MUTATION_OPERATION_MODIFY;
+    attempt.scope = CBM_MUTATION_SCOPE_REPOSITORY;
+    snprintf(attempt.attempt_id, sizeof(attempt.attempt_id), "tool_call_9");
+    CbmChangeGrounding grounding = {0};
+    grounding.kind = CBM_GROUNDING_CANON_CITATION;
+    snprintf(grounding.intent_key, sizeof(grounding.intent_key), "change_42");
+    snprintf(grounding.reference, sizeof(grounding.reference), "@inst/architecture#rule-3");
+    ASSERT_TRUE(session_test_set_target(&fx, &attempt, &grounding,
+                                        CBM_MUTATION_OPERATION_MODIFY, "rule.c"));
+
+    char journal_path[256];
+    snprintf(journal_path, sizeof(journal_path), "%s/authorization.sqlite", fx.dir);
+    CbmMutationJournal journal = {0};
+    ASSERT_EQ(cbm_mutation_journal_open(&journal, journal_path), CBM_MUTATION_JOURNAL_OK);
+
+    CbmMutationDecision decision = cbm_mutation_authorize_repository_write(&journal, &attempt);
+    ASSERT_FALSE(decision.permitted);
+    ASSERT_EQ(decision.refusal.code, CBM_MUTATION_REFUSAL_SESSION_UNBOUND);
+
+    ASSERT_EQ(cbm_session_bind_mutation_context(&fx.sessions, session.horizon_id,
+                                                &attempt.host_context, &grounding,
+                                                err, sizeof(err)), CBM_SESSION_OK);
+
+    /* A hook is a distinct short-lived process with a distinct in-memory
+     * registry. It must observe only durable session authority. */
+    ASSERT_EQ(cbm_mutation_journal_register_session(&journal, session.horizon_id,
+                                                   &attempt.host_context, &grounding),
+              CBM_MUTATION_JOURNAL_OK);
+    CbmMutationJournal hook_journal = {0};
+    ASSERT_EQ(cbm_mutation_journal_open(&hook_journal, journal_path),
+              CBM_MUTATION_JOURNAL_OK);
+    decision = cbm_mutation_authorize_repository_write(&hook_journal, &attempt);
+    ASSERT_TRUE(decision.permitted);
+    ASSERT_TRUE(decision.write_id[0] != '\0');
+    CbmMutationOutcome outcome = CBM_MUTATION_OUTCOME_NONE;
+    ASSERT_EQ(cbm_mutation_journal_get_outcome(&hook_journal, decision.write_id, &outcome),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(outcome, CBM_MUTATION_OUTCOME_PENDING);
+
+    char original_target[CBM_MUTATION_TARGET_PATH_MAX];
+    snprintf(original_target, sizeof(original_target), "%s", attempt.target_path);
+    char other_requested[CBM_MUTATION_CANONICAL_PATH_MAX];
+    int other_written = snprintf(other_requested, sizeof(other_requested), "%s/other.c", fx.dir);
+    ASSERT_TRUE(other_written > 0 && (size_t)other_written < sizeof(other_requested));
+    ASSERT_TRUE(cbm_mutation_canonicalize_path(other_requested, attempt.target_path,
+                                               sizeof(attempt.target_path)));
+    decision = cbm_mutation_authorize_repository_write(&hook_journal, &attempt);
+    ASSERT_FALSE(decision.permitted);
+    ASSERT_EQ(decision.refusal.code, CBM_MUTATION_REFUSAL_INTENT_SCOPE_MISMATCH);
+    snprintf(attempt.target_path, sizeof(attempt.target_path), "%s", original_target);
+    attempt.operation = CBM_MUTATION_OPERATION_CREATE;
+    decision = cbm_mutation_authorize_repository_write(&hook_journal, &attempt);
+    ASSERT_FALSE(decision.permitted);
+    ASSERT_EQ(decision.refusal.code, CBM_MUTATION_REFUSAL_INTENT_SCOPE_MISMATCH);
+    attempt.operation = CBM_MUTATION_OPERATION_MODIFY;
+
+    snprintf(attempt.host_context.context_id, sizeof(attempt.host_context.context_id), "thread_99");
+    decision = cbm_mutation_authorize_repository_write(&hook_journal, &attempt);
+    ASSERT_FALSE(decision.permitted);
+    ASSERT_EQ(decision.refusal.code, CBM_MUTATION_REFUSAL_SESSION_STALE);
+    ASSERT_EQ(cbm_mutation_journal_mark_session_unknown(&journal, session.horizon_id),
+              CBM_MUTATION_JOURNAL_OK);
+    snprintf(attempt.host_context.context_id, sizeof(attempt.host_context.context_id), "thread_42");
+    decision = cbm_mutation_authorize_repository_write(&hook_journal, &attempt);
+    ASSERT_FALSE(decision.permitted);
+    ASSERT_EQ(decision.refusal.code, CBM_MUTATION_REFUSAL_SESSION_UNBOUND);
+    cbm_mutation_journal_close(&hook_journal);
+    cbm_mutation_journal_close(&journal);
+    session_fixture_cleanup(&fx);
+    PASS();
+}
+
 SUITE(union_session) {
     RUN_TEST(test_session_open_registered);
     RUN_TEST(test_session_open_unregistered_restricted);
@@ -257,4 +554,10 @@ SUITE(union_session) {
     RUN_TEST(test_session_close_destroys_content);
     RUN_TEST(test_session_empty_close_first_class);
     RUN_TEST(test_session_registry_full);
+    RUN_TEST(test_mutation_effect_classification);
+    RUN_TEST(test_mutation_host_context_requires_stable_identity);
+    RUN_TEST(test_change_grounding_requires_intent_and_provenance);
+    RUN_TEST(test_session_mutation_context_is_bound_and_not_replayable);
+    RUN_TEST(test_mutation_journal_is_durable_and_outcomes_are_idempotent);
+    RUN_TEST(test_mutation_authorization_requires_session_and_committed_intent);
 }

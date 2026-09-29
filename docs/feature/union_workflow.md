@@ -9,7 +9,7 @@ edges:
     target: "adr:architecture"
   - relation: tested_by
     target: "adr:tests"
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 # Union Cognitive Workflows & Epistemic Authority
 Coordinates session horizons, skill contract registries, effect-class gateways, thematic knowledge base bindings, caller-blind contestations, and founding proposals.
@@ -21,14 +21,16 @@ Coordinates session horizons, skill contract registries, effect-class gateways, 
   "implements": ["adr:architecture"],
   "tested_by": ["adr:tests"],
   "entrypoints": [
-    "src/mcp/union_handler.c"
+    "src/mcp/union_handler.c",
+    "src/cli/hook_augment.c"
   ],
   "registration_files": [
-    "src/mcp/union_handler.h"
+    "src/mcp/mcp.c",
+    "src/cli/cli.c"
   ],
   "reference_files": [
     "src/union/union_session.c",
-    "src/union/union_session.h"
+    "src/union/mutation_gate.c"
   ],
   "code_files": [
     "src/union/union_binding.c",
@@ -39,12 +41,19 @@ Coordinates session horizons, skill contract registries, effect-class gateways, 
     "src/union/union_routing.c",
     "src/union/union_sweep.c",
     "src/union/union_theme_registry.c",
-    "src/union/union_trace.c"
+    "src/union/union_trace.c",
+    "src/union/mutation_gate.h",
+    "src/union/mutation_journal.c",
+    "src/union/mutation_journal.h",
+    "src/cli/config_toml_edit.c"
   ],
   "test_files": [
     "tests/test_union_contest.c",
     "tests/test_union_founding.c",
-    "tests/test_union_workflow_e2e.c"
+    "tests/test_union_workflow_e2e.c",
+    "tests/test_union_session.c",
+    "tests/test_cli.c",
+    "tests/test_config_toml_edit.c"
   ]
 }
 ```
@@ -96,6 +105,25 @@ union_record_action(horizon_id="h_01", action_name="update_handler", effect_clas
 union_session_close(horizon_id="h_01", reason="NORMAL")
 </code_example>
 
+### E01 Repository Mutation Gate
+
+Antigravity and Codex hooks share one gate. Reads have no Union or journal effects; repository writes and unknown tools need grounded authority and durable intent. Outside writes are exempt. SQLite shares session bindings with short-lived hooks.
+
+Bind `union_session_open` with host context, grounding kind, intent key, a reference or rationale, and `intent_scope`. The scope contains one to four exact absolute path and operation pairs (`create`, `modify`, `delete`, or `rename`); the gate canonicalizes each path and refuses writes outside those pairs. Use Antigravity `conversationId` or Codex `session_id`; rebinds fail.
+
+For example, `intent_scope=[{"path":"/repo/src/handler.c","operation":"modify"}]` authorizes only a modification to that file. A single-file `apply_patch` can use this scope. Multi-file patches, renames, and commands whose targets cannot be proven are refused.
+
+Intent commits before permit. Unobserved outcomes become `UNKNOWN` on close or recovery.
+
+| Host | Hook input identity | Denial output | Install location |
+|---|---|---|---|
+| Antigravity | `conversationId`, `toolCall.name/args`, `workspacePaths` | `decision: deny` with `reason` | `~/.gemini/antigravity/hooks.json` |
+| Codex | `session_id`, `tool_name`, `tool_input`, `cwd` | `hookSpecificOutput` with `permissionDecision: deny` | `~/.codex/config.toml` or `~/.codex/hooks.json` |
+
+The adapter denies at 25 seconds, before its 30-second timeout. Codex trust and tool-path opt-outs limit coverage; hooks are not an OS boundary. Unknown commands without a proven target are refused.
+
+Consultation creates no Union session or gate action. Read APIs may refresh indexes or caches.
+
 ## PARAMETERS / CONFIGURATIONS
 
 | Tool | Parameters | Description | Default |
@@ -105,7 +133,7 @@ union_session_close(horizon_id="h_01", reason="NORMAL")
 | `theme_lookup` | `theme_id` | Query theme registry (`ABSENT` is queryable). | — |
 | `theme_register` | `theme_id`, `namespace`, `curator`, `version`, `status` | Register theme (`ACTIVE` or `ABSENT`). | `status="ACTIVE"` |
 | `binding_claim` | `claim_id`, `theme_id`, `pinned_version`, `mode`, `binding_scope`, `validated_by` | Declare binding (`NORMATIVE` or `CONSULTED`). | `mode="NORMATIVE"` |
-| `union_session_open` | `identity`, `contract_id`, `based_on_seq`, `client_pid` | Open bounded session with restricted-mode gating. | — |
+| `union_session_open` | Identity, contract, sequence, client; E01: host, context, grounding, intent, reference/rationale, `intent_scope` | Open bounded session; bind E01 authority when supplied. | — |
 | `union_session_get` | `horizon_id` | Query session actions, refusals, budget. | — |
 | `union_session_close` | `horizon_id`, `reason` | Close session, verify sweep resolution, log trace. | `reason="NORMAL"` |
 | `union_claim_capture` | `horizon_id`, `claim_id`, `type`, `predicate`, `consequence`, `based_on_seq` | Capture claim into session as `PROPOSED`. | — |

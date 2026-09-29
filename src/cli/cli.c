@@ -22,6 +22,7 @@
 #include "foundation/constants.h"
 #include "foundation/log.h"
 #include "foundation/sha256.h"
+#include "foundation/str_util.h"
 #include "cli/client_adapter.h"
 #include "mcp/mcp.h" // cbm_mcp_tool_input_schema — CLI flag parser + per-tool --help
 #include "mcp/index_supervisor.h"
@@ -3569,6 +3570,26 @@ static int cbm_build_augment_command_windows(const char *binary_path, char *out,
     return written > 0 && (size_t)written < out_size ? CLI_OK : CLI_ERR;
 }
 
+static int cbm_build_mutation_gate_command(const char *binary_path, const char *host,
+                                          bool windows, char *out, size_t out_size) {
+    if (!binary_path || !host || !out || out_size == 0U ||
+        (strcmp(host, "codex") != 0 && strcmp(host, "antigravity") != 0)) {
+        return CLI_ERR;
+    }
+    char base[CLI_BUF_8K];
+    if (windows && strcmp(host, "antigravity") == 0) {
+        if (!cbm_validate_shell_path_arg(binary_path)) return CLI_ERR;
+        int base_written = snprintf(base, sizeof(base), "\"%s\" hook-augment", binary_path);
+        if (base_written <= 0 || (size_t)base_written >= sizeof(base)) return CLI_ERR;
+    } else if ((windows ? cbm_build_augment_command_windows(binary_path, base, sizeof(base))
+                        : cbm_build_augment_command(binary_path, base, sizeof(base))) != CLI_OK) {
+        return CLI_ERR;
+    }
+    int written = snprintf(out, out_size, "%s --event PreToolUse --dialect %s-mutation", base,
+                           host);
+    return written > 0 && (size_t)written < out_size ? CLI_OK : CLI_ERR;
+}
+
 static int cbm_build_dialect_hook_command(const char *binary_path, const char *dialect,
                                           bool windows, char *command, size_t command_size,
                                           char *shell, size_t shell_size) {
@@ -3955,6 +3976,144 @@ int cbm_remove_antigravity_mcp_owned(const char *binary_path, const char *config
 }
 
 /* ── Junie MCP config (JSON, same mcpServers format) ──────────── */
+
+static bool antigravity_mutation_command_owned(const char *command) {
+    static const char suffix[] =
+        " hook-augment --event PreToolUse --dialect antigravity-mutation";
+    if (!command) return false;
+    size_t length = strlen(command);
+    size_t suffix_length = sizeof(suffix) - 1U;
+    if (length <= suffix_length ||
+        memcmp(command + length - suffix_length, suffix, suffix_length) != 0) {
+        return false;
+    }
+    size_t executable_end = length - suffix_length;
+    if (executable_end > 0U &&
+        (command[executable_end - 1U] == '\'' || command[executable_end - 1U] == '"')) {
+        executable_end--;
+    }
+    size_t basename = 0U;
+    for (size_t index = 0U; index < executable_end; index++) {
+        if (command[index] == '/' || command[index] == '\\') basename = index + 1U;
+    }
+    if (basename < executable_end &&
+        (command[basename] == '\'' || command[basename] == '"')) {
+        basename++;
+    }
+    size_t basename_length = executable_end - basename;
+    return (basename_length == strlen("codebase-memory-mcp") &&
+            memcmp(command + basename, "codebase-memory-mcp", basename_length) == 0) ||
+           (basename_length == strlen("codebase-memory-mcp.exe") &&
+            memcmp(command + basename, "codebase-memory-mcp.exe", basename_length) == 0);
+}
+
+static bool antigravity_mutation_entry_owned(yyjson_val *entry) {
+    if (!yyjson_is_obj(entry)) return false;
+    yyjson_val *enabled = yyjson_obj_get(entry, "enabled");
+    yyjson_val *event = yyjson_obj_get(entry, "PreToolUse");
+    yyjson_val *group = event && yyjson_is_arr(event) && yyjson_arr_size(event) == 1U
+                            ? yyjson_arr_get(event, 0U) : NULL;
+    yyjson_val *matcher = yyjson_is_obj(group) ? yyjson_obj_get(group, "matcher") : NULL;
+    yyjson_val *hooks = yyjson_is_obj(group) ? yyjson_obj_get(group, "hooks") : NULL;
+    yyjson_val *handler = hooks && yyjson_is_arr(hooks) && yyjson_arr_size(hooks) == 1U
+                              ? yyjson_arr_get(hooks, 0U) : NULL;
+    yyjson_val *type = yyjson_is_obj(handler) ? yyjson_obj_get(handler, "type") : NULL;
+    yyjson_val *command = yyjson_is_obj(handler) ? yyjson_obj_get(handler, "command") : NULL;
+    yyjson_val *timeout = yyjson_is_obj(handler) ? yyjson_obj_get(handler, "timeout") : NULL;
+    return (!enabled || yyjson_is_true(enabled)) && yyjson_is_str(matcher) &&
+           strcmp(yyjson_get_str(matcher), "*") == 0 && yyjson_is_str(type) &&
+           strcmp(yyjson_get_str(type), "command") == 0 && yyjson_is_int(timeout) &&
+           yyjson_get_int(timeout) == 30 && yyjson_is_str(command) &&
+           antigravity_mutation_command_owned(yyjson_get_str(command));
+}
+
+static char *antigravity_mutation_entry_json(const char *command) {
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *entry = doc ? yyjson_mut_obj(doc) : NULL;
+    if (!doc || !entry) {
+        yyjson_mut_doc_free(doc);
+        return NULL;
+    }
+    yyjson_mut_doc_set_root(doc, entry);
+    yyjson_mut_obj_add_bool(doc, entry, "enabled", true);
+    yyjson_mut_val *group = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_str(doc, group, "matcher", "*");
+    yyjson_mut_val *hooks = yyjson_mut_arr(doc);
+    yyjson_mut_val *handler = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_str(doc, handler, "type", "command");
+    yyjson_mut_obj_add_strcpy(doc, handler, "command", command);
+    yyjson_mut_obj_add_int(doc, handler, "timeout", 30);
+    yyjson_mut_arr_add_val(hooks, handler);
+    yyjson_mut_obj_add_val(doc, group, "hooks", hooks);
+    yyjson_mut_val *pretool = yyjson_mut_arr(doc);
+    yyjson_mut_arr_add_val(pretool, group);
+    yyjson_mut_obj_add_val(doc, entry, "PreToolUse", pretool);
+    char *json = yyjson_mut_write(doc, YYJSON_WRITE_PRETTY, NULL);
+    yyjson_mut_doc_free(doc);
+    return json;
+}
+
+static int antigravity_mutation_hook_edit(const char *hooks_path, const char *command,
+                                          bool remove) {
+    static const char *const root_path[] = {NULL};
+    static const char entry_key[] = "codebase-memory-mutation-gate";
+    if (!hooks_path || (!remove && !antigravity_mutation_command_owned(command))) return CLI_ERR;
+    char *document = NULL;
+    size_t document_length = 0U;
+    int read_result = cbm_json_like_read_document(hooks_path, &document, &document_length);
+    if (read_result < 0) {
+        free(document);
+        return CLI_ERR;
+    }
+    yyjson_doc *parsed = NULL;
+    if (read_result == 0) {
+        parsed = yyjson_read(document, document_length,
+                             YYJSON_READ_ALLOW_COMMENTS | YYJSON_READ_ALLOW_TRAILING_COMMAS);
+        yyjson_val *root = parsed ? yyjson_doc_get_root(parsed) : NULL;
+        yyjson_val *owned_entry = yyjson_is_obj(root) ? yyjson_obj_get(root, entry_key) : NULL;
+        if (!yyjson_is_obj(root) || (owned_entry && !antigravity_mutation_entry_owned(owned_entry))) {
+            yyjson_doc_free(parsed);
+            free(document);
+            return CLI_ERR;
+        }
+        if (remove && !owned_entry) {
+            yyjson_doc_free(parsed);
+            free(document);
+            return CLI_OK;
+        }
+    } else if (remove) {
+        free(document);
+        return CLI_OK;
+    }
+
+    int result = CLI_ERR;
+    if (remove) {
+        result = cbm_json_like_remove_entry_if_unchanged(hooks_path, root_path, 0U, entry_key,
+                                                        document, document_length) == 0
+                     ? CLI_OK : CLI_ERR;
+    } else {
+        char *entry_json = antigravity_mutation_entry_json(command);
+        if (entry_json) {
+            result = cbm_json_like_upsert_entry_if_unchanged(
+                         hooks_path, root_path, 0U, entry_key, entry_json,
+                         read_result == 0 ? document : NULL,
+                         read_result == 0 ? document_length : 0U) == 0
+                         ? CLI_OK : CLI_ERR;
+        }
+        free(entry_json);
+    }
+    yyjson_doc_free(parsed);
+    free(document);
+    return result;
+}
+
+int cbm_upsert_antigravity_mutation_hook(const char *hooks_path, const char *command) {
+    return antigravity_mutation_hook_edit(hooks_path, command, false);
+}
+
+int cbm_remove_antigravity_mutation_hook(const char *hooks_path) {
+    return antigravity_mutation_hook_edit(hooks_path, NULL, true);
+}
 
 static int cbm_junie_mcp_preflight(const char *binary_path, const char *config_path) {
     static const char *const path[] = {"mcpServers"};
@@ -9135,13 +9294,20 @@ static void install_cli_agent_configs(const cbm_detected_agents_t *agents, const
         bool pointer_installed = install_codex_activation_pointer(ip, dry_run);
         char command[CLI_BUF_8K];
         char command_windows[CLI_BUF_8K];
+        char mutation_command[CLI_BUF_8K];
+        char mutation_command_windows[CLI_BUF_8K];
         char hooks_json[CLI_BUF_1K];
         snprintf(hooks_json, sizeof(hooks_json), "%s/hooks.json", config_dir);
         bool use_hooks_json = cbm_file_exists(hooks_json);
         bool commands_ok =
             cbm_build_augment_command(binary_path, command, sizeof(command)) == CLI_OK &&
             cbm_build_augment_command_windows(binary_path, command_windows,
-                                              sizeof(command_windows)) == CLI_OK;
+                                              sizeof(command_windows)) == CLI_OK &&
+            cbm_build_mutation_gate_command(binary_path, "codex", false, mutation_command,
+                                            sizeof(mutation_command)) == CLI_OK &&
+            cbm_build_mutation_gate_command(binary_path, "codex", true,
+                                            mutation_command_windows,
+                                            sizeof(mutation_command_windows)) == CLI_OK;
         cbm_toml_codex_hook_action_t preflight_action =
             use_hooks_json ? CBM_TOML_CODEX_HOOK_REMOVE : CBM_TOML_CODEX_HOOK_UPSERT;
         cbm_toml_codex_hook_failure_t preflight_failure = CBM_TOML_CODEX_HOOK_FAILURE_NONE;
@@ -9194,6 +9360,15 @@ static void install_cli_agent_configs(const cbm_detected_agents_t *agents, const
                 hook_ok =
                     cbm_upsert_paired_lifecycle_hooks_json(hooks_json, command, command_windows,
                                                            NULL, CMM_HOOK_TIMEOUT_SEC) == CLI_OK &&
+                    upsert_hooks_json((hooks_upsert_args_t){
+                        .settings_path = hooks_json,
+                        .hook_event = "PreToolUse",
+                        .matcher_str = "*",
+                        .command_str = mutation_command,
+                        .command_windows = mutation_command_windows,
+                        .timeout_value = 30,
+                        .match_command_exact = mutation_command,
+                    }) == CLI_OK &&
                     cbm_reconcile_codex_hooks_command(cp, command, command_windows,
                                                       CBM_TOML_CODEX_HOOK_REMOVE, false) == CLI_OK;
             } else if (!dry_run) {
@@ -9202,7 +9377,7 @@ static void install_cli_agent_configs(const cbm_detected_agents_t *agents, const
             if (!hook_ok) {
                 record_agent_config_error(false, "Codex CLI", "hook_install", hook_target);
             } else {
-                printf("  hooks: SessionStart + SubagentStart (dynamic graph context)\n");
+                printf("  hooks: SessionStart + SubagentStart + PreToolUse mutation gate\n");
                 printf("  note: non-managed hooks require /hooks trust; definition changes "
                        "require re-trust\n");
             }
@@ -9247,10 +9422,13 @@ static void install_cli_agent_configs(const cbm_detected_agents_t *agents, const
     if (agents->antigravity) {
         char cp[CLI_BUF_1K];
         char ip[CLI_BUF_1K];
+        char hooks_path[CLI_BUF_1K];
+        char mutation_command[CLI_BUF_8K];
         /* MCP config is the SHARED Antigravity config (CLI + IDE), not a
          * per-tool file (2026 unification). */
         snprintf(cp, sizeof(cp), "%s/.gemini/config/mcp_config.json", home);
         snprintf(ip, sizeof(ip), "%s/.gemini/GEMINI.md", home);
+        snprintf(hooks_path, sizeof(hooks_path), "%s/.gemini/antigravity/hooks.json", home);
         if (!dry_run && !g_install_plan) {
             char cfg_dir[CLI_BUF_1K];
             snprintf(cfg_dir, sizeof(cfg_dir), "%s/.gemini/config", home);
@@ -9258,6 +9436,28 @@ static void install_cli_agent_configs(const cbm_detected_agents_t *agents, const
         }
         install_generic_agent_config("Antigravity", binary_path, cp, ip, dry_run,
                                      cbm_upsert_antigravity_mcp);
+        if (g_install_plan) {
+            plan_record("Antigravity", "hook", hooks_path);
+        } else if (cbm_build_mutation_gate_command(binary_path, "antigravity",
+                                                   cbm_current_platform_is_windows(),
+                                                   mutation_command, sizeof(mutation_command)) !=
+                       CLI_OK) {
+            record_agent_config_error(false, "Antigravity", "mutation_hook_command", binary_path);
+        } else {
+            char hooks_dir[CLI_BUF_1K];
+            snprintf(hooks_dir, sizeof(hooks_dir), "%s/.gemini/antigravity", home);
+            if (!dry_run && !cbm_mkdir_p_ex(hooks_dir, CLI_OCTAL_PERM,
+                                            CBM_MKDIR_FOLLOW_OWNED)) {
+                record_agent_config_error(false, "Antigravity", "mutation_hook_directory",
+                                          hooks_dir);
+            } else if (!dry_run &&
+                       cbm_upsert_antigravity_mutation_hook(hooks_path, mutation_command) != CLI_OK) {
+                record_agent_config_error(false, "Antigravity", "mutation_hook_install",
+                                          hooks_path);
+            } else {
+                printf("  hooks: %s (PreToolUse mutation gate)\n", hooks_path);
+            }
+        }
         /* SessionStart is not part of Antigravity's documented hook surface.
          * Clean up the legacy entry that older installers put in a CLI-only
          * settings file, without creating that file for new installations. */
@@ -11544,11 +11744,20 @@ static void uninstall_cli_agents(const cbm_detected_agents_t *agents, const char
         cbm_agent_installed_binary_path(home, installed_binary, sizeof(installed_binary));
         char hook_command[CLI_BUF_8K];
         char hook_command_windows[CLI_BUF_8K];
+        char hook_mutation_command[CLI_BUF_8K];
+        char hook_mutation_command_windows[CLI_BUF_8K];
         bool hook_command_ok = cbm_build_augment_command(installed_binary, hook_command,
                                                          sizeof(hook_command)) == CLI_OK;
         bool hook_commands_ok = hook_command_ok && cbm_build_augment_command_windows(
                                                        installed_binary, hook_command_windows,
                                                        sizeof(hook_command_windows)) == CLI_OK;
+        bool hook_mutation_command_ok =
+            cbm_build_mutation_gate_command(installed_binary, "codex", false,
+                                            hook_mutation_command,
+                                            sizeof(hook_mutation_command)) == CLI_OK &&
+            cbm_build_mutation_gate_command(installed_binary, "codex", true,
+                                            hook_mutation_command_windows,
+                                            sizeof(hook_mutation_command_windows)) == CLI_OK;
         cbm_toml_codex_hook_failure_t preflight_failure = CBM_TOML_CODEX_HOOK_FAILURE_NONE;
         bool hook_preflight_ok =
             hook_commands_ok && cbm_reconcile_codex_hooks_command_detailed(
@@ -11588,7 +11797,14 @@ static void uninstall_cli_agents(const cbm_detected_agents_t *agents, const char
             snprintf(hooks_json, sizeof(hooks_json), "%s/hooks.json", config_dir);
             if (cbm_file_exists(hooks_json) &&
                 (!hook_command_ok ||
-                 cbm_remove_paired_lifecycle_hooks_json(hooks_json, hook_command) != CLI_OK)) {
+                 !hook_mutation_command_ok ||
+                 cbm_remove_paired_lifecycle_hooks_json(hooks_json, hook_command) != CLI_OK ||
+                 remove_hooks_json((hooks_remove_args_t){
+                     .settings_path = hooks_json,
+                     .hook_event = "PreToolUse",
+                     .matcher_str = "*",
+                     .match_command_exact = hook_mutation_command,
+                 }) != CLI_OK)) {
                 record_agent_config_error(true, "Codex CLI", "json_hook_uninstall", hooks_json);
             }
         }
@@ -11624,10 +11840,16 @@ static void uninstall_cli_agents(const cbm_detected_agents_t *agents, const char
     if (agents->antigravity) {
         char cp[CLI_BUF_1K];
         char ip[CLI_BUF_1K];
+        char hooks_path[CLI_BUF_1K];
         snprintf(cp, sizeof(cp), "%s/.gemini/config/mcp_config.json", home);
         snprintf(ip, sizeof(ip), "%s/.gemini/GEMINI.md", home);
+        snprintf(hooks_path, sizeof(hooks_path), "%s/.gemini/antigravity/hooks.json", home);
         uninstall_agent_mcp_instr((mcp_uninstall_args_t){"Antigravity", cp, ip}, dry_run,
                                   cbm_remove_antigravity_mcp_owned);
+        if (!dry_run && cbm_file_exists(hooks_path) &&
+            cbm_remove_antigravity_mutation_hook(hooks_path) != CLI_OK) {
+            record_agent_config_error(true, "Antigravity", "mutation_hook_uninstall", hooks_path);
+        }
         if (!dry_run) {
             char sp[CLI_BUF_1K];
             snprintf(sp, sizeof(sp), "%s/.gemini/antigravity-cli/settings.json", home);

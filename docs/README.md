@@ -14,7 +14,7 @@ Index of project technical documentation for **codebase-memory-mcp**. Use the li
 | [**index_governance.md**](./feature/index_governance.md) | Repository indexing, path coverage verification, project lifecycle, and git diff impact tools. | Optional |
 | [**multi_graph_federation.md**](./feature/multi_graph_federation.md) | Ephemeral cognitive horizon overlays, speculative modeling, and AST two-tier anchor admission tools. | Optional |
 | [**multi_graph_federation_e2e.md**](./feature/multi_graph_federation_e2e.md) | Black-box MCP stdio JSON-RPC E2E test suite covering isolation, two-tier anchors, and recovery. | Optional |
-| [**union_workflow.md**](./feature/union_workflow.md) | Cognitive session horizons, effect-class gateways, craft theme bindings, and contestation tools. | Optional |
+| [**union_workflow.md**](./feature/union_workflow.md) | Cognitive session horizons, grounded repository mutation gates, craft theme bindings, and contestation tools. | Optional |
 
 ## Recommended Reading Order
 

@@ -1,6 +1,7 @@
 #include "union_handler.h"
 #include "mcp.h"
 #include "mcp_internal.h"
+#include "../union/mutation_journal.h"
 #include "../foundation/log.h"
 #include "../foundation/platform.h"
 #include "../foundation/compat.h"
@@ -375,6 +376,21 @@ static char *json_error_result(const char *code, const char *message) {
 }
 
 /* W01: union_session_open */
+static bool union_mutation_operation_from_name(const char *name,
+                                              CbmMutationOperation *operation_out) {
+    if (!name || !operation_out) return false;
+    if (strcmp(name, "create") == 0) {
+        *operation_out = CBM_MUTATION_OPERATION_CREATE;
+    } else if (strcmp(name, "modify") == 0) {
+        *operation_out = CBM_MUTATION_OPERATION_MODIFY;
+    } else if (strcmp(name, "delete") == 0) {
+        *operation_out = CBM_MUTATION_OPERATION_DELETE;
+    } else {
+        return false;
+    }
+    return true;
+}
+
 char *handle_union_session_open(cbm_mcp_server_t *srv, const char *args_json) {
     if (!args_json) {
         return json_error_result("INVALID_PARAMS", "missing arguments");
@@ -408,6 +424,93 @@ char *handle_union_session_open(cbm_mcp_server_t *srv, const char *args_json) {
         seq_str = yyjson_get_str(v_seq);
     }
 
+    CbmHostWorkContext host_context = {0};
+    CbmChangeGrounding grounding = {0};
+    yyjson_val *v_host = yyjson_obj_get(root, "host");
+    yyjson_val *v_context = yyjson_obj_get(root, "context_id");
+    yyjson_val *v_grounding = yyjson_obj_get(root, "grounding_kind");
+    yyjson_val *v_intent = yyjson_obj_get(root, "intent_key");
+    yyjson_val *v_intent_scope = yyjson_obj_get(root, "intent_scope");
+    yyjson_val *v_reference = yyjson_obj_get(root, "reference");
+    yyjson_val *v_rationale = yyjson_obj_get(root, "rationale");
+    bool bind_mutation_context = v_host || v_context || v_grounding || v_intent || v_reference ||
+                                 v_rationale || v_intent_scope;
+    if (bind_mutation_context) {
+        if (!v_host || !yyjson_is_str(v_host) || !v_context || !yyjson_is_str(v_context) ||
+            !v_grounding || !yyjson_is_str(v_grounding) || !v_intent || !yyjson_is_str(v_intent) ||
+            !v_intent_scope || !yyjson_is_arr(v_intent_scope) ||
+            yyjson_arr_size(v_intent_scope) == 0U ||
+            yyjson_arr_size(v_intent_scope) > CBM_MUTATION_SCOPE_MAX_TARGETS) {
+            yyjson_doc_free(doc);
+            return json_error_result("INVALID_PARAMS",
+                                     "host, context_id, grounding_kind, intent_key, and a nonempty intent_scope are required together");
+        }
+        const char *host_name = yyjson_get_str(v_host);
+        const char *grounding_name = yyjson_get_str(v_grounding);
+        if (strcmp(host_name, "codex") == 0) {
+            host_context.host = CBM_MUTATION_HOST_CODEX;
+        } else if (strcmp(host_name, "antigravity") == 0) {
+            host_context.host = CBM_MUTATION_HOST_ANTIGRAVITY;
+        }
+        snprintf(host_context.context_id, sizeof(host_context.context_id), "%s",
+                 yyjson_get_str(v_context));
+        snprintf(grounding.intent_key, sizeof(grounding.intent_key), "%s",
+                 yyjson_get_str(v_intent));
+        for (size_t index = 0; index < yyjson_arr_size(v_intent_scope); index++) {
+            yyjson_val *scope_entry = yyjson_arr_get(v_intent_scope, index);
+            yyjson_val *v_target_path = scope_entry ? yyjson_obj_get(scope_entry, "path") : NULL;
+            yyjson_val *v_operation = scope_entry ? yyjson_obj_get(scope_entry, "operation") : NULL;
+            const char *target_path = v_target_path && yyjson_is_str(v_target_path)
+                                          ? yyjson_get_str(v_target_path) : NULL;
+            const char *operation_name = v_operation && yyjson_is_str(v_operation)
+                                             ? yyjson_get_str(v_operation) : NULL;
+            CbmMutationIntentTarget *target = &grounding.targets[index];
+            char canonical_path[CBM_MUTATION_TARGET_PATH_MAX];
+            if (!target_path || !operation_name ||
+                !union_mutation_operation_from_name(operation_name, &target->operation) ||
+                !cbm_mutation_canonicalize_path(target_path, canonical_path,
+                                                sizeof(canonical_path))) {
+                yyjson_doc_free(doc);
+                return json_error_result("INVALID_PARAMS",
+                                         "intent_scope entries require an absolute resolvable path and supported operation");
+            }
+            if (strlen(canonical_path) >= sizeof(target->path)) {
+                yyjson_doc_free(doc);
+                return json_error_result("INVALID_PARAMS",
+                                         "intent_scope target path exceeds the supported size");
+            }
+            snprintf(target->path, sizeof(target->path), "%s", canonical_path);
+            grounding.target_count++;
+        }
+        if (strcmp(grounding_name, "canon_citation") == 0) {
+            grounding.kind = CBM_GROUNDING_CANON_CITATION;
+            if (!v_reference || !yyjson_is_str(v_reference) || v_rationale) {
+                yyjson_doc_free(doc);
+                return json_error_result("INVALID_PARAMS",
+                                         "canon_citation requires reference and excludes rationale");
+            }
+            snprintf(grounding.reference, sizeof(grounding.reference), "%s",
+                     yyjson_get_str(v_reference));
+        } else if (strcmp(grounding_name, "declared_invention") == 0) {
+            grounding.kind = CBM_GROUNDING_DECLARED_INVENTION;
+            if (!v_rationale || !yyjson_is_str(v_rationale) || v_reference) {
+                yyjson_doc_free(doc);
+                return json_error_result("INVALID_PARAMS",
+                                         "declared_invention requires rationale and excludes reference");
+            }
+            snprintf(grounding.rationale, sizeof(grounding.rationale), "%s",
+                     yyjson_get_str(v_rationale));
+        } else {
+            yyjson_doc_free(doc);
+            return json_error_result("INVALID_PARAMS", "unsupported grounding_kind");
+        }
+        if (!cbm_host_work_context_is_valid(&host_context) ||
+            !cbm_change_grounding_is_valid(&grounding)) {
+            yyjson_doc_free(doc);
+            return json_error_result("INVALID_PARAMS", "invalid host context or change grounding");
+        }
+    }
+
     uint32_t pid = 0;
     yyjson_val *v_pid = yyjson_obj_get(root, "client_pid");
     if (v_pid && yyjson_is_int(v_pid)) {
@@ -425,6 +528,26 @@ char *handle_union_session_open(cbm_mcp_server_t *srv, const char *args_json) {
     CbmSessionResult rc = cbm_session_open(get_sessions(srv), get_contracts(srv), get_pool(srv),
                                           pid, identity, contract_id, seq_str, &horizon,
                                           err_buf, sizeof(err_buf));
+    if (rc == CBM_SESSION_OK && bind_mutation_context) {
+        rc = cbm_session_bind_mutation_context(get_sessions(srv), horizon.horizon_id,
+                                               &host_context, &grounding, err_buf,
+                                               sizeof(err_buf));
+        if (rc == CBM_SESSION_OK &&
+            cbm_mutation_journal_register_default_session(
+                horizon.horizon_id, &host_context, &grounding) != CBM_MUTATION_JOURNAL_OK) {
+            rc = CBM_SESSION_ERR_JOURNAL;
+            snprintf(err_buf, sizeof(err_buf), "MUTATION_JOURNAL_UNAVAILABLE");
+        }
+        if (rc == CBM_SESSION_OK) {
+            const CbmSessionHorizon *bound = cbm_session_get(get_sessions(srv), horizon.horizon_id);
+            if (bound) horizon = *bound;
+        } else {
+            char close_error[CBM_SESSION_REASON_MAX] = {0};
+            (void)cbm_session_close(get_sessions(srv), get_pool(srv), horizon.horizon_id,
+                                    CBM_SESSION_CLOSE_EMPTY, NULL, close_error,
+                                    sizeof(close_error));
+        }
+    }
     yyjson_doc_free(doc);
 
     if (rc != CBM_SESSION_OK) {
@@ -444,6 +567,35 @@ char *handle_union_session_open(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "open_refusal", cbm_refusal_code_string(horizon.open_refusal));
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "based_on_seq", horizon.based_on_seq);
     yyjson_mut_obj_add_uint(out_doc, out_root, "opened_at_unix", (uint64_t)horizon.opened_at_unix);
+    if (horizon.has_bound_context) {
+        yyjson_mut_obj_add_strcpy(out_doc, out_root, "host",
+                                  horizon.host_context.host == CBM_MUTATION_HOST_CODEX
+                                      ? "codex" : "antigravity");
+        yyjson_mut_obj_add_strcpy(out_doc, out_root, "context_id",
+                                  horizon.host_context.context_id);
+        yyjson_mut_obj_add_strcpy(out_doc, out_root, "intent_key",
+                                  horizon.change_grounding.intent_key);
+        yyjson_mut_obj_add_strcpy(out_doc, out_root, "grounding_kind",
+                                  horizon.change_grounding.kind == CBM_GROUNDING_CANON_CITATION
+                                      ? "canon_citation" : "declared_invention");
+        yyjson_mut_val *scope = yyjson_mut_arr(out_doc);
+        for (size_t index = 0; index < horizon.change_grounding.target_count; index++) {
+            const CbmMutationIntentTarget *target = &horizon.change_grounding.targets[index];
+            yyjson_mut_val *entry = yyjson_mut_obj(out_doc);
+            const char *operation = "unknown";
+            switch (target->operation) {
+                case CBM_MUTATION_OPERATION_CREATE: operation = "create"; break;
+                case CBM_MUTATION_OPERATION_MODIFY: operation = "modify"; break;
+                case CBM_MUTATION_OPERATION_DELETE: operation = "delete"; break;
+                case CBM_MUTATION_OPERATION_RENAME: operation = "rename"; break;
+                default: break;
+            }
+            yyjson_mut_obj_add_strcpy(out_doc, entry, "path", target->path);
+            yyjson_mut_obj_add_strcpy(out_doc, entry, "operation", operation);
+            yyjson_mut_arr_add_val(scope, entry);
+        }
+        yyjson_mut_obj_add_val(out_doc, out_root, "intent_scope", scope);
+    }
     return result_from_mut_doc(out_doc, false);
 }
 
@@ -563,7 +715,9 @@ char *handle_union_session_close(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_doc_free(doc);
 
     if (rc != CBM_SESSION_OK) {
-        return json_error_result("SESSION_NOT_FOUND", "failed to close session: not found");
+        return json_error_result(rc == CBM_SESSION_ERR_JOURNAL ? "MUTATION_JOURNAL_FAILURE"
+                                                               : "SESSION_CLOSE_FAILED",
+                                 err_buf[0] ? err_buf : "failed to close session");
     }
 
     yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
@@ -708,7 +862,8 @@ char *handle_classify_activity(cbm_mcp_server_t *srv, const char *args_json) {
     CbmActivityClass cls = cbm_classify_activity(intent);
     const char *cls_str = (cls == CBM_ACTIVITY_SPECIALTY) ? "SPECIALTY" : "CONSULTATIVE";
 
-    cbm_log(CBM_LOG_INFO, "union.routing moment=classify intent=%s verdict=%s", intent, cls_str);
+    cbm_log(CBM_LOG_INFO, "union.routing", "moment", "classify", "intent", intent,
+            "verdict", cls_str, NULL);
 
     yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *out_root = yyjson_mut_obj(out_doc);

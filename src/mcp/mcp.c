@@ -82,6 +82,7 @@ enum {
 #include "foundation/compat_regex.h"
 #include "pipeline/artifact.h"
 #include "mcp/union_handler.h"
+#include "union/mutation_journal.h"
 
 #ifdef _WIN32
 #include "foundation/win_utf8.h"
@@ -791,12 +792,23 @@ static const tool_def_t TOOLS[] = {
      "\"description\":\"Whether dangling nodes without edges fail validation (default true)\"}},"
      "\"required\":[\"horizon_id\"]}"},
 
-    {"union_session_open", "Open a bounded session horizon for a skill identity with contract validation and restricted-mode gating",
+    {"union_session_open", "Open a bounded Union session; optional host/context/grounding fields bind it to the E01 repository mutation gate",
      "{\"type\":\"object\",\"properties\":{\"identity\":{\"type\":\"string\",\"description\":"
      "\"Skill archetype identity (e.g. developer, architect)\"},\"contract_id\":{\"type\":\"string\","
      "\"description\":\"Registered skill contract identifier\"},\"based_on_seq\":{\"type\":\"string\","
      "\"description\":\"Belief sequence or generation hash this session is grounded upon\"},\"client_pid\":"
-     "{\"type\":\"integer\",\"description\":\"Client process ID\"}},\"required\":[\"identity\"]}"},
+     "{\"type\":\"integer\",\"description\":\"Client process ID\"},\"host\":{\"type\":\"string\","
+     "\"enum\":[\"codex\",\"antigravity\"],\"description\":\"Host that owns the work context\"},"
+     "\"context_id\":{\"type\":\"string\",\"description\":\"Host-issued stable thread or conversation ID\"},"
+     "\"grounding_kind\":{\"type\":\"string\",\"enum\":[\"canon_citation\",\"declared_invention\"]},"
+     "\"intent_key\":{\"type\":\"string\",\"description\":\"Change intent authorized by this session\"},"
+     "\"intent_scope\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":4,\"items\":{\"type\":\"object\","
+     "\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"Absolute target path\"},"
+     "\"operation\":{\"type\":\"string\",\"enum\":[\"create\",\"modify\",\"delete\"]}},"
+     "\"required\":[\"path\",\"operation\"]},\"description\":\"Exact path and operation pairs this session may write\"},"
+     "\"reference\":{\"type\":\"string\",\"description\":\"Required canon citation for canon_citation\"},"
+     "\"rationale\":{\"type\":\"string\",\"description\":\"Required rationale for declared_invention\"}},"
+     "\"required\":[\"identity\"]}"},
 
     {"union_session_get", "Query the live state of an open session horizon",
      "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
@@ -2145,6 +2157,15 @@ static void mcp_project_mutation_end(cbm_mcp_server_t *srv, const char *project)
 void cbm_mcp_server_free(cbm_mcp_server_t *srv) {
     if (!srv) {
         return;
+    }
+    for (size_t index = 0; index < srv->session_registry.count; index++) {
+        const CbmSessionHorizon *session = &srv->session_registry.sessions[index];
+        if (session->has_bound_context &&
+            cbm_mutation_journal_mark_default_session_unknown(session->horizon_id) !=
+                CBM_MUTATION_JOURNAL_OK) {
+            cbm_log_error("union.mutation_journal.session_close_failed", "horizon_id",
+                          session->horizon_id, NULL);
+        }
     }
     if (srv->autoindex_active) {
         cbm_thread_join(&srv->autoindex_tid);
