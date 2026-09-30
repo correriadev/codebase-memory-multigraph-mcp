@@ -385,6 +385,8 @@ static bool union_mutation_operation_from_name(const char *name,
         *operation_out = CBM_MUTATION_OPERATION_MODIFY;
     } else if (strcmp(name, "delete") == 0) {
         *operation_out = CBM_MUTATION_OPERATION_DELETE;
+    } else if (strcmp(name, "rename") == 0) {
+        *operation_out = CBM_MUTATION_OPERATION_RENAME;
     } else {
         return false;
     }

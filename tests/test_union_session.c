@@ -11,6 +11,8 @@
 #include "../src/union/union_session.h"
 #include "../src/foundation/compat.h"
 
+#include <sqlite3.h>
+
 #include <stdlib.h>
 #ifndef _WIN32
 #include <unistd.h>
@@ -71,6 +73,38 @@ static bool session_test_set_target(SessionFixture *fx, CbmMutationAttempt *atte
     snprintf(grounding->targets[0].path, sizeof(grounding->targets[0].path), "%s",
              attempt->target_path);
     return strlen(attempt->target_path) < sizeof(grounding->targets[0].path);
+}
+
+static bool session_test_set_rename_targets(SessionFixture *fx, CbmMutationAttempt *attempt,
+                                            CbmChangeGrounding *grounding,
+                                            const char *source_leaf,
+                                            const char *destination_leaf) {
+    char source_request[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char destination_request[CBM_MUTATION_CANONICAL_PATH_MAX];
+    int source_written = snprintf(source_request, sizeof(source_request), "%s/%s",
+                                  fx->dir, source_leaf);
+    int destination_written = snprintf(destination_request, sizeof(destination_request), "%s/%s",
+                                       fx->dir, destination_leaf);
+    if (source_written <= 0 || (size_t)source_written >= sizeof(source_request) ||
+        destination_written <= 0 || (size_t)destination_written >= sizeof(destination_request) ||
+        !cbm_mutation_canonicalize_path(source_request, attempt->target_path,
+                                        sizeof(attempt->target_path)) ||
+        !cbm_mutation_canonicalize_path(destination_request,
+                                        attempt->secondary_target_path,
+                                        sizeof(attempt->secondary_target_path)) ||
+        strcmp(attempt->target_path, attempt->secondary_target_path) == 0) {
+        return false;
+    }
+    attempt->operation = CBM_MUTATION_OPERATION_RENAME;
+    grounding->target_count = 2U;
+    for (size_t index = 0; index < grounding->target_count; index++) {
+        grounding->targets[index].operation = CBM_MUTATION_OPERATION_RENAME;
+    }
+    snprintf(grounding->targets[0].path, sizeof(grounding->targets[0].path), "%s",
+             attempt->target_path);
+    snprintf(grounding->targets[1].path, sizeof(grounding->targets[1].path), "%s",
+             attempt->secondary_target_path);
+    return true;
 }
 
 /* AC1: registered identity opens full-mode; the host log records identity,
@@ -340,6 +374,68 @@ TEST(test_change_grounding_requires_intent_and_provenance) {
     PASS();
 }
 
+TEST(test_mutation_rename_authorizes_and_journals_both_endpoints) {
+    SessionFixture fx;
+    if (session_fixture_init(&fx) != 0) FAIL("fixture init");
+
+    CbmMutationAttempt attempt = {0};
+    attempt.host_context.host = CBM_MUTATION_HOST_CODEX;
+    snprintf(attempt.host_context.context_id, sizeof(attempt.host_context.context_id),
+             "thread_rename_42");
+    attempt.scope = CBM_MUTATION_SCOPE_REPOSITORY;
+    snprintf(attempt.attempt_id, sizeof(attempt.attempt_id), "rename_call_1");
+    CbmChangeGrounding grounding = {0};
+    grounding.kind = CBM_GROUNDING_DECLARED_INVENTION;
+    snprintf(grounding.intent_key, sizeof(grounding.intent_key), "rename_source_file");
+    snprintf(grounding.rationale, sizeof(grounding.rationale),
+             "The operator requested this file move.");
+    ASSERT_TRUE(session_test_set_rename_targets(&fx, &attempt, &grounding,
+                                                "source.c", "destination.c"));
+    ASSERT_TRUE(cbm_change_grounding_is_valid(&grounding));
+
+    char journal_path[256];
+    snprintf(journal_path, sizeof(journal_path), "%s/rename.sqlite", fx.dir);
+    CbmMutationJournal journal = {0};
+    ASSERT_EQ(cbm_mutation_journal_open(&journal, journal_path), CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(cbm_mutation_journal_register_session(&journal, "horizon_rename",
+                                                    &attempt.host_context, &grounding),
+              CBM_MUTATION_JOURNAL_OK);
+
+    CbmMutationDecision decision = cbm_mutation_authorize_repository_write(&journal, &attempt);
+    ASSERT_TRUE(decision.permitted);
+    ASSERT_TRUE(decision.write_id[0] != '\0');
+    sqlite3_stmt *statement = NULL;
+    ASSERT_EQ(sqlite3_prepare_v2(
+                  journal.db,
+                  "SELECT target_path,secondary_target_path FROM mutation_write_journal WHERE write_id=?;",
+                  -1, &statement, NULL), SQLITE_OK);
+    ASSERT_EQ(sqlite3_bind_text(statement, 1, decision.write_id, -1, SQLITE_TRANSIENT), SQLITE_OK);
+    ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
+    ASSERT_STR_EQ((const char *)sqlite3_column_text(statement, 0), attempt.target_path);
+    ASSERT_STR_EQ((const char *)sqlite3_column_text(statement, 1),
+                  attempt.secondary_target_path);
+    sqlite3_finalize(statement);
+
+    char unscoped_request[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char unscoped_path[CBM_MUTATION_TARGET_PATH_MAX];
+    int unscoped_written = snprintf(unscoped_request, sizeof(unscoped_request),
+                                    "%s/unscoped.c", fx.dir);
+    ASSERT_TRUE(unscoped_written > 0 && (size_t)unscoped_written < sizeof(unscoped_request));
+    ASSERT_TRUE(cbm_mutation_canonicalize_path(unscoped_request, unscoped_path,
+                                               sizeof(unscoped_path)));
+    snprintf(attempt.secondary_target_path, sizeof(attempt.secondary_target_path), "%s",
+             unscoped_path);
+    decision = cbm_mutation_authorize_repository_write(&journal, &attempt);
+    ASSERT_FALSE(decision.permitted);
+    ASSERT_EQ(decision.refusal.code, CBM_MUTATION_REFUSAL_INTENT_SCOPE_MISMATCH);
+
+    ASSERT_EQ(cbm_mutation_journal_mark_session_unknown(&journal, "horizon_rename"),
+              CBM_MUTATION_JOURNAL_OK);
+    cbm_mutation_journal_close(&journal);
+    session_fixture_cleanup(&fx);
+    PASS();
+}
+
 TEST(test_session_mutation_context_is_bound_and_not_replayable) {
     SessionFixture fx;
     if (session_fixture_init(&fx) != 0) FAIL("fixture init");
@@ -557,6 +653,7 @@ SUITE(union_session) {
     RUN_TEST(test_mutation_effect_classification);
     RUN_TEST(test_mutation_host_context_requires_stable_identity);
     RUN_TEST(test_change_grounding_requires_intent_and_provenance);
+    RUN_TEST(test_mutation_rename_authorizes_and_journals_both_endpoints);
     RUN_TEST(test_session_mutation_context_is_bound_and_not_replayable);
     RUN_TEST(test_mutation_journal_is_durable_and_outcomes_are_idempotent);
     RUN_TEST(test_mutation_authorization_requires_session_and_committed_intent);

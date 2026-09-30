@@ -36,6 +36,10 @@ Read the host's code and context. Record the refusal and what changed before ano
 | `CONTRACT_INVALID` / `CONTRACT_UNKNOWN` | Correct the contract or honor the reported restricted mode. |
 | `TOOL_UNCLASSIFIED` | Classify the action before requesting authorization. |
 
+## Repository mutation gate
+
+The Codex and Antigravity `PreToolUse` hooks may return a human-readable denial instead of one of the Union tool codes above. Follow the stated reason: for an unbound or stale context, use the host-issued context ID and open a mutation-bound session; for a target or operation outside `intent_scope`, correct the declared scope. A bound session cannot be rebound in place: close it through the normal claim-sweep procedure before opening another for the same host context. If journal or session authority is unavailable, stop the write until it is available. A rename is supported only when the adapter proves both canonical endpoints and the session contains exact `rename` entries for both; if a patch, shell command, or other invocation has no provable supported target, keep the refusal and use a supported scoped operation when it serves the authorized task. Do not bypass the hook or repeat an unchanged denied call.
+
 For `PROVENANCE_UNDECLARED`, a citation needs a verifiable theme, node, and version; inventing a reference does not resolve the refusal. `BINDING_SELF_VALIDATED` reserves binding authority for the operator. `TERRITORY_WRITE_FORBIDDEN` keeps Tradition outside project writes. `AUTO_FOUNDING_FORBIDDEN` permits a proposal, not autonomous founding. Apply the same visibility rule to session, gateway, and parameter errors.
 
 `CbmSkillContract` stores an acknowledged-refusals bitmask, not this response table. Report contract gaps. A human instruction does not make an identical submission new evidence.

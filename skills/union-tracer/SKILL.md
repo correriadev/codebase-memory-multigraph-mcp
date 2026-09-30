@@ -15,6 +15,7 @@ Use after a successful `union_session_close`. The trace should help distinguish 
 4. Separate session facts from agent commentary. An explanation does not prove that a claim was admitted, a binding exists, or a theme was consulted.
 5. Report canon citations and declared inventions only when real references support them. Do not derive their ratio from generic trace counts.
 6. If closure yielded reusable craft seeds, describe a founding proposal to the operator, never a completed founding.
+7. For repository writes, distinguish a durable pre-write intent from an observed result. The current pre-tool adapters do not prove whether an allowed write ran successfully; pending intents become `outcome_unknown` at closure or recovery. Do not report `observed_applied` without a trustworthy host result linked to the same write ID. If the journal is not exposed to this skill, state that per-write verification is unavailable.
 
 ## Output
 

@@ -25,3 +25,5 @@ Tradition is not a third plane inside the project. The project holds references 
 ## Current implementation boundary
 
 These files guide agents; they do not install skills into a client or create missing APIs. The current interface does not provide a complete binding query, every Idealization claim type, public contract registration, or a trace with references for every judgment. Mark those gaps as unresolved. An agent report is not a host-admitted record.
+
+For repository writes, the E01 host hook requires a mutation-bound `union_session_open` with exact `intent_scope` path and operation pairs. Read-only consultation needs no mutation session. The hook records an intent before permitting a supported write; absent a trustworthy post-tool result, its outcome remains unknown. See [Union workflow](../docs/feature/union_workflow.md#e01-repository-mutation-gate).

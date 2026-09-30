@@ -23,6 +23,10 @@ Use `classify_activity` when available, then check its result against the user's
 5. Before acting on specialty work, show a verifiable theme, rule node, and version, or ask whether to proceed with declared invention or propose binding/founding a theme. If binding status is unknown, say so; do not claim that no theme governs the craft. A consulted, unbound theme is advisory.
 6. For speculative code context, pass `active_horizons` only to `search_graph`, `query_graph`, and `trace_path`. Other discovery tools may show only the base graph.
 
+## Hand off repository changes
+
+Consultation and read-only investigation do not require a Union session. When the authorized task will change repository files, hand the mutation workflow the selected canon citation or declared invention with its rationale, a specific `intent_key`, and the intended absolute paths and operations. `union_session_open` binds those pairs in `intent_scope`; grounding alone does not permit a write. Do not invent a host `context_id` or treat an unverified target as covered. A patch with multiple files or a command whose targets cannot be proven remains outside the currently supported gate path.
+
 ## Report
 
 Record the activity class and routing uncertainty; separate Realization and Idealization evidence with references and sequence; the theme and version consulted; verified `DEVE`/`PODE` status or unknown binding status; the source of each HOW judgment or declared invention; and contestations, open questions, and evidence gaps.

@@ -109,9 +109,9 @@ union_session_close(horizon_id="h_01", reason="NORMAL")
 
 Antigravity and Codex hooks share one gate. Reads have no Union or journal effects; repository writes and unknown tools need grounded authority and durable intent. Outside writes are exempt. SQLite shares session bindings with short-lived hooks.
 
-Bind `union_session_open` with host context, grounding kind, intent key, a reference or rationale, and `intent_scope`. The scope contains one to four exact absolute path and operation pairs (`create`, `modify`, `delete`, or `rename`); the gate canonicalizes each path and refuses writes outside those pairs. Use Antigravity `conversationId` or Codex `session_id`; rebinds fail.
+Bind `union_session_open` with host context, grounding kind, intent key, a reference or rationale, and `intent_scope`. The MCP scope accepts one to four exact absolute path and operation pairs (`create`, `modify`, `delete`, or `rename`); the gate canonicalizes each path and refuses writes outside those pairs. A rename requires two distinct `rename` entries, one for the source and one for the destination. Use Antigravity `conversationId` or Codex `session_id`; rebinds fail.
 
-For example, `intent_scope=[{"path":"/repo/src/handler.c","operation":"modify"}]` authorizes only a modification to that file. A single-file `apply_patch` can use this scope. Multi-file patches, renames, and commands whose targets cannot be proven are refused.
+For example, `intent_scope=[{"path":"/repo/src/handler.c","operation":"modify"}]` authorizes only a modification to that file. A single-file `apply_patch` can use this scope. A rename is authorized only when the adapter proves both endpoints; if either endpoint is inside a workspace, both exact paths must be covered by the active session. Multi-file patches and commands whose targets cannot be proven are refused.
 
 Intent commits before permit. Unobserved outcomes become `UNKNOWN` on close or recovery.
 

@@ -23,6 +23,7 @@ static const char *const MUTATION_JOURNAL_SCHEMA =
     "scope INTEGER NOT NULL,"
     "effect INTEGER NOT NULL,"
     "target_path TEXT NOT NULL,"
+    "secondary_target_path TEXT NOT NULL DEFAULT '',"
     "intent_key TEXT NOT NULL,"
     "grounding_kind INTEGER NOT NULL,"
     "reference TEXT NOT NULL,"
@@ -58,7 +59,9 @@ static CbmMutationJournalResult journal_exec(CbmMutationJournal *journal, const 
                : CBM_MUTATION_JOURNAL_ERR_STORAGE;
 }
 
-static CbmMutationJournalResult journal_migrate_target_path(CbmMutationJournal *journal) {
+static CbmMutationJournalResult journal_ensure_target_column(CbmMutationJournal *journal,
+                                                             const char *column_name,
+                                                             const char *alter_sql) {
     sqlite3_stmt *statement = NULL;
     if (sqlite3_prepare_v2(journal->db, "PRAGMA table_info(mutation_write_journal);", -1,
                            &statement, NULL) != SQLITE_OK) {
@@ -69,7 +72,7 @@ static CbmMutationJournalResult journal_migrate_target_path(CbmMutationJournal *
     int rc = SQLITE_OK;
     while ((rc = sqlite3_step(statement)) == SQLITE_ROW) {
         const unsigned char *name = sqlite3_column_text(statement, 1);
-        if (name && strcmp((const char *)name, "target_path") == 0) {
+        if (name && strcmp((const char *)name, column_name) == 0) {
             found = true;
             break;
         }
@@ -77,8 +80,17 @@ static CbmMutationJournalResult journal_migrate_target_path(CbmMutationJournal *
     sqlite3_finalize(statement);
     if (rc != SQLITE_ROW && rc != SQLITE_DONE) return CBM_MUTATION_JOURNAL_ERR_STORAGE;
     if (found) return CBM_MUTATION_JOURNAL_OK;
-    return journal_exec(journal,
-                        "ALTER TABLE mutation_write_journal ADD COLUMN target_path TEXT NOT NULL DEFAULT ''; ");
+    return journal_exec(journal, alter_sql);
+}
+
+static CbmMutationJournalResult journal_migrate_target_paths(CbmMutationJournal *journal) {
+    CbmMutationJournalResult result = journal_ensure_target_column(
+        journal, "target_path",
+        "ALTER TABLE mutation_write_journal ADD COLUMN target_path TEXT NOT NULL DEFAULT ''; ");
+    if (result != CBM_MUTATION_JOURNAL_OK) return result;
+    return journal_ensure_target_column(
+        journal, "secondary_target_path",
+        "ALTER TABLE mutation_write_journal ADD COLUMN secondary_target_path TEXT NOT NULL DEFAULT ''; ");
 }
 
 CbmMutationJournalResult cbm_mutation_journal_open(CbmMutationJournal *journal,
@@ -97,7 +109,7 @@ CbmMutationJournalResult cbm_mutation_journal_open(CbmMutationJournal *journal,
         journal_exec(journal, "PRAGMA synchronous=FULL;") != CBM_MUTATION_JOURNAL_OK ||
         journal_exec(journal, "PRAGMA foreign_keys=ON;") != CBM_MUTATION_JOURNAL_OK ||
         journal_exec(journal, MUTATION_JOURNAL_SCHEMA) != CBM_MUTATION_JOURNAL_OK ||
-        journal_migrate_target_path(journal) != CBM_MUTATION_JOURNAL_OK) {
+        journal_migrate_target_paths(journal) != CBM_MUTATION_JOURNAL_OK) {
         cbm_mutation_journal_close(journal);
         return CBM_MUTATION_JOURNAL_ERR_STORAGE;
     }
@@ -370,10 +382,13 @@ static bool journal_session_is_active(CbmMutationJournal *journal, const char *h
                                       const CbmMutationAttempt *attempt,
                                       const CbmChangeGrounding *grounding) {
     static const char sql[] =
-        "SELECT 1 FROM mutation_session_authority a JOIN mutation_session_target t "
-        "ON t.horizon_id=a.horizon_id WHERE a.horizon_id=? AND a.host=? AND "
+        "SELECT 1 FROM mutation_session_authority a WHERE a.horizon_id=? AND a.host=? AND "
         "a.context_id=? AND a.intent_key=? AND a.grounding_kind=? AND a.reference=? "
-        "AND a.rationale=? AND a.active=1 AND t.operation=? AND t.path=?;";
+        "AND a.rationale=? AND a.active=1 "
+        "AND EXISTS (SELECT 1 FROM mutation_session_target t WHERE t.horizon_id=a.horizon_id "
+        "AND t.operation=? AND t.path=?) "
+        "AND (?=0 OR EXISTS (SELECT 1 FROM mutation_session_target t2 "
+        "WHERE t2.horizon_id=a.horizon_id AND t2.operation=? AND t2.path=?));";
     sqlite3_stmt *statement = NULL;
     if (sqlite3_prepare_v2(journal->db, sql, -1, &statement, NULL) != SQLITE_OK) return false;
     int rc = sqlite3_bind_text(statement, 1, horizon_id, -1, SQLITE_TRANSIENT);
@@ -385,6 +400,9 @@ static bool journal_session_is_active(CbmMutationJournal *journal, const char *h
     rc |= sqlite3_bind_text(statement, 7, grounding->rationale, -1, SQLITE_TRANSIENT);
     rc |= sqlite3_bind_int(statement, 8, (int)attempt->operation);
     rc |= sqlite3_bind_text(statement, 9, attempt->target_path, -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_int(statement, 10, attempt->secondary_target_path[0] ? 1 : 0);
+    rc |= sqlite3_bind_int(statement, 11, (int)attempt->operation);
+    rc |= sqlite3_bind_text(statement, 12, attempt->secondary_target_path, -1, SQLITE_TRANSIENT);
     bool active = rc == SQLITE_OK && sqlite3_step(statement) == SQLITE_ROW;
     sqlite3_finalize(statement);
     return active;
@@ -397,7 +415,16 @@ CbmMutationJournalResult cbm_mutation_journal_commit_intent(
         !cbm_host_work_context_is_valid(&attempt->host_context) ||
         !cbm_change_grounding_is_valid(grounding) || !attempt->target_path[0] ||
         !memchr(attempt->target_path, '\0', sizeof(attempt->target_path)) ||
+        !memchr(attempt->secondary_target_path, '\0',
+                sizeof(attempt->secondary_target_path)) ||
         !write_id_out || write_id_out_size < 37U) {
+        return CBM_MUTATION_JOURNAL_ERR_ARGUMENT;
+    }
+    bool rename_operation = attempt->operation == CBM_MUTATION_OPERATION_RENAME;
+    if ((rename_operation && (!attempt->secondary_target_path[0] ||
+                              strcmp(attempt->target_path,
+                                     attempt->secondary_target_path) == 0)) ||
+        (!rename_operation && attempt->secondary_target_path[0])) {
         return CBM_MUTATION_JOURNAL_ERR_ARGUMENT;
     }
     char canonical_target[CBM_MUTATION_TARGET_PATH_MAX];
@@ -405,6 +432,15 @@ CbmMutationJournalResult cbm_mutation_journal_commit_intent(
                                         sizeof(canonical_target)) ||
         strcmp(canonical_target, attempt->target_path) != 0) {
         return CBM_MUTATION_JOURNAL_ERR_ARGUMENT;
+    }
+    if (rename_operation) {
+        char canonical_secondary[CBM_MUTATION_TARGET_PATH_MAX];
+        if (!cbm_mutation_canonicalize_path(attempt->secondary_target_path,
+                                            canonical_secondary,
+                                            sizeof(canonical_secondary)) ||
+            strcmp(canonical_secondary, attempt->secondary_target_path) != 0) {
+            return CBM_MUTATION_JOURNAL_ERR_ARGUMENT;
+        }
     }
     CbmMutationEffect effect = cbm_mutation_classify(attempt->operation, attempt->scope);
     if (effect != CBM_MUTATION_EFFECT_REPOSITORY_WRITE &&
@@ -418,8 +454,9 @@ CbmMutationJournalResult cbm_mutation_journal_commit_intent(
     }
     static const char insert_sql[] =
         "INSERT INTO mutation_write_journal (write_id,horizon_id,host,context_id,attempt_id,"
-        "operation,scope,effect,target_path,intent_key,grounding_kind,reference,rationale,created_at,outcome) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
+        "operation,scope,effect,target_path,secondary_target_path,intent_key,grounding_kind,"
+        "reference,rationale,created_at,outcome) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);";
     sqlite3_stmt *statement = NULL;
     CbmMutationJournalResult result = CBM_MUTATION_JOURNAL_ERR_STORAGE;
     if (journal_exec(journal, "BEGIN IMMEDIATE;") != CBM_MUTATION_JOURNAL_OK) {
@@ -442,12 +479,13 @@ CbmMutationJournalResult cbm_mutation_journal_commit_intent(
     rc |= sqlite3_bind_int(statement, 7, (int)attempt->scope);
     rc |= sqlite3_bind_int(statement, 8, (int)effect);
     rc |= sqlite3_bind_text(statement, 9, attempt->target_path, -1, SQLITE_TRANSIENT);
-    rc |= sqlite3_bind_text(statement, 10, grounding->intent_key, -1, SQLITE_TRANSIENT);
-    rc |= sqlite3_bind_int(statement, 11, (int)grounding->kind);
-    rc |= sqlite3_bind_text(statement, 12, grounding->reference, -1, SQLITE_TRANSIENT);
-    rc |= sqlite3_bind_text(statement, 13, grounding->rationale, -1, SQLITE_TRANSIENT);
-    rc |= sqlite3_bind_int64(statement, 14, (sqlite3_int64)time(NULL));
-    rc |= sqlite3_bind_int(statement, 15, CBM_MUTATION_OUTCOME_PENDING);
+    rc |= sqlite3_bind_text(statement, 10, attempt->secondary_target_path, -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_text(statement, 11, grounding->intent_key, -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_int(statement, 12, (int)grounding->kind);
+    rc |= sqlite3_bind_text(statement, 13, grounding->reference, -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_text(statement, 14, grounding->rationale, -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_int64(statement, 15, (sqlite3_int64)time(NULL));
+    rc |= sqlite3_bind_int(statement, 16, CBM_MUTATION_OUTCOME_PENDING);
     if (rc == SQLITE_OK && sqlite3_step(statement) == SQLITE_DONE &&
         journal_exec(journal, "COMMIT;") == CBM_MUTATION_JOURNAL_OK) {
         snprintf(write_id_out, write_id_out_size, "%s", write_id);

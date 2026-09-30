@@ -24,6 +24,8 @@
 #include <foundation/log.h>
 #include <foundation/platform.h>
 #include <mcp/mcp.h>
+#include <union/mutation_gate.h>
+#include <union/mutation_journal.h>
 #include <pipeline/pipeline.h>
 #include <foundation/yaml.h>
 #include <store/store.h>
@@ -31,6 +33,13 @@
 #include <stdatomic.h>
 #include <stdint.h>
 #include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#define test_cli_getcwd _getcwd
+#else
+#include <unistd.h>
+#define test_cli_getcwd getcwd
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -11106,6 +11115,121 @@ TEST(cli_mutation_hook_adapters_fail_closed_and_keep_reads_side_effect_free) {
     PASS();
 }
 
+TEST(cli_mutation_hook_rename_requires_both_scoped_endpoints) {
+    char tmpdir[256];
+    snprintf(tmpdir, sizeof(tmpdir), "/tmp/cli-mutation-rename-XXXXXX");
+    if (!cbm_mkdtemp(tmpdir)) FAIL("cbm_mkdtemp failed");
+    char repo[512];
+    char cache[512];
+    char source_path[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char destination_path[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char outside_path[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char canonical_repo[CBM_MUTATION_CANONICAL_PATH_MAX];
+    if (!test_cli_getcwd(repo, sizeof(repo))) {
+        test_rmdir_r(tmpdir);
+        FAIL("failed to read current workspace root");
+    }
+    snprintf(cache, sizeof(cache), "%s/cache", tmpdir);
+    if (test_mkdirp(cache) != 0) {
+        test_rmdir_r(tmpdir);
+        FAIL("failed to create rename hook fixture");
+    }
+    if (!cbm_mutation_canonicalize_path(repo, canonical_repo, sizeof(canonical_repo))) {
+        test_rmdir_r(tmpdir);
+        FAIL("failed to canonicalize rename workspace root");
+    }
+
+    char requested[CBM_MUTATION_CANONICAL_PATH_MAX];
+    snprintf(requested, sizeof(requested), "%s/src/union/.mutation-rename-source.c", repo);
+    if (!cbm_mutation_canonicalize_path(requested, source_path, sizeof(source_path))) {
+        test_rmdir_r(tmpdir);
+        FAIL("failed to canonicalize rename source");
+    }
+    snprintf(requested, sizeof(requested), "%s/src/union/.mutation-rename-destination.c", repo);
+    if (!cbm_mutation_canonicalize_path(requested, destination_path,
+                                        sizeof(destination_path))) {
+        test_rmdir_r(tmpdir);
+        FAIL("failed to canonicalize rename destination");
+    }
+    snprintf(requested, sizeof(requested), "%s/outside.c", tmpdir);
+    if (!cbm_mutation_canonicalize_path(requested, outside_path, sizeof(outside_path))) {
+        test_rmdir_r(tmpdir);
+        FAIL("failed to canonicalize outside destination");
+    }
+
+    char *saved_cache = save_test_env("CBM_CACHE_DIR");
+    cbm_setenv("CBM_CACHE_DIR", cache, 1);
+    CbmMutationJournal journal = {0};
+    if (cbm_mutation_journal_open_default(&journal) != CBM_MUTATION_JOURNAL_OK) {
+        restore_test_env("CBM_CACHE_DIR", saved_cache);
+        test_rmdir_r(tmpdir);
+        FAIL("failed to open isolated mutation journal");
+    }
+    CbmHostWorkContext context = {0};
+    context.host = CBM_MUTATION_HOST_CODEX;
+    snprintf(context.context_id, sizeof(context.context_id), "rename-hook-context");
+    CbmChangeGrounding grounding = {0};
+    grounding.kind = CBM_GROUNDING_DECLARED_INVENTION;
+    snprintf(grounding.intent_key, sizeof(grounding.intent_key), "move_one_file");
+    snprintf(grounding.rationale, sizeof(grounding.rationale),
+             "The operator requested this file move.");
+    grounding.target_count = 2U;
+    grounding.targets[0].operation = CBM_MUTATION_OPERATION_RENAME;
+    grounding.targets[1].operation = CBM_MUTATION_OPERATION_RENAME;
+    snprintf(grounding.targets[0].path, sizeof(grounding.targets[0].path), "%s",
+             source_path);
+    snprintf(grounding.targets[1].path, sizeof(grounding.targets[1].path), "%s",
+             destination_path);
+    if (cbm_mutation_journal_register_session(&journal, "horizon_rename_hook",
+                                              &context, &grounding) != CBM_MUTATION_JOURNAL_OK) {
+        cbm_mutation_journal_close(&journal);
+        restore_test_env("CBM_CACHE_DIR", saved_cache);
+        test_rmdir_r(tmpdir);
+        FAIL("failed to register rename authority");
+    }
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    if (!srv) {
+        cbm_mutation_journal_close(&journal);
+        restore_test_env("CBM_CACHE_DIR", saved_cache);
+        test_rmdir_r(tmpdir);
+        FAIL("failed to create hook server");
+    }
+
+    char input[4096];
+    int written = snprintf(input, sizeof(input),
+                           "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"%s\","
+                           "\"cwd\":\"%s\",\"workspace_roots\":[\"%s\"],"
+                           "\"tool_name\":\"move_file\",\"tool_input\":{"
+                           "\"source\":\"%s\",\"destination\":\"%s\"}}",
+                           context.context_id, canonical_repo, canonical_repo, source_path,
+                           destination_path);
+    ASSERT_TRUE(written > 0 && (size_t)written < sizeof(input));
+    char *output = cbm_hook_augment_process_for(srv, input, "PreToolUse",
+                                                "codex-mutation");
+    ASSERT_NULL(output);
+
+    written = snprintf(input, sizeof(input),
+                       "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"%s\","
+                       "\"cwd\":\"%s\",\"workspace_roots\":[\"%s\"],"
+                       "\"tool_name\":\"move_file\",\"tool_input\":{"
+                       "\"source\":\"%s\",\"destination\":\"%s\"}}",
+                       context.context_id, canonical_repo, canonical_repo, source_path,
+                       outside_path);
+    ASSERT_TRUE(written > 0 && (size_t)written < sizeof(input));
+    output = cbm_hook_augment_process_for(srv, input, "PreToolUse", "codex-mutation");
+    ASSERT_NOT_NULL(output);
+    ASSERT_NOT_NULL(strstr(output, "permissionDecision\":\"deny"));
+    free(output);
+
+    ASSERT_EQ(cbm_mutation_journal_mark_session_unknown(&journal, "horizon_rename_hook"),
+              CBM_MUTATION_JOURNAL_OK);
+    cbm_mcp_server_free(srv);
+    cbm_mutation_journal_close(&journal);
+    restore_test_env("CBM_CACHE_DIR", saved_cache);
+    test_rmdir_r(tmpdir);
+    PASS();
+}
+
 TEST(cli_mutation_hook_allows_proven_codex_scratch_write_without_union_session) {
     char tmpdir[256];
     snprintf(tmpdir, sizeof(tmpdir), "/tmp/cli-mutation-scratch-XXXXXX");
@@ -15387,6 +15511,7 @@ SUITE(cli) {
 #endif
     RUN_TEST(cli_hook_augment_context_tracks_search_json_shape);
     RUN_TEST(cli_mutation_hook_adapters_fail_closed_and_keep_reads_side_effect_free);
+    RUN_TEST(cli_mutation_hook_rename_requires_both_scoped_endpoints);
     RUN_TEST(cli_mutation_apply_patch_requires_one_file);
     RUN_TEST(cli_mutation_hook_allows_proven_codex_scratch_write_without_union_session);
     RUN_TEST(cli_hook_augment_bash_pretooluse_reaches_augmenter);

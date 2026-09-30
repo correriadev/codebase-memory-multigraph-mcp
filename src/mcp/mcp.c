@@ -804,7 +804,7 @@ static const tool_def_t TOOLS[] = {
      "\"intent_key\":{\"type\":\"string\",\"description\":\"Change intent authorized by this session\"},"
      "\"intent_scope\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":4,\"items\":{\"type\":\"object\","
      "\"properties\":{\"path\":{\"type\":\"string\",\"description\":\"Absolute target path\"},"
-     "\"operation\":{\"type\":\"string\",\"enum\":[\"create\",\"modify\",\"delete\"]}},"
+     "\"operation\":{\"type\":\"string\",\"enum\":[\"create\",\"modify\",\"delete\",\"rename\"]}},"
      "\"required\":[\"path\",\"operation\"]},\"description\":\"Exact path and operation pairs this session may write\"},"
      "\"reference\":{\"type\":\"string\",\"description\":\"Required canon citation for canon_citation\"},"
      "\"rationale\":{\"type\":\"string\",\"description\":\"Required rationale for declared_invention\"}},"

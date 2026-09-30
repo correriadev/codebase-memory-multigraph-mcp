@@ -53,9 +53,10 @@ typedef struct {
     CbmMutationOperation operation;
     CbmMutationScope scope;
     char attempt_id[CBM_MUTATION_WRITE_ID_MAX];
-    /* Canonical absolute target. Empty means the adapter could not prove the
-     * individual resource affected by this invocation. */
+    /* Canonical absolute primary target. For RENAME this is the source path. */
     char target_path[CBM_MUTATION_TARGET_PATH_MAX];
+    /* Canonical absolute destination for RENAME; empty for other operations. */
+    char secondary_target_path[CBM_MUTATION_TARGET_PATH_MAX];
 } CbmMutationAttempt;
 
 typedef enum {

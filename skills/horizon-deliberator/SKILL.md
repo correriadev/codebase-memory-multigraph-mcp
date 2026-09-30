@@ -9,9 +9,10 @@ Use after grounding when a task needs a proposal or decision. A horizon holds pr
 
 ## Open a session
 
-1. Call `union_session_open` with an identity, a contract when available, and the observed `based_on_seq`. Inspect `restricted` and `open_refusal`; an unknown contract opens in restricted mode.
+1. For deliberation, call `union_session_open` with an identity, a contract when available, and the observed `based_on_seq`. Inspect `restricted` and `open_refusal`; an unknown contract opens in restricted mode. Read-only consultation needs no session.
 2. Keep proposals provisional and tie each one to the project's WHAT/WHY. `union_claim_capture` records conversational claims; it does not create arbitrary Idealization nodes.
-3. Check the target and authorization of each action separately. The session does not automatically confine file edits or other tools. A project session must never write to a thematic graph.
+3. Before an authorized repository write, open a mutation-bound session with the host-issued `host` and `context_id`, `grounding_kind`, `intent_key`, the matching `reference` or `rationale`, and `intent_scope` containing one to four exact absolute path and operation pairs (`create`, `modify`, `delete`, or `rename`). A rename needs two distinct entries with operation `rename`, covering its source and destination. Check the returned binding. An unbound deliberation session does not authorize a write, and a bound session cannot be rebound to another scope.
+4. Check each action's target separately. Supported host hooks compare its canonical path and operation with `intent_scope`; unsupported or indeterminate routes are refused. The hook is not an operating-system boundary. A project session must never write to a thematic graph.
 
 ## Provenance of craft judgments
 
@@ -30,7 +31,7 @@ Keep open questions with an owner and consequence. Agent assumptions remain prov
 
 ## Actions and closure
 
-For a mutation governed by the Union workflow, call `union_record_action` with an explicit effect class and inspect the result before acting. This call does not execute or automatically guard separate tools. Do not promote the horizon from this skill. Give each captured claim a valid destination before closure; `PROMOTED` for a `DECISION` or `OPEN_QUESTION` requires host-proven operator validation. `SWEEP_INCOMPLETE` leaves the session open.
+For a mutation governed by the Union workflow, call `union_record_action` with an explicit effect class and inspect the result before acting. It does not replace the hook's per-write authorization or execute the tool. A single-file `apply_patch` can be scoped. A rename is permitted only when the adapter proves both canonical endpoints and both exact `rename` entries are in scope. Multi-file patches, shell commands, and other calls without a provable target are refused by the current adapter. Do not promote the horizon from this skill. Give each captured claim a valid destination before closure; `PROMOTED` for a `DECISION` or `OPEN_QUESTION` requires host-proven operator validation. `SWEEP_INCOMPLETE` leaves the session open.
 
 Return the horizon, proposals, project evidence, craft provenance, collisions, questions, authorizations, and unresolved items. Opening a session alone does not prove that no base-graph write occurred.
 

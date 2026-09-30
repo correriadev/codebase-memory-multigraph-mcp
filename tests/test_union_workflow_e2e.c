@@ -125,6 +125,92 @@ TEST(test_union_session_open_requires_and_registers_exact_intent_scope) {
     PASS();
 }
 
+TEST(test_union_session_open_accepts_exact_rename_endpoints) {
+    char temp_dir[256];
+    snprintf(temp_dir, sizeof(temp_dir), "/tmp/cbm_union_rename_XXXXXX");
+    if (!cbm_mkdtemp(temp_dir)) FAIL("temporary directory creation failed");
+    char cache_dir[512];
+    snprintf(cache_dir, sizeof(cache_dir), "%s/cache", temp_dir);
+    char *old_cache = getenv("CBM_CACHE_DIR") ? strdup(getenv("CBM_CACHE_DIR")) : NULL;
+    if (cbm_setenv("CBM_CACHE_DIR", cache_dir, 1) != 0) {
+        free(old_cache);
+        th_rmtree(temp_dir);
+        FAIL("could not isolate mutation journal cache");
+    }
+
+    char source_request[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char destination_request[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char source_path[CBM_MUTATION_TARGET_PATH_MAX];
+    char destination_path[CBM_MUTATION_TARGET_PATH_MAX];
+    int source_written = snprintf(source_request, sizeof(source_request), "%s/source.c", temp_dir);
+    int destination_written = snprintf(destination_request, sizeof(destination_request),
+                                       "%s/destination.c", temp_dir);
+    FILE *source_file = source_written > 0 && (size_t)source_written < sizeof(source_request)
+                            ? fopen(source_request, "wb") : NULL;
+    if (!source_file || fclose(source_file) != 0 || destination_written <= 0 ||
+        (size_t)destination_written >= sizeof(destination_request) ||
+        !cbm_mutation_canonicalize_path(source_request, source_path, sizeof(source_path)) ||
+        !cbm_mutation_canonicalize_path(destination_request, destination_path,
+                                        sizeof(destination_path))) {
+        if (old_cache) cbm_setenv("CBM_CACHE_DIR", old_cache, 1);
+        else cbm_unsetenv("CBM_CACHE_DIR");
+        free(old_cache);
+        th_rmtree(temp_dir);
+        FAIL("could not prepare canonical rename endpoints");
+    }
+
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    if (!srv) {
+        if (old_cache) cbm_setenv("CBM_CACHE_DIR", old_cache, 1);
+        else cbm_unsetenv("CBM_CACHE_DIR");
+        free(old_cache);
+        th_rmtree(temp_dir);
+        FAIL("MCP server creation failed");
+    }
+
+    char open_args[CBM_MUTATION_CANONICAL_PATH_MAX * 2 + 512];
+    int open_written = snprintf(
+        open_args, sizeof(open_args),
+        "{\"identity\":\"developer\",\"host\":\"codex\","
+        "\"context_id\":\"rename-scope-parser\","
+        "\"grounding_kind\":\"declared_invention\","
+        "\"intent_key\":\"rename one file\",\"rationale\":\"requested\","
+        "\"intent_scope\":[{\"path\":\"%s\",\"operation\":\"rename\"},"
+        "{\"path\":\"%s\",\"operation\":\"rename\"}]}",
+        source_path, destination_path);
+    ASSERT(open_written > 0 && (size_t)open_written < sizeof(open_args));
+    char *opened = handle_union_session_open(srv, open_args);
+    ASSERT_NOT_NULL(opened);
+    yyjson_doc *opened_doc = yyjson_read(opened, strlen(opened), 0);
+    ASSERT_NOT_NULL(opened_doc);
+    ASSERT_FALSE(get_is_error(opened_doc));
+    yyjson_val *payload = get_payload(opened_doc);
+    yyjson_val *scope = payload ? yyjson_obj_get(payload, "intent_scope") : NULL;
+    ASSERT_TRUE(scope && yyjson_is_arr(scope) && yyjson_arr_size(scope) == 2U);
+    yyjson_val *source_entry = yyjson_arr_get(scope, 0);
+    yyjson_val *destination_entry = yyjson_arr_get(scope, 1);
+    ASSERT_STR_EQ(yyjson_get_str(yyjson_obj_get(source_entry, "path")), source_path);
+    ASSERT_STR_EQ(yyjson_get_str(yyjson_obj_get(destination_entry, "path")), destination_path);
+    ASSERT_STR_EQ(yyjson_get_str(yyjson_obj_get(source_entry, "operation")), "rename");
+    ASSERT_STR_EQ(yyjson_get_str(yyjson_obj_get(destination_entry, "operation")), "rename");
+    const char *horizon_id = yyjson_get_str(yyjson_obj_get(payload, "horizon_id"));
+    ASSERT_NOT_NULL(horizon_id);
+    char close_args[256];
+    snprintf(close_args, sizeof(close_args), "{\"horizon_id\":\"%s\"}", horizon_id);
+    yyjson_doc_free(opened_doc);
+    free(opened);
+    char *closed = handle_union_session_close(srv, close_args);
+    ASSERT_NOT_NULL(closed);
+    free(closed);
+
+    cbm_mcp_server_free(srv);
+    if (old_cache) cbm_setenv("CBM_CACHE_DIR", old_cache, 1);
+    else cbm_unsetenv("CBM_CACHE_DIR");
+    free(old_cache);
+    th_rmtree(temp_dir);
+    PASS();
+}
+
 TEST(test_w01_session_lifecycle) {
     cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
     ASSERT(srv != NULL);
@@ -1504,6 +1590,7 @@ TEST(test_w01_full_lifecycle_over_mcp_transport) {
 
 SUITE(union_workflow_e2e) {
     RUN_TEST(test_union_session_open_requires_and_registers_exact_intent_scope);
+    RUN_TEST(test_union_session_open_accepts_exact_rename_endpoints);
     RUN_TEST(test_w01_session_lifecycle);
     RUN_TEST(test_w01_session_close_sweep_and_trace);
     RUN_TEST(test_w01_claims_outside_session_rejected);

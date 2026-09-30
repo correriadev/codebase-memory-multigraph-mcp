@@ -63,7 +63,8 @@ bool cbm_change_grounding_is_valid(const CbmChangeGrounding *grounding) {
             !mutation_path_is_absolute(target->path) ||
             (target->operation != CBM_MUTATION_OPERATION_CREATE &&
              target->operation != CBM_MUTATION_OPERATION_MODIFY &&
-             target->operation != CBM_MUTATION_OPERATION_DELETE)) {
+             target->operation != CBM_MUTATION_OPERATION_DELETE &&
+             target->operation != CBM_MUTATION_OPERATION_RENAME)) {
             return false;
         }
         for (size_t previous = 0; previous < index; previous++) {
@@ -165,13 +166,29 @@ static bool mutation_intent_covers_attempt(const CbmChangeGrounding *grounding,
         !is_nonempty_string(attempt->target_path, sizeof(attempt->target_path))) {
         return false;
     }
+    bool source_covered = false;
+    bool destination_covered = attempt->operation != CBM_MUTATION_OPERATION_RENAME;
+    if (attempt->operation == CBM_MUTATION_OPERATION_RENAME &&
+        (!is_nonempty_string(attempt->secondary_target_path,
+                             sizeof(attempt->secondary_target_path)) ||
+         strcmp(attempt->target_path, attempt->secondary_target_path) == 0)) {
+        return false;
+    }
+    if (attempt->operation != CBM_MUTATION_OPERATION_RENAME &&
+        attempt->secondary_target_path[0] != '\0') {
+        return false;
+    }
     for (size_t index = 0; index < grounding->target_count; index++) {
-        if (grounding->targets[index].operation == attempt->operation &&
-            strcmp(grounding->targets[index].path, attempt->target_path) == 0) {
-            return true;
+        if (grounding->targets[index].operation != attempt->operation) continue;
+        if (strcmp(grounding->targets[index].path, attempt->target_path) == 0) {
+            source_covered = true;
+        }
+        if (attempt->operation == CBM_MUTATION_OPERATION_RENAME &&
+            strcmp(grounding->targets[index].path, attempt->secondary_target_path) == 0) {
+            destination_covered = true;
         }
     }
-    return false;
+    return source_covered && destination_covered;
 }
 
 CbmMutationDecision cbm_mutation_authorize_repository_write(

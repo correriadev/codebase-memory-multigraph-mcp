@@ -1933,9 +1933,44 @@ static CbmMutationOperation ha_mutation_operation_for_tool(const char *tool) {
     if (strcmp(tool, "delete_file") == 0 || strcmp(tool, "remove_file") == 0) {
         return CBM_MUTATION_OPERATION_DELETE;
     }
-    /* Multi-file patches/replacements and two-path renames are not authorized
-     * until this adapter can enumerate every affected path. */
+    if (strcmp(tool, "rename_file") == 0 || strcmp(tool, "move_file") == 0 ||
+        strcmp(tool, "rename") == 0 || strcmp(tool, "move") == 0 ||
+        strcmp(tool, "RenameFile") == 0 || strcmp(tool, "MoveFile") == 0) {
+        return CBM_MUTATION_OPERATION_RENAME;
+    }
+    /* Multi-file patches remain unauthorized until this adapter can enumerate
+     * every affected path. */
     return CBM_MUTATION_OPERATION_UNKNOWN;
+}
+
+static const char *ha_mutation_first_path(yyjson_val *tool_input,
+                                          const char *const *field_names,
+                                          size_t field_count) {
+    for (size_t index = 0; index < field_count; index++) {
+        const char *value = ha_obj_str(tool_input, field_names[index]);
+        if (value && value[0]) return value;
+    }
+    return NULL;
+}
+
+static bool ha_mutation_rename_paths(yyjson_val *tool_input,
+                                     const char **source_out,
+                                     const char **destination_out) {
+    static const char *const source_fields[] = {
+        "source_path", "sourcePath", "old_path", "oldPath", "from", "src",
+        "source", "file_path", "filePath", "path",
+    };
+    static const char *const destination_fields[] = {
+        "destination_path", "destinationPath", "new_path", "newPath", "to",
+        "dest", "destination", "target_path", "targetPath",
+    };
+    if (!source_out || !destination_out) return false;
+    *source_out = ha_mutation_first_path(
+        tool_input, source_fields, sizeof(source_fields) / sizeof(source_fields[0]));
+    *destination_out = ha_mutation_first_path(
+        tool_input, destination_fields,
+        sizeof(destination_fields) / sizeof(destination_fields[0]));
+    return *source_out && *destination_out && strcmp(*source_out, *destination_out) != 0;
 }
 
 static const char *ha_mutation_target_path(yyjson_val *tool_input) {
@@ -1967,11 +2002,6 @@ static CbmMutationScope ha_mutation_scope_for_target(cbm_mcp_server_t *srv, yyjs
     char cwd_buffer[4096];
     const char *cwd = ha_normalized_cwd_with_server(root, srv, cwd_buffer, sizeof(cwd_buffer));
     if (!cwd) return CBM_MUTATION_SCOPE_UNKNOWN;
-    /* A rename has both a source and destination. Until the adapter can prove
-     * both paths, classify it as ambiguous so one endpoint cannot be treated
-     * as an outside write while the other is inside the workspace. */
-    if (operation == CBM_MUTATION_OPERATION_RENAME) return CBM_MUTATION_SCOPE_UNKNOWN;
-
     const char *target = explicit_target && explicit_target[0]
                              ? explicit_target : ha_mutation_target_path(tool_input);
     if (!target) {
@@ -2007,7 +2037,7 @@ static CbmMutationScope ha_mutation_scope_for_target(cbm_mcp_server_t *srv, yyjs
             const char *workspace = yyjson_get_str(workspace_paths);
             char workspace_root[4096];
             if (!workspace || !workspace[0] ||
-                !cbm_canonical_path(workspace, workspace_root, sizeof(workspace_root))) {
+                !ha_canonical_path(workspace, workspace_root, sizeof(workspace_root))) {
                 return CBM_MUTATION_SCOPE_UNKNOWN;
             }
             return ha_path_contains(workspace_root, canonical_target)
@@ -2023,7 +2053,7 @@ static CbmMutationScope ha_mutation_scope_for_target(cbm_mcp_server_t *srv, yyjs
             const char *workspace = entry && yyjson_is_str(entry) ? yyjson_get_str(entry) : NULL;
             char workspace_root[4096];
             if (!workspace || !workspace[0] ||
-                !cbm_canonical_path(workspace, workspace_root, sizeof(workspace_root))) {
+                !ha_canonical_path(workspace, workspace_root, sizeof(workspace_root))) {
                 return CBM_MUTATION_SCOPE_UNKNOWN;
             }
             if (ha_path_contains(workspace_root, canonical_target)) {
@@ -2061,6 +2091,15 @@ static const char *ha_mutation_refusal_reason(const CbmMutationDecision *decisio
     }
     const char *host = attempt->host_context.host == CBM_MUTATION_HOST_CODEX
                            ? "codex" : "antigravity";
+    if (decision->refusal.code == CBM_MUTATION_REFUSAL_INTENT_SCOPE_MISMATCH &&
+        attempt->operation == CBM_MUTATION_OPERATION_RENAME) {
+        (void)snprintf(reason, reason_size,
+                       "Repository rename blocked: %s -> %s is outside the exact endpoint pairs declared by the active Union session.",
+                       attempt->target_path[0] ? attempt->target_path : "unresolved source",
+                       attempt->secondary_target_path[0] ? attempt->secondary_target_path
+                                                        : "unresolved destination");
+        return reason;
+    }
     if (decision->refusal.code == CBM_MUTATION_REFUSAL_INTENT_SCOPE_MISMATCH) {
         (void)snprintf(reason, reason_size,
                        "Repository write blocked: %s (%s) is outside the exact path and operation pairs declared by the active Union session.",
@@ -2156,10 +2195,38 @@ static char *ha_mutation_process(cbm_mcp_server_t *srv, const char *input_json,
             attempt.operation = CBM_MUTATION_OPERATION_UNKNOWN;
         }
     }
-    attempt.scope = ha_mutation_scope_for_target(srv, root, tool_input, explicit_target,
-                                                 attempt.operation,
-                                                 attempt.target_path,
-                                                 sizeof(attempt.target_path));
+    if (attempt.operation == CBM_MUTATION_OPERATION_RENAME) {
+        const char *rename_source = NULL;
+        const char *rename_destination = NULL;
+        if (!ha_mutation_rename_paths(tool_input, &rename_source, &rename_destination)) {
+            attempt.operation = CBM_MUTATION_OPERATION_UNKNOWN;
+            attempt.scope = CBM_MUTATION_SCOPE_UNKNOWN;
+        } else {
+            CbmMutationScope source_scope = ha_mutation_scope_for_target(
+                srv, root, tool_input, rename_source, attempt.operation,
+                attempt.target_path, sizeof(attempt.target_path));
+            CbmMutationScope destination_scope = ha_mutation_scope_for_target(
+                srv, root, tool_input, rename_destination, attempt.operation,
+                attempt.secondary_target_path, sizeof(attempt.secondary_target_path));
+            if (source_scope == CBM_MUTATION_SCOPE_UNKNOWN ||
+                destination_scope == CBM_MUTATION_SCOPE_UNKNOWN) {
+                attempt.scope = CBM_MUTATION_SCOPE_UNKNOWN;
+            } else if (source_scope == CBM_MUTATION_SCOPE_REPOSITORY ||
+                       destination_scope == CBM_MUTATION_SCOPE_REPOSITORY) {
+                attempt.scope = CBM_MUTATION_SCOPE_REPOSITORY;
+            } else if (source_scope == CBM_MUTATION_SCOPE_OUTSIDE &&
+                       destination_scope == CBM_MUTATION_SCOPE_OUTSIDE) {
+                attempt.scope = CBM_MUTATION_SCOPE_OUTSIDE;
+            } else {
+                attempt.scope = CBM_MUTATION_SCOPE_UNKNOWN;
+            }
+        }
+    } else {
+        attempt.scope = ha_mutation_scope_for_target(srv, root, tool_input, explicit_target,
+                                                     attempt.operation,
+                                                     attempt.target_path,
+                                                     sizeof(attempt.target_path));
+    }
     if (attempt.operation == CBM_MUTATION_OPERATION_CREATE && attempt.target_path[0] &&
         cbm_file_exists(attempt.target_path)) {
         attempt.operation = CBM_MUTATION_OPERATION_MODIFY;
