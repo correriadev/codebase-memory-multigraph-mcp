@@ -637,6 +637,13 @@ char *handle_union_session_get(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_mut_obj_add_uint(out_doc, out_root, "opened_at_unix", (uint64_t)sh->opened_at_unix);
     yyjson_mut_obj_add_uint(out_doc, out_root, "actions", sh->actions);
     yyjson_mut_obj_add_uint(out_doc, out_root, "refusals", sh->refusals);
+    uint32_t hook_refusals = 0;
+    CbmMutationJournal journal = {0};
+    if (cbm_mutation_journal_open_default(&journal) == CBM_MUTATION_JOURNAL_OK) {
+        (void)cbm_mutation_journal_count_hook_refusals(&journal, sh->horizon_id, &hook_refusals);
+        cbm_mutation_journal_close(&journal);
+    }
+    yyjson_mut_obj_add_uint(out_doc, out_root, "hook_refusals", hook_refusals);
     yyjson_doc_free(doc);
     return result_from_mut_doc(out_doc, false);
 }
@@ -732,6 +739,13 @@ char *handle_union_session_close(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_mut_obj_add_uint(out_doc, out_root, "duration_sec", (uint64_t)closure.duration_sec);
     yyjson_mut_obj_add_uint(out_doc, out_root, "actions", closure.actions);
     yyjson_mut_obj_add_uint(out_doc, out_root, "refusals", closure.refusals);
+    uint32_t hook_refusals = 0;
+    CbmMutationJournal journal = {0};
+    if (cbm_mutation_journal_open_default(&journal) == CBM_MUTATION_JOURNAL_OK) {
+        (void)cbm_mutation_journal_count_hook_refusals(&journal, closure.horizon_id, &hook_refusals);
+        cbm_mutation_journal_close(&journal);
+    }
+    yyjson_mut_obj_add_uint(out_doc, out_root, "hook_refusals", hook_refusals);
 
     char trace_buf[1024] = {0};
     if (cbm_trace_format_evaluator_json(&trace, trace_buf, sizeof(trace_buf)) == 0) {

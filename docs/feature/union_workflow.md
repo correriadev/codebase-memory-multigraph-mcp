@@ -107,11 +107,13 @@ union_session_close(horizon_id="h_01", reason="NORMAL")
 
 ### E01 Repository Mutation Gate
 
-Antigravity and Codex hooks share one gate. Reads have no Union or journal effects; repository writes and unknown tools need grounded authority and durable intent. Outside writes are exempt. SQLite shares session bindings with short-lived hooks.
+Antigravity and Codex hooks share one gate. Reads and non-mutating coordination tools (e.g. `send_message`, `invoke_subagent`, `ask_question`, `read_url_content`, `read_browser_page`, `search_web`, `generate_image`, `list_resources`, `read_resource`) have no Union or journal effects; repository writes and unknown tools need grounded authority and durable intent. Outside writes are exempt. SQLite shares session bindings with short-lived hooks.
 
-Bind `union_session_open` with host context, grounding kind, intent key, a reference or rationale, and `intent_scope`. The MCP scope accepts one to four exact absolute path and operation pairs (`create`, `modify`, `delete`, or `rename`); the gate canonicalizes each path and refuses writes outside those pairs. A rename requires two distinct `rename` entries, one for the source and one for the destination. Use Antigravity `conversationId` or Codex `session_id`; rebinds fail.
+Bind `union_session_open` with host context, grounding kind, intent key, a reference or rationale, and `intent_scope`. The MCP scope accepts one to four exact absolute path and operation pairs (`create`, `modify`, `delete`, or `rename`); the gate canonicalizes each path and refuses writes outside those pairs. Uncreated intermediate directories within the workspace boundary are safely resolved to their closest existing ancestor during canonicalization without allowing traversal escapes. A rename requires two distinct `rename` entries, one for the source and one for the destination. Use Antigravity `conversationId` or Codex `session_id`; rebinds fail.
 
-For example, `intent_scope=[{"path":"/repo/src/handler.c","operation":"modify"}]` authorizes only a modification to that file. A single-file `apply_patch` can use this scope. A rename is authorized only when the adapter proves both endpoints; if either endpoint is inside a workspace, both exact paths must be covered by the active session. Multi-file patches and commands whose targets cannot be proven are refused.
+For example, `intent_scope=[{"path":"/repo/src/handler.c","operation":"modify"}]` authorizes only a modification to that file. Patches in `apply_patch` support up to four distinct targets evaluated atomically: every file must match the active session scope before any write intent is committed to the durable journal. A rename is authorized only when the adapter proves both endpoints; if either endpoint is inside a workspace, both exact paths must be covered by the active session. Patches exceeding four targets, malformed patches, or commands whose targets cannot be proven are refused.
+
+PreToolUse host hook vetoes are durably recorded in `mutation_hook_refusal_journal` and reported as `hook_refusals` distinctly from semantic Union gateway refusals (`refusals`) in both `union_session_get` and `union_session_close`.
 
 Intent commits before permit. Unobserved outcomes become `UNKNOWN` on close or recovery.
 
@@ -123,6 +125,10 @@ Intent commits before permit. Unobserved outcomes become `UNKNOWN` on close or r
 The adapter denies at 25 seconds, before its 30-second timeout. Codex trust and tool-path opt-outs limit coverage; hooks are not an OS boundary. Unknown commands without a proven target are refused.
 
 Consultation creates no Union session or gate action. Read APIs may refresh indexes or caches.
+
+The mutation hook recognizes Codex's normalized `mcp__codebase_memory_mcp__` names as well as the existing CBM prefixes. Union session lifecycle calls pass through before journal authorization, so `union_session_open` can establish the first binding. The MCP handler still validates the requested grounding and scope.
+
+Shell tools remain subject to classification. The adapter permits plain `rg --files` and `Get-Content` with one literal path (optionally `-LiteralPath`) without a session. Commands with a custom interpreter, compound shell syntax, substitutions, redirects, globs, or unrecognized arguments are refused when their write scope cannot be proven. Use direct read tools or MCP queries for other reads.
 
 ## PARAMETERS / CONFIGURATIONS
 

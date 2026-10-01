@@ -117,6 +117,9 @@ bool cbm_change_grounding_is_valid(const CbmChangeGrounding *grounding);
 bool cbm_mutation_canonicalize_path(const char *path, char *canonical,
                                    size_t canonical_size);
 
+bool cbm_mutation_intent_covers_attempt(const CbmChangeGrounding *grounding,
+                                        const CbmMutationAttempt *attempt);
+
 /* Shared authorization path used by each host adapter. A permit is returned
  * only after the bound live session's grounding is validated and its durable
  * write intent is committed. */

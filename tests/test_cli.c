@@ -11066,6 +11066,87 @@ TEST(cli_mutation_hook_adapters_fail_closed_and_keep_reads_side_effect_free) {
         "\"tool_name\":\"mcp__codebase-memory-mcp__search_graph\",\"tool_input\":{}}",
         "PreToolUse", "codex-mutation");
     ASSERT_NULL(output);
+    const char *const bootstrap_tools[] = {
+        "mcp__codebase_memory_mcp__union_session_open",
+        "mcp__codebase_memory_mcp__union_session_get",
+        "mcp__codebase_memory_mcp__union_session_close",
+        "mcp__codebase_memory_mcp__search_graph",
+        "mcp__codebase_memory_mcp__check_index_coverage",
+        "mcp__codebase_memory_mcp__list_projects",
+        "mcp__codebase_memory_mcp__index_status",
+    };
+    for (size_t i = 0; i < sizeof(bootstrap_tools) / sizeof(bootstrap_tools[0]); i++) {
+        char bootstrap_input[512];
+        snprintf(bootstrap_input, sizeof(bootstrap_input),
+                 "{\"tool_name\":\"%s\",\"tool_input\":{}}", bootstrap_tools[i]);
+        output = cbm_hook_augment_process_for(NULL, bootstrap_input, "PreToolUse",
+                                            "codex-mutation");
+        ASSERT_NULL(output);
+        snprintf(bootstrap_input, sizeof(bootstrap_input),
+                 "{\"toolCall\":{\"name\":\"%s\",\"args\":{}}}", bootstrap_tools[i]);
+        output = cbm_hook_augment_process_for(NULL, bootstrap_input, "PreToolUse",
+                                            "antigravity-mutation");
+        ASSERT_NULL(output);
+    }
+    const char *const coordination_tools[] = {
+        "collaboration.send_message",
+        "send_message",
+        "invoke_subagent",
+        "manage_subagents",
+        "define_subagent",
+        "schedule",
+        "ask_question",
+        "read_url_content",
+        "read_browser_page",
+        "search_web",
+        "generate_image",
+        "list_resources",
+        "read_resource",
+    };
+    for (size_t i = 0; i < sizeof(coordination_tools) / sizeof(coordination_tools[0]); i++) {
+        char coord_input[512];
+        snprintf(coord_input, sizeof(coord_input),
+                 "{\"tool_name\":\"%s\",\"tool_input\":{}}", coordination_tools[i]);
+        output = cbm_hook_augment_process_for(NULL, coord_input, "PreToolUse",
+                                            "codex-mutation");
+        ASSERT_NULL(output);
+        snprintf(coord_input, sizeof(coord_input),
+                 "{\"toolCall\":{\"name\":\"%s\",\"args\":{}}}", coordination_tools[i]);
+        output = cbm_hook_augment_process_for(NULL, coord_input, "PreToolUse",
+                                            "antigravity-mutation");
+        ASSERT_NULL(output);
+    }
+    const char *const shell_reads[] = {
+        "Get-Content src/cli/hook_augment.c",
+        "Get-Content -LiteralPath src/cli/hook_augment.c",
+        "rg --files",
+    };
+    for (size_t i = 0; i < sizeof(shell_reads) / sizeof(shell_reads[0]); i++) {
+        char shell_input[512];
+        snprintf(shell_input, sizeof(shell_input),
+                 "{\"tool_name\":\"exec_command\",\"tool_input\":{\"cmd\":\"%s\"}}",
+                 shell_reads[i]);
+        output = cbm_hook_augment_process_for(NULL, shell_input, "PreToolUse", "codex-mutation");
+        ASSERT_NULL(output);
+    }
+    const char *const unsafe_calls[] = {
+        "{\"tool_name\":\"mcp__codebase_memory_mcp__delete_project\",\"tool_input\":{}}",
+        "{\"tool_name\":\"mcp__untrusted__union_session_open\",\"tool_input\":{}}",
+        "{\"tool_name\":\"collaboration.send_message_fake\",\"tool_input\":{}}",
+        "{\"tool_name\":\"send_message_exec\",\"tool_input\":{}}",
+        "{\"tool_name\":\"exec_command\",\"tool_input\":{\"cmd\":\"rg --files; Remove-Item src/a.c\"}}",
+        "{\"tool_name\":\"exec_command\",\"tool_input\":{\"cmd\":\"Get-Content src/a.c > src/b.c\"}}",
+        "{\"tool_name\":\"exec_command\",\"tool_input\":{\"cmd\":\"Get-Content $(Remove-Item src/a.c)\"}}",
+        "{\"tool_name\":\"exec_command\",\"tool_input\":{\"cmd\":\"rg --pre=evil pattern src\"}}",
+        "{\"tool_name\":\"exec_command\",\"tool_input\":{\"cmd\":\"rg --files\",\"shell\":\"custom.exe\"}}",
+    };
+    for (size_t i = 0; i < sizeof(unsafe_calls) / sizeof(unsafe_calls[0]); i++) {
+        output = cbm_hook_augment_process_for(NULL, unsafe_calls[i], "PreToolUse",
+                                            "codex-mutation");
+        ASSERT_NOT_NULL(output);
+        ASSERT_NOT_NULL(strstr(output, "permissionDecision\":\"deny"));
+        free(output);
+    }
     struct stat cache_state;
     ASSERT_NEQ(stat(cache_dir, &cache_state), 0);
 
@@ -11207,6 +11288,24 @@ TEST(cli_mutation_hook_rename_requires_both_scoped_endpoints) {
     char *output = cbm_hook_augment_process_for(srv, input, "PreToolUse",
                                                 "codex-mutation");
     ASSERT_NULL(output);
+
+#ifdef _WIN32
+    /* Host JSON uses escaped backslashes for native Windows absolute paths. */
+    char windows_input[sizeof(input) * 2];
+    size_t windows_offset = 0;
+    for (const char *cursor = input; *cursor; cursor++) {
+        if (*cursor == '/') {
+            windows_input[windows_offset++] = '\\';
+            windows_input[windows_offset++] = '\\';
+        } else {
+            windows_input[windows_offset++] = *cursor;
+        }
+    }
+    windows_input[windows_offset] = '\0';
+    output = cbm_hook_augment_process_for(srv, windows_input, "PreToolUse",
+                                        "codex-mutation");
+    ASSERT_NULL(output);
+#endif
 
     written = snprintf(input, sizeof(input),
                        "{\"hook_event_name\":\"PreToolUse\",\"session_id\":\"%s\","
@@ -11418,6 +11517,207 @@ TEST(cli_mutation_apply_patch_requires_one_file) {
     ASSERT_FALSE(cbm_hook_mutation_parse_single_patch_for_testing(
         "*** Begin Patch\n*** Update File: src/a.c\n@@\n-old\n+new", path,
         sizeof(path), &operation));
+    PASS();
+}
+
+TEST(cli_mutation_apply_patch_supports_up_to_four_files_atomically) {
+    char tmpdir[256];
+    snprintf(tmpdir, sizeof(tmpdir), "/tmp/cli-mutation-patch-multi-XXXXXX");
+    if (!cbm_mkdtemp(tmpdir)) FAIL("cbm_mkdtemp failed");
+    char repo[512];
+    char cache[512];
+    char file1[512];
+    char file2[512];
+    char file3[512];
+    char canonical_repo[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char canonical_file1[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char canonical_file2[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char canonical_file3[CBM_MUTATION_CANONICAL_PATH_MAX];
+    snprintf(repo, sizeof(repo), "%s/repo", tmpdir);
+    snprintf(cache, sizeof(cache), "%s/cache", tmpdir);
+    snprintf(file1, sizeof(file1), "%s/file1.txt", repo);
+    snprintf(file2, sizeof(file2), "%s/file2.txt", repo);
+    snprintf(file3, sizeof(file3), "%s/file3.txt", repo);
+
+    if (test_mkdirp(repo) != 0 || test_mkdirp(cache) != 0) {
+        test_rmdir_r(tmpdir);
+        FAIL("failed to create patch test directories");
+    }
+    write_test_file(file2, "initial content\n");
+
+    if (!cbm_mutation_canonicalize_path(repo, canonical_repo, sizeof(canonical_repo)) ||
+        !cbm_mutation_canonicalize_path(file1, canonical_file1, sizeof(canonical_file1)) ||
+        !cbm_mutation_canonicalize_path(file2, canonical_file2, sizeof(canonical_file2)) ||
+        !cbm_mutation_canonicalize_path(file3, canonical_file3, sizeof(canonical_file3))) {
+        test_rmdir_r(tmpdir);
+        FAIL("failed to canonicalize test paths");
+    }
+
+    char *saved_cache = save_test_env("CBM_CACHE_DIR");
+    cbm_setenv("CBM_CACHE_DIR", cache, 1);
+    CbmMutationJournal journal = {0};
+    if (cbm_mutation_journal_open_default(&journal) != CBM_MUTATION_JOURNAL_OK) {
+        restore_test_env("CBM_CACHE_DIR", saved_cache);
+        test_rmdir_r(tmpdir);
+        FAIL("failed to open isolated mutation journal");
+    }
+
+    CbmHostWorkContext context = {0};
+    context.host = CBM_MUTATION_HOST_CODEX;
+    snprintf(context.context_id, sizeof(context.context_id), "patch-multi-context");
+
+    CbmChangeGrounding grounding = {0};
+    grounding.kind = CBM_GROUNDING_DECLARED_INVENTION;
+    snprintf(grounding.intent_key, sizeof(grounding.intent_key), "multi_patch_test");
+    snprintf(grounding.rationale, sizeof(grounding.rationale), "Operator authorized two files.");
+    grounding.target_count = 2U;
+    grounding.targets[0].operation = CBM_MUTATION_OPERATION_CREATE;
+    snprintf(grounding.targets[0].path, sizeof(grounding.targets[0].path), "%s", canonical_file1);
+    grounding.targets[1].operation = CBM_MUTATION_OPERATION_MODIFY;
+    snprintf(grounding.targets[1].path, sizeof(grounding.targets[1].path), "%s", canonical_file2);
+
+    if (cbm_mutation_journal_register_session(&journal, "horizon_patch_multi",
+                                              &context, &grounding) != CBM_MUTATION_JOURNAL_OK) {
+        cbm_mutation_journal_close(&journal);
+        restore_test_env("CBM_CACHE_DIR", saved_cache);
+        test_rmdir_r(tmpdir);
+        FAIL("failed to register session authority");
+    }
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    if (!srv) {
+        cbm_mutation_journal_close(&journal);
+        restore_test_env("CBM_CACHE_DIR", saved_cache);
+        test_rmdir_r(tmpdir);
+        FAIL("failed to create server");
+    }
+
+    /* Sub-test 1: Patch containing 2 authorized files (file1 CREATE, file2 MODIFY) -> PASS */
+    const char *patch_2_ok =
+        "*** Begin Patch\n"
+        "*** Add File: file1.txt\n"
+        "+first file\n"
+        "*** Update File: file2.txt\n"
+        "@@\n"
+        "-initial content\n"
+        "+updated content\n"
+        "*** End Patch\n";
+
+    yyjson_mut_doc *jdoc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *jroot = yyjson_mut_obj(jdoc);
+    yyjson_mut_doc_set_root(jdoc, jroot);
+    yyjson_mut_obj_add_str(jdoc, jroot, "hook_event_name", "PreToolUse");
+    yyjson_mut_obj_add_str(jdoc, jroot, "session_id", context.context_id);
+    yyjson_mut_obj_add_str(jdoc, jroot, "cwd", canonical_repo);
+    yyjson_mut_val *jroots = yyjson_mut_arr(jdoc);
+    yyjson_mut_arr_add_str(jdoc, jroots, canonical_repo);
+    yyjson_mut_obj_add_val(jdoc, jroot, "workspace_roots", jroots);
+    yyjson_mut_obj_add_str(jdoc, jroot, "tool_name", "apply_patch");
+    yyjson_mut_val *jtin = yyjson_mut_obj(jdoc);
+    yyjson_mut_obj_add_str(jdoc, jtin, "patch", patch_2_ok);
+    yyjson_mut_obj_add_val(jdoc, jroot, "tool_input", jtin);
+    char *input_json = yyjson_mut_write(jdoc, 0, NULL);
+    yyjson_mut_doc_free(jdoc);
+
+    char *output = cbm_hook_augment_process_for(srv, input_json, "PreToolUse", "codex-mutation");
+    free(input_json);
+    ASSERT_NULL(output);
+
+    /* Sub-test 2: Patch containing 1 authorized file and 1 unauthorized file (file3) -> ATOMIC VETO */
+    const char *patch_mixed =
+        "*** Begin Patch\n"
+        "*** Add File: file1.txt\n"
+        "+first file\n"
+        "*** Add File: file3.txt\n"
+        "+unauthorized file\n"
+        "*** End Patch\n";
+
+    jdoc = yyjson_mut_doc_new(NULL);
+    jroot = yyjson_mut_obj(jdoc);
+    yyjson_mut_doc_set_root(jdoc, jroot);
+    yyjson_mut_obj_add_str(jdoc, jroot, "hook_event_name", "PreToolUse");
+    yyjson_mut_obj_add_str(jdoc, jroot, "session_id", context.context_id);
+    yyjson_mut_obj_add_str(jdoc, jroot, "cwd", canonical_repo);
+    jroots = yyjson_mut_arr(jdoc);
+    yyjson_mut_arr_add_str(jdoc, jroots, canonical_repo);
+    yyjson_mut_obj_add_val(jdoc, jroot, "workspace_roots", jroots);
+    yyjson_mut_obj_add_str(jdoc, jroot, "tool_name", "apply_patch");
+    jtin = yyjson_mut_obj(jdoc);
+    yyjson_mut_obj_add_str(jdoc, jtin, "patch", patch_mixed);
+    yyjson_mut_obj_add_val(jdoc, jroot, "tool_input", jtin);
+    input_json = yyjson_mut_write(jdoc, 0, NULL);
+    yyjson_mut_doc_free(jdoc);
+
+    output = cbm_hook_augment_process_for(srv, input_json, "PreToolUse", "codex-mutation");
+    free(input_json);
+    ASSERT_NOT_NULL(output);
+    ASSERT_NOT_NULL(strstr(output, "permissionDecision\":\"deny"));
+    free(output);
+
+    /* Sub-test 3: Patch exceeding 4 files (5 files) -> DENY WITH CAPACITY MESSAGE (A22) */
+    const char *patch_5_files =
+        "*** Begin Patch\n"
+        "*** Add File: a.txt\n+a\n"
+        "*** Add File: b.txt\n+b\n"
+        "*** Add File: c.txt\n+c\n"
+        "*** Add File: d.txt\n+d\n"
+        "*** Add File: e.txt\n+e\n"
+        "*** End Patch\n";
+
+    jdoc = yyjson_mut_doc_new(NULL);
+    jroot = yyjson_mut_obj(jdoc);
+    yyjson_mut_doc_set_root(jdoc, jroot);
+    yyjson_mut_obj_add_str(jdoc, jroot, "hook_event_name", "PreToolUse");
+    yyjson_mut_obj_add_str(jdoc, jroot, "session_id", context.context_id);
+    yyjson_mut_obj_add_str(jdoc, jroot, "cwd", canonical_repo);
+    jroots = yyjson_mut_arr(jdoc);
+    yyjson_mut_arr_add_str(jdoc, jroots, canonical_repo);
+    yyjson_mut_obj_add_val(jdoc, jroot, "workspace_roots", jroots);
+    yyjson_mut_obj_add_str(jdoc, jroot, "tool_name", "apply_patch");
+    jtin = yyjson_mut_obj(jdoc);
+    yyjson_mut_obj_add_str(jdoc, jtin, "patch", patch_5_files);
+    yyjson_mut_obj_add_val(jdoc, jroot, "tool_input", jtin);
+    input_json = yyjson_mut_write(jdoc, 0, NULL);
+    yyjson_mut_doc_free(jdoc);
+
+    output = cbm_hook_augment_process_for(srv, input_json, "PreToolUse", "codex-mutation");
+    free(input_json);
+    ASSERT_NOT_NULL(output);
+    ASSERT_NOT_NULL(strstr(output, "permissionDecision\":\"deny"));
+    ASSERT_NOT_NULL(strstr(output, "exceeds the maximum supported targets"));
+    free(output);
+
+    /* Sub-test 4: Malformed patch syntax -> DENY WITH FORMAT MESSAGE (A13) */
+    const char *patch_truncated =
+        "*** Begin Patch\n"
+        "*** Add File: a.txt\n+a\n";
+
+    jdoc = yyjson_mut_doc_new(NULL);
+    jroot = yyjson_mut_obj(jdoc);
+    yyjson_mut_doc_set_root(jdoc, jroot);
+    yyjson_mut_obj_add_str(jdoc, jroot, "hook_event_name", "PreToolUse");
+    yyjson_mut_obj_add_str(jdoc, jroot, "session_id", context.context_id);
+    yyjson_mut_obj_add_str(jdoc, jroot, "cwd", canonical_repo);
+    jroots = yyjson_mut_arr(jdoc);
+    yyjson_mut_arr_add_str(jdoc, jroots, canonical_repo);
+    yyjson_mut_obj_add_val(jdoc, jroot, "workspace_roots", jroots);
+    yyjson_mut_obj_add_str(jdoc, jroot, "tool_name", "apply_patch");
+    jtin = yyjson_mut_obj(jdoc);
+    yyjson_mut_obj_add_str(jdoc, jtin, "patch", patch_truncated);
+    yyjson_mut_obj_add_val(jdoc, jroot, "tool_input", jtin);
+    input_json = yyjson_mut_write(jdoc, 0, NULL);
+    yyjson_mut_doc_free(jdoc);
+
+    output = cbm_hook_augment_process_for(srv, input_json, "PreToolUse", "codex-mutation");
+    free(input_json);
+    ASSERT_NOT_NULL(output);
+    ASSERT_NOT_NULL(strstr(output, "permissionDecision\":\"deny"));
+    ASSERT_NOT_NULL(strstr(output, "Malformed patch"));
+    free(output);
+
+    cbm_mcp_server_free(srv);
+    cbm_mutation_journal_close(&journal);
+    restore_test_env("CBM_CACHE_DIR", saved_cache);
+    test_rmdir_r(tmpdir);
     PASS();
 }
 TEST(cli_hook_augment_coverage_requests_machine_json) {
@@ -13653,6 +13953,7 @@ TEST(cli_hook_augment_path_is_abs) {
     ASSERT(cbm_hook_path_is_abs("/home/u/proj"));
     /* Windows drive roots — the #618 regression */
     ASSERT(cbm_hook_path_is_abs("C:/Users/me/proj"));
+    ASSERT(cbm_hook_path_is_abs("C:\\Users\\me\\proj"));
     ASSERT(cbm_hook_path_is_abs("C:/"));
     ASSERT(cbm_hook_path_is_abs("C:"));
     ASSERT(cbm_hook_path_is_abs("d:/lowercase/drive"));
@@ -15513,6 +15814,7 @@ SUITE(cli) {
     RUN_TEST(cli_mutation_hook_adapters_fail_closed_and_keep_reads_side_effect_free);
     RUN_TEST(cli_mutation_hook_rename_requires_both_scoped_endpoints);
     RUN_TEST(cli_mutation_apply_patch_requires_one_file);
+    RUN_TEST(cli_mutation_apply_patch_supports_up_to_four_files_atomically);
     RUN_TEST(cli_mutation_hook_allows_proven_codex_scratch_write_without_union_session);
     RUN_TEST(cli_hook_augment_bash_pretooluse_reaches_augmenter);
     RUN_TEST(cli_hook_augment_bash_pattern_extractor);

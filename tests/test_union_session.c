@@ -642,6 +642,81 @@ TEST(test_mutation_authorization_requires_session_and_committed_intent) {
     PASS();
 }
 
+TEST(test_mutation_canonicalize_path_handles_uncreated_nested_directories) {
+    SessionFixture fx;
+    ASSERT_EQ(session_fixture_init(&fx), 0);
+
+    char canonical[CBM_MUTATION_CANONICAL_PATH_MAX];
+    char target[CBM_MUTATION_CANONICAL_PATH_MAX];
+
+    /* Case 1: uncreated file in non-existent nested directory structure */
+    snprintf(target, sizeof(target), "%s/new_folder/sub_folder/probe.txt", fx.dir);
+    ASSERT_TRUE(cbm_mutation_canonicalize_path(target, canonical, sizeof(canonical)));
+    ASSERT_TRUE(strstr(canonical, "new_folder/sub_folder/probe.txt") != NULL);
+
+    /* Case 2: relative paths must be rejected */
+    ASSERT_FALSE(cbm_mutation_canonicalize_path("new_folder/probe.txt", canonical, sizeof(canonical)));
+
+    /* Case 3: directory traversal attempt via .. above root must be rejected */
+    ASSERT_FALSE(cbm_mutation_canonicalize_path("/../../escape.txt", canonical, sizeof(canonical)));
+
+    /* Case 4: uncreated path ending in /.. or /. must be rejected */
+    snprintf(target, sizeof(target), "%s/new_folder/..", fx.dir);
+    ASSERT_FALSE(cbm_mutation_canonicalize_path(target, canonical, sizeof(canonical)));
+
+    session_fixture_cleanup(&fx);
+    PASS();
+}
+
+TEST(test_hook_refusal_journal_tracks_and_reports_distinct_from_union_refusals) {
+    SessionFixture fx;
+    ASSERT_EQ(session_fixture_init(&fx), 0);
+
+    char journal_path[256];
+    snprintf(journal_path, sizeof(journal_path), "%s/mutation-journal.sqlite", fx.dir);
+    CbmMutationJournal journal = {0};
+    ASSERT_EQ(cbm_mutation_journal_open(&journal, journal_path), CBM_MUTATION_JOURNAL_OK);
+
+    /* Case 1: Record hook refusal when no horizon is bound yet (pre-session A19) */
+    ASSERT_EQ(cbm_mutation_journal_record_hook_refusal(
+                  &journal, "", CBM_MUTATION_HOST_CODEX, "ctx_presession",
+                  "write_to_file", "/repo/test.txt", CBM_MUTATION_OPERATION_CREATE,
+                  "No valid grounded Union session is bound"),
+              CBM_MUTATION_JOURNAL_OK);
+
+    uint32_t count = 999;
+    ASSERT_EQ(cbm_mutation_journal_count_hook_refusals(&journal, "horizon_empty", &count),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(count, 0);
+
+    /* Case 2: Record hook refusals for an active horizon (A20) */
+    const char *horizon = "horizon_hook_refusal_test";
+    ASSERT_EQ(cbm_mutation_journal_record_hook_refusal(
+                  &journal, horizon, CBM_MUTATION_HOST_CODEX, "ctx_active",
+                  "apply_patch", "/repo/probe.txt", CBM_MUTATION_OPERATION_CREATE,
+                  "Repository write blocked: out of scope"),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(cbm_mutation_journal_record_hook_refusal(
+                  &journal, horizon, CBM_MUTATION_HOST_CODEX, "ctx_active",
+                  "replace_file_content", "/repo/other.txt", CBM_MUTATION_OPERATION_MODIFY,
+                  "Repository write blocked: out of scope"),
+              CBM_MUTATION_JOURNAL_OK);
+
+    /* Case 3: Verify count reaches 2 for this horizon */
+    ASSERT_EQ(cbm_mutation_journal_count_hook_refusals(&journal, horizon, &count),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(count, 2);
+
+    /* Other horizon remains 0 */
+    ASSERT_EQ(cbm_mutation_journal_count_hook_refusals(&journal, "other_horizon", &count),
+              CBM_MUTATION_JOURNAL_OK);
+    ASSERT_EQ(count, 0);
+
+    cbm_mutation_journal_close(&journal);
+    session_fixture_cleanup(&fx);
+    PASS();
+}
+
 SUITE(union_session) {
     RUN_TEST(test_session_open_registered);
     RUN_TEST(test_session_open_unregistered_restricted);
@@ -657,4 +732,6 @@ SUITE(union_session) {
     RUN_TEST(test_session_mutation_context_is_bound_and_not_replayable);
     RUN_TEST(test_mutation_journal_is_durable_and_outcomes_are_idempotent);
     RUN_TEST(test_mutation_authorization_requires_session_and_committed_intent);
+    RUN_TEST(test_mutation_canonicalize_path_handles_uncreated_nested_directories);
+    RUN_TEST(test_hook_refusal_journal_tracks_and_reports_distinct_from_union_refusals);
 }

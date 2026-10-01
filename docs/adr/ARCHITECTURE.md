@@ -7,12 +7,18 @@ tags: [architecture, design-patterns, multi-graph-federation, union-workflows]
 edges:
   - relation: references
     target: "adr:tests"
-updated: 2026-09-28
+  - relation: references
+    target: "adr:cognitive-respiration"
+  - relation: references
+    target: "adr:three-territories"
+  - relation: references
+    target: "adr:two-tier-anchors"
+updated: 2026-10-01
 ---
 # Project Architecture
 
 ## OVERVIEW
-Layered architecture providing persistent codebase knowledge indexing, multi-graph cognitive horizon federation, epistemic authority workflows, and Model Context Protocol (MCP) JSON-RPC tool endpoints over SQLite storage.
+Layered C11 architecture providing persistent codebase knowledge indexing, multi-graph cognitive horizon federation, epistemic authority workflows, and Model Context Protocol (MCP) JSON-RPC tool endpoints over SQLite storage.
 
 ## FOLDER STRUCTURE
 <folder_structure>
@@ -32,12 +38,15 @@ Layered architecture providing persistent codebase knowledge indexing, multi-gra
 └── docs/                         # Technical documentation, ADRs, and feature specifications
     ├── adr/                      # Architectural Decision Records and baseline protocols
     ├── feature/                  # Feature domain documentation and source routing
-    └── _legacy/                  # Archived specifications, superseded PRD drafts, and product logs
+    ├── guide/                    # Consumption, tools reference (35 tools), and workflows
+    ├── PRD/                      # Product requirements, vision (PTBR/V1/V2/V3), and specs
+    ├── audit/                    # Technical audit reports and investment rationales
+    └── archive/                  # Historical specifications and product logs
 ```
 </folder_structure>
 
 ## LAYERS
-- **Transport / Protocol**: MCP JSON-RPC stdio server dispatching 33 tool endpoints across discovery, governance, horizons, and union workflows.
+- **Transport / Protocol**: MCP JSON-RPC stdio server dispatching 35 tool endpoints across discovery (10), inspection (7), horizons (4), and union workflows (14).
 - **Epistemic Authority & Gateways**: `CbmGateway` effect classification, `CbmContractRegistry`, and `CbmSessionRegistry`.
 - **Thematic Knowledge & Doc Plane**: `CbmThemeRegistry`, `CbmBindingLedger`, and `CbmContestRegistry`.
 - **Federation & Admission**: `AdmissionGate`, `TwoTierAnchor` verification against AST, and `EpistemicRecallService`.
@@ -105,13 +114,23 @@ cbm_admission_gate_admit(gate, horizon_id, anchors, count); // Ignores contested
 | Host Operating System | Client PID liveness check for daemon reaper | `OpenProcess` (Windows) / `kill(pid, 0)` (POSIX) |
 | Host OS & WSL2 Boundary | Cross-platform path canonicalization and inode unlinking | `cbm_path_within_root`, `install -m 755` bypassing `ETXTBSY` |
 
-<!-- DOCUMENT MAP: omitted — this baseline ADR has exactly 1 edge. The ## REFERENCES section below carries the relation. Include ## DOCUMENT MAP with Mermaid graph TD only when 2+ edges exist. -->
+## DOCUMENT MAP
+
+```mermaid
+graph TD
+    THIS["Project Architecture"] -->|references| TESTS["Testing Protocol"]
+    THIS -->|references| RESP["Cognitive Respiration (ADR-001)"]
+    THIS -->|references| TERR["Three Territories (ADR-002)"]
+    THIS -->|references| ANCH["Two-Tier Anchors (ADR-003)"]
+```
 
 ## REFERENCES
 
 - [**README.md**](../README.md): Main documentation index.
 - [**TESTS.md**](./TESTS.md): Testing strategies, test suites, and execution commands.
-- [**code_discovery.md**](../feature/code_discovery.md): Symbol discovery, Cypher query, and call-chain tracing tools.
-- [**index_governance.md**](../feature/index_governance.md): Repository indexing, path coverage, and change detection tools.
-- [**multi_graph_federation.md**](../feature/multi_graph_federation.md): Cognitive horizons and speculative overlay tools.
-- [**union_workflow.md**](../feature/union_workflow.md): Epistemic authority, session horizons, and craft theme tools.
+- [**ADR-001-COGNITIVE-RESPIRATION.md**](./ADR-001-COGNITIVE-RESPIRATION.md): Respiration and Seam.
+- [**ADR-002-THREE-TERRITORIES.md**](./ADR-002-THREE-TERRITORIES.md): Realization, Idealization, and Tradition.
+- [**ADR-003-TWO-TIER-ANCHORS.md**](./ADR-003-TWO-TIER-ANCHORS.md): Two-Tier AST Anchors.
+- [**TOOLS_REFERENCE.md**](../guide/TOOLS_REFERENCE.md): Detailed reference for all 35 MCP tools.
+- [**CONSUMPTION.md**](../guide/CONSUMPTION.md): Client onboarding and integration guide.
+- [**mutation_gate.md**](../feature/mutation_gate.md): PreToolUse hook gate and lifecycle seam.

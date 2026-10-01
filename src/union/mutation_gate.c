@@ -86,24 +86,123 @@ bool cbm_change_grounding_is_valid(const CbmChangeGrounding *grounding) {
     return false;
 }
 
+#include <ctype.h>
+
 static bool mutation_path_is_absolute(const char *path) {
     if (!path || !path[0]) return false;
 #ifdef _WIN32
     if (path[0] == '\\' && path[1] == '\\') return true;
-    return path[0] && path[1] == ':' && (path[2] == '/' || path[2] == '\\');
+    if (path[0] == '/') return true;
+    return isalpha((unsigned char)path[0]) && path[1] == ':' &&
+           (path[2] == '/' || path[2] == '\\' || path[2] == '\0');
 #else
     return path[0] == '/';
 #endif
 }
 
+static bool mutation_lexical_normalize(const char *input, char *clean, size_t clean_size) {
+    if (!input || !clean || clean_size == 0U) return false;
+    char temp[CBM_MUTATION_CANONICAL_PATH_MAX];
+    size_t in_len = strlen(input);
+    if (in_len == 0U || in_len >= sizeof(temp)) return false;
+    for (size_t i = 0; i < in_len; i++) {
+        temp[i] = (input[i] == '\\') ? '/' : input[i];
+    }
+    temp[in_len] = '\0';
+
+    /* Reject if leaf ends in . or .. */
+    const char *last_sep = strrchr(temp, '/');
+    if (last_sep) {
+        if (strcmp(last_sep + 1, ".") == 0 || strcmp(last_sep + 1, "..") == 0) {
+            return false;
+        }
+    }
+
+    char prefix[8] = {0};
+    size_t prefix_len = 0U;
+#ifdef _WIN32
+    if (isalpha((unsigned char)temp[0]) && temp[1] == ':') {
+        prefix[0] = temp[0];
+        prefix[1] = ':';
+        prefix[2] = '/';
+        prefix[3] = '\0';
+        prefix_len = (temp[2] == '/') ? 3U : 2U;
+    } else if (temp[0] == '/' && temp[1] == '/') {
+        prefix[0] = '/';
+        prefix[1] = '/';
+        prefix[2] = '\0';
+        prefix_len = 2U;
+    } else if (temp[0] == '/') {
+        prefix[0] = '/';
+        prefix[1] = '\0';
+        prefix_len = 1U;
+    } else {
+        return false;
+    }
+#else
+    if (temp[0] == '/') {
+        prefix[0] = '/';
+        prefix[1] = '\0';
+        prefix_len = 1U;
+    } else {
+        return false;
+    }
+#endif
+
+    const char *cursor = temp + prefix_len;
+    char *segments[128];
+    size_t seg_count = 0U;
+
+    char seg_buf[CBM_MUTATION_CANONICAL_PATH_MAX];
+    size_t seg_buf_len = strlen(cursor);
+    if (seg_buf_len >= sizeof(seg_buf)) return false;
+    memcpy(seg_buf, cursor, seg_buf_len + 1U);
+
+    char *token = strtok(seg_buf, "/");
+    while (token) {
+        if (strcmp(token, ".") == 0) {
+            /* skip dot segment */
+        } else if (strcmp(token, "..") == 0) {
+            if (seg_count > 0U) {
+                seg_count--;
+            } else {
+                return false; /* cannot escape above root */
+            }
+        } else if (token[0] != '\0') {
+            if (seg_count >= sizeof(segments) / sizeof(segments[0])) return false;
+            segments[seg_count++] = token;
+        }
+        token = strtok(NULL, "/");
+    }
+
+    char out[CBM_MUTATION_CANONICAL_PATH_MAX];
+    size_t written = snprintf(out, sizeof(out), "%s", prefix);
+    for (size_t i = 0; i < seg_count; i++) {
+        int w = snprintf(out + written, sizeof(out) - written, "%s%s",
+                         (i > 0U || prefix[prefix_len - 1U] != '/') ? "/" : "",
+                         segments[i]);
+        if (w <= 0 || (size_t)w >= sizeof(out) - written) return false;
+        written += (size_t)w;
+    }
+    if (written + 1U > clean_size) return false;
+    memcpy(clean, out, written + 1U);
+    return true;
+}
+
 bool cbm_mutation_canonicalize_path(const char *path, char *canonical,
-                                   size_t canonical_size) {
+                                    size_t canonical_size) {
     if (!path || !canonical || canonical_size == 0U ||
         !mutation_path_is_absolute(path)) {
         return false;
     }
+
+    char clean[CBM_MUTATION_CANONICAL_PATH_MAX];
+    if (!mutation_lexical_normalize(path, clean, sizeof(clean))) {
+        return false;
+    }
+
     char resolved[CBM_MUTATION_CANONICAL_PATH_MAX];
-    if (cbm_canonical_path(path, resolved, sizeof(resolved))) {
+    if (cbm_canonical_path(clean, resolved, sizeof(resolved))) {
         for (char *cursor = resolved; *cursor; cursor++) {
             if (*cursor == '\\') *cursor = '/';
         }
@@ -113,37 +212,66 @@ bool cbm_mutation_canonicalize_path(const char *path, char *canonical,
         return mutation_path_is_absolute(canonical);
     }
 
-    char parent[CBM_MUTATION_CANONICAL_PATH_MAX];
-    size_t path_len = strlen(path);
-    if (path_len == 0U || path_len >= sizeof(parent)) return false;
-    memcpy(parent, path, path_len + 1U);
-    char *separator = strrchr(parent, '/');
-    char *backslash = strrchr(parent, '\\');
-    if (!separator || (backslash && backslash > separator)) separator = backslash;
-    if (!separator || !separator[1] || strcmp(separator + 1, ".") == 0 ||
-        strcmp(separator + 1, "..") == 0) {
-        return false;
-    }
-    char leaf[CBM_MUTATION_CANONICAL_PATH_MAX];
-    if (strlen(separator + 1) >= sizeof(leaf)) return false;
-    snprintf(leaf, sizeof(leaf), "%s", separator + 1);
-    if (separator == parent) {
-        separator[1] = '\0';
-    } else if (separator == parent + 2 && parent[1] == ':') {
-        separator[1] = '\0';
-    } else {
-        *separator = '\0';
+    char ancestor[CBM_MUTATION_CANONICAL_PATH_MAX];
+    size_t clean_len = strlen(clean);
+    if (clean_len >= sizeof(ancestor)) return false;
+    memcpy(ancestor, clean, clean_len + 1U);
+
+    char resolved_ancestor[CBM_MUTATION_CANONICAL_PATH_MAX];
+    const char *uncreated_tail = NULL;
+
+    while (true) {
+        char *sep = strrchr(ancestor, '/');
+        if (!sep) return false;
+
+        bool is_root = false;
+#ifdef _WIN32
+        if (sep == ancestor + 2 && ancestor[1] == ':') {
+            is_root = true;
+        } else if (sep == ancestor) {
+            is_root = true;
+        }
+#else
+        if (sep == ancestor) {
+            is_root = true;
+        }
+#endif
+        if (is_root) {
+            if (sep == ancestor) {
+                ancestor[1] = '\0';
+            } else {
+                sep[1] = '\0';
+            }
+            if (cbm_canonical_path(ancestor, resolved_ancestor, sizeof(resolved_ancestor))) {
+                uncreated_tail = clean + strlen(ancestor);
+                if (uncreated_tail[0] == '/') uncreated_tail++;
+                break;
+            }
+            return false;
+        }
+
+        *sep = '\0';
+        if (cbm_canonical_path(ancestor, resolved_ancestor, sizeof(resolved_ancestor))) {
+            uncreated_tail = clean + (sep - ancestor) + 1;
+            break;
+        }
     }
 
-    char canonical_parent[CBM_MUTATION_CANONICAL_PATH_MAX];
-    if (!cbm_canonical_path(parent, canonical_parent, sizeof(canonical_parent))) return false;
-    size_t parent_len = strlen(canonical_parent);
-    int written = snprintf(resolved, sizeof(resolved), "%s%s%s", canonical_parent,
-                           parent_len > 0U &&
-                                   (canonical_parent[parent_len - 1U] == '/' ||
-                                    canonical_parent[parent_len - 1U] == '\\')
-                               ? "" : "/",
-                           leaf);
+    for (char *cursor = resolved_ancestor; *cursor; cursor++) {
+        if (*cursor == '\\') *cursor = '/';
+    }
+    size_t anc_len = strlen(resolved_ancestor);
+    while (anc_len > 1U && resolved_ancestor[anc_len - 1U] == '/') {
+#ifdef _WIN32
+        if (anc_len == 3U && resolved_ancestor[1] == ':') break;
+#endif
+        resolved_ancestor[--anc_len] = '\0';
+    }
+
+    int written = snprintf(resolved, sizeof(resolved), "%s%s%s",
+                           resolved_ancestor,
+                           (anc_len > 0U && resolved_ancestor[anc_len - 1U] == '/') ? "" : "/",
+                           uncreated_tail);
     if (written <= 0 || (size_t)written >= sizeof(resolved)) return false;
     for (char *cursor = resolved; *cursor; cursor++) {
         if (*cursor == '\\') *cursor = '/';
@@ -160,8 +288,8 @@ static CbmMutationDecision mutation_refusal(CbmMutationRefusalCode code, const c
     return decision;
 }
 
-static bool mutation_intent_covers_attempt(const CbmChangeGrounding *grounding,
-                                           const CbmMutationAttempt *attempt) {
+bool cbm_mutation_intent_covers_attempt(const CbmChangeGrounding *grounding,
+                                        const CbmMutationAttempt *attempt) {
     if (!grounding || !attempt ||
         !is_nonempty_string(attempt->target_path, sizeof(attempt->target_path))) {
         return false;
@@ -235,7 +363,7 @@ CbmMutationDecision cbm_mutation_authorize_repository_write(
         return mutation_refusal(CBM_MUTATION_REFUSAL_GROUNDING_MISSING,
                                 "The live Union session has no valid scoped change grounding.");
     }
-    if (!mutation_intent_covers_attempt(&binding.grounding, attempt)) {
+    if (!cbm_mutation_intent_covers_attempt(&binding.grounding, attempt)) {
         return mutation_refusal(CBM_MUTATION_REFUSAL_INTENT_SCOPE_MISMATCH,
                                 "The repository write target or operation is outside the session's declared change intent.");
     }

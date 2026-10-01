@@ -73,4 +73,14 @@ CbmMutationJournalResult cbm_mutation_journal_recover_default_if_present(void);
 CbmMutationJournalResult cbm_mutation_journal_mark_default_session_unknown(
     const char *horizon_id);
 
+/* Distinct tracking for PreToolUse host hook vetoes (E05/F05/A19/A20). */
+CbmMutationJournalResult cbm_mutation_journal_record_hook_refusal(
+    CbmMutationJournal *journal, const char *horizon_id,
+    CbmMutationHost host, const char *context_id,
+    const char *tool_name, const char *target_path,
+    CbmMutationOperation operation, const char *reason);
+CbmMutationJournalResult cbm_mutation_journal_count_hook_refusals(
+    CbmMutationJournal *journal, const char *horizon_id,
+    uint32_t *count_out);
+
 #endif /* CBM_UNION_MUTATION_JOURNAL_H */

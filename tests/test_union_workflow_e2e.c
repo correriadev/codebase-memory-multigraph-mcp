@@ -8,6 +8,7 @@
 #include "../src/mcp/mcp_internal.h"
 #include "../src/admission/admission_gate.h"
 #include "../src/union/mutation_gate.h"
+#include "../src/union/mutation_journal.h"
 #include "../src/foundation/compat.h"
 #include "../src/foundation/compat_fs.h"
 #include <yyjson/yyjson.h>
@@ -280,6 +281,129 @@ TEST(test_w01_session_lifecycle) {
     free(get_closed);
 
     cbm_mcp_server_free(srv);
+    PASS();
+}
+
+TEST(test_w01_hook_refusals_reported_distinctly_from_union_refusals) {
+    char temp_dir[256];
+    snprintf(temp_dir, sizeof(temp_dir), "/tmp/cbm_union_hr_XXXXXX");
+    if (!cbm_mkdtemp(temp_dir)) FAIL("temporary directory creation failed");
+    char cache_dir[512];
+    snprintf(cache_dir, sizeof(cache_dir), "%s/cache", temp_dir);
+    char *old_cache = getenv("CBM_CACHE_DIR") ? strdup(getenv("CBM_CACHE_DIR")) : NULL;
+    if (cbm_setenv("CBM_CACHE_DIR", cache_dir, 1) != 0) {
+        free(old_cache);
+        th_rmtree(temp_dir);
+        FAIL("could not isolate mutation journal cache");
+    }
+
+    cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
+    if (!srv) {
+        if (old_cache) cbm_setenv("CBM_CACHE_DIR", old_cache, 1);
+        else cbm_unsetenv("CBM_CACHE_DIR");
+        free(old_cache);
+        th_rmtree(temp_dir);
+        FAIL("MCP server creation failed");
+    }
+
+    /* Open session in restricted mode (no contract) */
+    const char *open_args = "{\"identity\":\"junior_dev\"}";
+    char *open_res = handle_union_session_open(srv, open_args);
+    ASSERT(open_res != NULL);
+    yyjson_doc *doc = yyjson_read(open_res, strlen(open_res), 0);
+    ASSERT(doc != NULL);
+    yyjson_val *payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_hid = yyjson_obj_get(payload, "horizon_id");
+    ASSERT(v_hid && yyjson_is_str(v_hid));
+    char h_id[64];
+    strncpy(h_id, yyjson_get_str(v_hid), sizeof(h_id) - 1);
+    h_id[sizeof(h_id) - 1] = '\0';
+    yyjson_doc_free(doc);
+    free(open_res);
+
+    /* 1. Initially both refusals and hook_refusals are 0 */
+    char get_args[128];
+    snprintf(get_args, sizeof(get_args), "{\"horizon_id\":\"%s\"}", h_id);
+    char *get_res = handle_union_session_get(srv, get_args);
+    ASSERT(get_res != NULL);
+    doc = yyjson_read(get_res, strlen(get_res), 0);
+    ASSERT(doc != NULL);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_ref = yyjson_obj_get(payload, "refusals");
+    ASSERT(v_ref && yyjson_get_int(v_ref) == 0);
+    yyjson_val *v_hr = yyjson_obj_get(payload, "hook_refusals");
+    ASSERT(v_hr && yyjson_get_int(v_hr) == 0);
+    yyjson_doc_free(doc);
+    free(get_res);
+
+    /* 2. Record PreToolUse hook refusal for this horizon */
+    CbmMutationJournal journal = {0};
+    ASSERT(cbm_mutation_journal_open_default(&journal) == CBM_MUTATION_JOURNAL_OK);
+    ASSERT(cbm_mutation_journal_record_hook_refusal(
+               &journal, h_id, CBM_MUTATION_HOST_CODEX, "ctx_test",
+               "apply_patch", "/repo/probe.txt", CBM_MUTATION_OPERATION_CREATE,
+               "Repository write blocked: out of scope") == CBM_MUTATION_JOURNAL_OK);
+    cbm_mutation_journal_close(&journal);
+
+    /* 3. Query session: refusals remains 0, hook_refusals is 1 */
+    get_res = handle_union_session_get(srv, get_args);
+    ASSERT(get_res != NULL);
+    doc = yyjson_read(get_res, strlen(get_res), 0);
+    ASSERT(doc != NULL);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    v_ref = yyjson_obj_get(payload, "refusals");
+    ASSERT(v_ref && yyjson_get_int(v_ref) == 0);
+    v_hr = yyjson_obj_get(payload, "hook_refusals");
+    ASSERT(v_hr && yyjson_get_int(v_hr) == 1);
+    yyjson_doc_free(doc);
+    free(get_res);
+
+    /* 4. Trigger semantic Union action refusal via IRREVERSIBLE in restricted mode */
+    char act_args[256];
+    snprintf(act_args, sizeof(act_args),
+             "{\"horizon_id\":\"%s\",\"action_name\":\"drop_table\",\"effect_class\":\"IRREVERSIBLE\"}", h_id);
+    char *act_res = handle_union_record_action(srv, act_args);
+    ASSERT(act_res != NULL);
+    free(act_res);
+
+    /* 5. Query session: refusals is 1, hook_refusals is still 1 */
+    get_res = handle_union_session_get(srv, get_args);
+    ASSERT(get_res != NULL);
+    doc = yyjson_read(get_res, strlen(get_res), 0);
+    ASSERT(doc != NULL);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    v_ref = yyjson_obj_get(payload, "refusals");
+    ASSERT(v_ref && yyjson_get_int(v_ref) == 1);
+    v_hr = yyjson_obj_get(payload, "hook_refusals");
+    ASSERT(v_hr && yyjson_get_int(v_hr) == 1);
+    yyjson_doc_free(doc);
+    free(get_res);
+
+    /* 6. Close session: verify both refusal counters reported distinctly in closure */
+    char close_args[128];
+    snprintf(close_args, sizeof(close_args), "{\"horizon_id\":\"%s\",\"reason\":\"NORMAL\"}", h_id);
+    char *close_res = handle_union_session_close(srv, close_args);
+    ASSERT(close_res != NULL);
+    doc = yyjson_read(close_res, strlen(close_res), 0);
+    ASSERT(doc != NULL);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    v_ref = yyjson_obj_get(payload, "refusals");
+    ASSERT(v_ref && yyjson_get_int(v_ref) == 1);
+    v_hr = yyjson_obj_get(payload, "hook_refusals");
+    ASSERT(v_hr && yyjson_get_int(v_hr) == 1);
+    yyjson_doc_free(doc);
+    free(close_res);
+
+    cbm_mcp_server_free(srv);
+    if (old_cache) cbm_setenv("CBM_CACHE_DIR", old_cache, 1);
+    else cbm_unsetenv("CBM_CACHE_DIR");
+    free(old_cache);
+    th_rmtree(temp_dir);
     PASS();
 }
 
@@ -1592,6 +1716,7 @@ SUITE(union_workflow_e2e) {
     RUN_TEST(test_union_session_open_requires_and_registers_exact_intent_scope);
     RUN_TEST(test_union_session_open_accepts_exact_rename_endpoints);
     RUN_TEST(test_w01_session_lifecycle);
+    RUN_TEST(test_w01_hook_refusals_reported_distinctly_from_union_refusals);
     RUN_TEST(test_w01_session_close_sweep_and_trace);
     RUN_TEST(test_w01_claims_outside_session_rejected);
     RUN_TEST(test_w01_claim_intent_validation_requires_host_proven_authority);

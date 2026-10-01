@@ -50,7 +50,20 @@ static const char *const MUTATION_JOURNAL_SCHEMA =
     "PRIMARY KEY(horizon_id,operation,path)"
     ");"
     "CREATE UNIQUE INDEX IF NOT EXISTS mutation_session_active_context_idx "
-    "ON mutation_session_authority(host,context_id) WHERE active=1;";
+    "ON mutation_session_authority(host,context_id) WHERE active=1;"
+    "CREATE TABLE IF NOT EXISTS mutation_hook_refusal_journal ("
+    "refusal_id TEXT PRIMARY KEY NOT NULL,"
+    "horizon_id TEXT NOT NULL DEFAULT '',"
+    "host INTEGER NOT NULL,"
+    "context_id TEXT NOT NULL,"
+    "tool_name TEXT NOT NULL,"
+    "target_path TEXT NOT NULL,"
+    "operation INTEGER NOT NULL,"
+    "reason TEXT NOT NULL,"
+    "created_at INTEGER NOT NULL"
+    ");"
+    "CREATE INDEX IF NOT EXISTS mutation_hook_refusal_journal_horizon_idx "
+    "ON mutation_hook_refusal_journal(horizon_id);";
 
 static CbmMutationJournalResult journal_exec(CbmMutationJournal *journal, const char *sql) {
     if (!journal || !journal->db || !sql) return CBM_MUTATION_JOURNAL_ERR_ARGUMENT;
@@ -650,3 +663,83 @@ CbmMutationJournalResult cbm_mutation_journal_mark_default_session_unknown(
     cbm_mutation_journal_close(&journal);
     return result;
 }
+
+static bool refusal_id_generate(char *refusal_id, size_t capacity) {
+    unsigned char random[16];
+    if (!refusal_id || capacity < 38U) return false;
+    sqlite3_randomness((int)sizeof(random), random);
+    int written = snprintf(refusal_id, capacity,
+                           "rf_%02x%02x%02x%02x%02x%02x%02x%02x"
+                           "%02x%02x%02x%02x%02x%02x%02x%02x",
+                           random[0], random[1], random[2], random[3], random[4], random[5],
+                           random[6], random[7], random[8], random[9], random[10], random[11],
+                           random[12], random[13], random[14], random[15]);
+    return written > 0 && (size_t)written < capacity;
+}
+
+CbmMutationJournalResult cbm_mutation_journal_record_hook_refusal(
+    CbmMutationJournal *journal, const char *horizon_id,
+    CbmMutationHost host, const char *context_id,
+    const char *tool_name, const char *target_path,
+    CbmMutationOperation operation, const char *reason) {
+    if (!journal || !journal->db) {
+        return CBM_MUTATION_JOURNAL_ERR_ARGUMENT;
+    }
+    char refusal_id[38];
+    if (!refusal_id_generate(refusal_id, sizeof(refusal_id))) {
+        return CBM_MUTATION_JOURNAL_ERR_STORAGE;
+    }
+    static const char sql[] =
+        "INSERT INTO mutation_hook_refusal_journal "
+        "(refusal_id, horizon_id, host, context_id, tool_name, target_path, operation, reason, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(journal->db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        return CBM_MUTATION_JOURNAL_ERR_STORAGE;
+    }
+    int rc = SQLITE_OK;
+    rc |= sqlite3_bind_text(stmt, 1, refusal_id, -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_text(stmt, 2, horizon_id ? horizon_id : "", -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_int(stmt, 3, (int)host);
+    rc |= sqlite3_bind_text(stmt, 4, context_id ? context_id : "", -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_text(stmt, 5, tool_name ? tool_name : "", -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_text(stmt, 6, target_path ? target_path : "", -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_int(stmt, 7, (int)operation);
+    rc |= sqlite3_bind_text(stmt, 8, reason ? reason : "", -1, SQLITE_TRANSIENT);
+    rc |= sqlite3_bind_int64(stmt, 9, (sqlite3_int64)time(NULL));
+
+    if (rc != SQLITE_OK || sqlite3_step(stmt) != SQLITE_DONE) {
+        sqlite3_finalize(stmt);
+        return CBM_MUTATION_JOURNAL_ERR_STORAGE;
+    }
+    sqlite3_finalize(stmt);
+    return CBM_MUTATION_JOURNAL_OK;
+}
+
+CbmMutationJournalResult cbm_mutation_journal_count_hook_refusals(
+    CbmMutationJournal *journal, const char *horizon_id,
+    uint32_t *count_out) {
+    if (!journal || !journal->db || !count_out) {
+        return CBM_MUTATION_JOURNAL_ERR_ARGUMENT;
+    }
+    *count_out = 0;
+    if (!horizon_id || !horizon_id[0]) {
+        return CBM_MUTATION_JOURNAL_OK;
+    }
+    static const char sql[] =
+        "SELECT COUNT(*) FROM mutation_hook_refusal_journal WHERE horizon_id = ?;";
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(journal->db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        return CBM_MUTATION_JOURNAL_ERR_STORAGE;
+    }
+    if (sqlite3_bind_text(stmt, 1, horizon_id, -1, SQLITE_TRANSIENT) != SQLITE_OK) {
+        sqlite3_finalize(stmt);
+        return CBM_MUTATION_JOURNAL_ERR_STORAGE;
+    }
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        *count_out = (uint32_t)sqlite3_column_int64(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return CBM_MUTATION_JOURNAL_OK;
+}
+

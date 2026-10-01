@@ -808,7 +808,8 @@ bool cbm_hook_path_is_abs(const char *d) {
     if (d[0] == '/') {
         return true;
     }
-    return isalpha((unsigned char)d[0]) && d[1] == ':' && (d[2] == '/' || d[2] == '\0');
+    return isalpha((unsigned char)d[0]) && d[1] == ':' &&
+           (d[2] == '/' || d[2] == '\\' || d[2] == '\0');
 }
 
 /* Walk up from `start`, deriving a project name at each level and querying
@@ -1725,12 +1726,28 @@ static bool ha_mutation_line_is(const char *line, size_t line_size, const char *
            memcmp(line, expected, line_size) == 0;
 }
 
-static bool ha_mutation_parse_single_patch_target(const char *patch, char *path_out,
-                                                  size_t path_out_size,
-                                                  CbmMutationOperation *operation_out) {
-    if (!patch || !path_out || path_out_size == 0U || !operation_out) return false;
+typedef struct {
+    char target_path[CBM_MUTATION_TARGET_PATH_MAX];
+    char secondary_target_path[CBM_MUTATION_TARGET_PATH_MAX];
+    CbmMutationOperation operation;
+} CbmParsedPatchTarget;
+
+typedef enum {
+    HA_PATCH_PARSE_OK = 0,
+    HA_PATCH_PARSE_ERR_SYNTAX = 1,
+    HA_PATCH_PARSE_ERR_CAPACITY = 2
+} HaPatchParseResult;
+
+static HaPatchParseResult ha_mutation_parse_patch_targets(const char *patch,
+                                                          CbmParsedPatchTarget *targets_out,
+                                                          size_t max_targets,
+                                                          size_t *target_count_out) {
+    if (!patch || !targets_out || max_targets == 0U || !target_count_out) {
+        return HA_PATCH_PARSE_ERR_SYNTAX;
+    }
+    *target_count_out = 0U;
     size_t patch_size = strlen(patch);
-    if (patch_size == 0U || patch_size > HA_STDIN_CAP) return false;
+    if (patch_size == 0U || patch_size > HA_STDIN_CAP) return HA_PATCH_PARSE_ERR_SYNTAX;
     while (patch_size > 0U && (patch[patch_size - 1U] == '\n' ||
                               patch[patch_size - 1U] == '\r')) {
         patch_size--;
@@ -1739,11 +1756,8 @@ static bool ha_mutation_parse_single_patch_target(const char *patch, char *path_
     const char *cursor = patch;
     const char *end = patch + patch_size;
     bool first_line = true;
-    bool saw_file = false;
-    bool saw_payload = false;
-    size_t file_count = 0U;
-    CbmMutationOperation operation = CBM_MUTATION_OPERATION_UNKNOWN;
-    char target_path[CBM_MUTATION_TARGET_PATH_MAX] = {0};
+    size_t count = 0U;
+    bool current_saw_payload = false;
 
     while (cursor < end) {
         const char *line_end = memchr(cursor, '\n', (size_t)(end - cursor));
@@ -1752,16 +1766,18 @@ static bool ha_mutation_parse_single_patch_target(const char *patch, char *path_
         if (line_size > 0U && cursor[line_size - 1U] == '\r') line_size--;
 
         if (first_line) {
-            if (!ha_mutation_line_is(cursor, line_size, "*** Begin Patch")) return false;
+            if (!ha_mutation_line_is(cursor, line_size, "*** Begin Patch")) return HA_PATCH_PARSE_ERR_SYNTAX;
             first_line = false;
         } else if (ha_mutation_line_is(cursor, line_size, "*** End Patch")) {
-            if (line_end != end || file_count != 1U || !saw_file) return false;
-            if (!saw_payload && operation != CBM_MUTATION_OPERATION_CREATE) return false;
-            size_t target_path_size = strlen(target_path) + 1U;
-            if (target_path_size > path_out_size) return false;
-            memcpy(path_out, target_path, target_path_size);
-            *operation_out = operation;
-            return true;
+            if (line_end != end || count == 0U) return HA_PATCH_PARSE_ERR_SYNTAX;
+            if (count > 0U && !current_saw_payload &&
+                targets_out[count - 1U].operation != CBM_MUTATION_OPERATION_CREATE &&
+                targets_out[count - 1U].operation != CBM_MUTATION_OPERATION_DELETE &&
+                targets_out[count - 1U].operation != CBM_MUTATION_OPERATION_RENAME) {
+                return HA_PATCH_PARSE_ERR_SYNTAX;
+            }
+            *target_count_out = count;
+            return HA_PATCH_PARSE_OK;
         } else {
             static const struct {
                 const char *prefix;
@@ -1777,42 +1793,76 @@ static bool ha_mutation_parse_single_patch_target(const char *patch, char *path_
                 if (line_size >= prefix_size &&
                     memcmp(cursor, headers[index].prefix, prefix_size) == 0) {
                     recognized_header = true;
-                    if (++file_count != 1U || line_size == prefix_size ||
-                        line_size - prefix_size >= sizeof(target_path)) {
-                        return false;
+                    if (count > 0U) {
+                        if (!current_saw_payload &&
+                            targets_out[count - 1U].operation != CBM_MUTATION_OPERATION_CREATE &&
+                            targets_out[count - 1U].operation != CBM_MUTATION_OPERATION_DELETE &&
+                            targets_out[count - 1U].operation != CBM_MUTATION_OPERATION_RENAME) {
+                            return HA_PATCH_PARSE_ERR_SYNTAX;
+                        }
                     }
-                    memcpy(target_path, cursor + prefix_size, line_size - prefix_size);
-                    target_path[line_size - prefix_size] = '\0';
-                    operation = headers[index].operation;
-                    saw_file = true;
+                    if (count >= max_targets) {
+                        return HA_PATCH_PARSE_ERR_CAPACITY;
+                    }
+                    size_t path_len = line_size - prefix_size;
+                    if (path_len == 0U || path_len >= sizeof(targets_out[count].target_path)) {
+                        return HA_PATCH_PARSE_ERR_SYNTAX;
+                    }
+                    memset(&targets_out[count], 0, sizeof(targets_out[count]));
+                    memcpy(targets_out[count].target_path, cursor + prefix_size, path_len);
+                    targets_out[count].target_path[path_len] = '\0';
+                    targets_out[count].operation = headers[index].operation;
+                    current_saw_payload = false;
+                    count++;
                     break;
+                }
+            }
+            if (!recognized_header && count > 0U) {
+                static const char move_prefix[] = "*** Move to: ";
+                size_t move_prefix_len = sizeof(move_prefix) - 1U;
+                if (line_size >= move_prefix_len &&
+                    memcmp(cursor, move_prefix, move_prefix_len) == 0) {
+                    recognized_header = true;
+                    size_t dest_len = line_size - move_prefix_len;
+                    if (dest_len == 0U ||
+                        dest_len >= sizeof(targets_out[count - 1U].secondary_target_path)) {
+                        return HA_PATCH_PARSE_ERR_SYNTAX;
+                    }
+                    memcpy(targets_out[count - 1U].secondary_target_path,
+                           cursor + move_prefix_len, dest_len);
+                    targets_out[count - 1U].secondary_target_path[dest_len] = '\0';
+                    targets_out[count - 1U].operation = CBM_MUTATION_OPERATION_RENAME;
                 }
             }
             if (line_size >= 3U && memcmp(cursor, "***", 3U) == 0 &&
                 !recognized_header &&
                 !ha_mutation_line_is(cursor, line_size, "*** End of File")) {
-                return false;
+                return HA_PATCH_PARSE_ERR_SYNTAX;
             }
-            if (saw_file && line_size > 0U && !recognized_header &&
+            if (count > 0U && line_size > 0U && !recognized_header &&
                 !ha_mutation_line_is(cursor, line_size, "*** End of File")) {
-                saw_payload = true;
+                current_saw_payload = true;
             }
         }
         cursor = line_end < end ? line_end + 1 : end;
     }
-    return false;
+    return HA_PATCH_PARSE_ERR_SYNTAX;
 }
 
 #ifdef CBM_CLI_ENABLE_TEST_API
 bool cbm_hook_mutation_parse_single_patch_for_testing(const char *patch, char *path_out,
                                                       size_t path_out_size,
                                                       const char **operation_name_out) {
-    CbmMutationOperation operation = CBM_MUTATION_OPERATION_UNKNOWN;
-    if (!operation_name_out ||
-        !ha_mutation_parse_single_patch_target(patch, path_out, path_out_size, &operation)) {
-        return false;
-    }
-    switch (operation) {
+    CbmParsedPatchTarget targets[CBM_MUTATION_SCOPE_MAX_TARGETS];
+    size_t target_count = 0U;
+    if (!operation_name_out || !path_out || path_out_size == 0U) return false;
+    HaPatchParseResult res = ha_mutation_parse_patch_targets(patch, targets, 1U, &target_count);
+    if (res != HA_PATCH_PARSE_OK || target_count != 1U) return false;
+    if (targets[0].secondary_target_path[0] != '\0') return false;
+    size_t target_path_size = strlen(targets[0].target_path) + 1U;
+    if (target_path_size > path_out_size) return false;
+    memcpy(path_out, targets[0].target_path, target_path_size);
+    switch (targets[0].operation) {
         case CBM_MUTATION_OPERATION_CREATE: *operation_name_out = "create"; break;
         case CBM_MUTATION_OPERATION_MODIFY: *operation_name_out = "modify"; break;
         case CBM_MUTATION_OPERATION_DELETE: *operation_name_out = "delete"; break;
@@ -1881,6 +1931,7 @@ bool cbm_hook_mutation_invocation_supported(const char *forced_event,
 static const char *ha_mutation_cbm_mcp_suffix(const char *tool) {
     static const char *const prefixes[] = {
         "mcp__codebase-memory-mcp__",
+        "mcp__codebase_memory_mcp__",
         "mcp__codebase_memory_mcp_",
         "codebase-memory-mcp__",
     };
@@ -1921,6 +1972,53 @@ static bool ha_mutation_readonly_tool(const char *tool) {
         if (strcmp(name, safe_tools[i]) == 0) return true;
     }
     return ha_mutation_cbm_union_tool(name);
+}
+
+static bool ha_mutation_coordination_tool(const char *tool) {
+    if (!tool || !tool[0]) return false;
+    static const char *const coord_tools[] = {
+        "collaboration.send_message",
+        "send_message",
+        "invoke_subagent",
+        "manage_subagents",
+        "define_subagent",
+        "schedule",
+        "ask_question",
+        "read_url_content",
+        "read_browser_page",
+        "search_web",
+        "generate_image",
+        "list_resources",
+        "read_resource",
+    };
+    const char *name = ha_mutation_cbm_mcp_suffix(tool);
+    if (!name) name = tool;
+    for (size_t i = 0; i < sizeof(coord_tools) / sizeof(coord_tools[0]); i++) {
+        if (strcmp(name, coord_tools[i]) == 0) return true;
+    }
+    return false;
+}
+
+/* Deliberately small shell read grammar. Never exempt the shell tool itself:
+ * substitutions, pipelines, redirects and compound commands can hide writes. */
+static bool ha_mutation_readonly_shell(const char *tool, yyjson_val *input) {
+    if (strcmp(tool, "exec_command") != 0 && strcmp(tool, "Bash") != 0) return false;
+    /* A caller-selected interpreter can give an innocent command another meaning. */
+    if (ha_obj_str(input, "shell")) return false;
+    const char *command = ha_obj_str(input, strcmp(tool, "exec_command") == 0
+                                              ? "cmd" : "command");
+    if (!command || !command[0] || strpbrk(command, "\"'`$;&|<>(){}\r\n")) return false;
+    if (strcmp(command, "rg --files") == 0) return true;
+    const char *path = NULL;
+    static const char literal_prefix[] = "Get-Content -LiteralPath ";
+    static const char read_prefix[] = "Get-Content ";
+    if (strncmp(command, literal_prefix, sizeof(literal_prefix) - 1) == 0) {
+        path = command + sizeof(literal_prefix) - 1;
+    } else if (strncmp(command, read_prefix, sizeof(read_prefix) - 1) == 0) {
+        path = command + sizeof(read_prefix) - 1;
+    }
+    /* A single literal filename, with no parameter binding or glob expansion. */
+    return path && path[0] && path[0] != '-' && !strpbrk(path, " \t*?[],");
 }
 
 static CbmMutationOperation ha_mutation_operation_for_tool(const char *tool) {
@@ -2127,6 +2225,27 @@ static const char *ha_mutation_refusal_reason(const CbmMutationDecision *decisio
                                       : "Repository write blocked by the CBM mutation gate.";
 }
 
+static char *ha_mutation_refuse_and_journal(
+    CbmMutationJournal *journal,
+    const char *dialect_name,
+    const char *horizon_id,
+    const CbmMutationAttempt *attempt,
+    const char *tool_name,
+    const CbmMutationDecision *decision) {
+    char refusal_reason[768];
+    const char *reason = ha_mutation_refusal_reason(
+        decision, attempt, refusal_reason, sizeof(refusal_reason));
+    if (journal && journal->db) {
+        (void)cbm_mutation_journal_record_hook_refusal(
+            journal, horizon_id ? horizon_id : "",
+            attempt->host_context.host, attempt->host_context.context_id,
+            tool_name ? tool_name : "", attempt->target_path,
+            attempt->operation, reason);
+        cbm_mutation_journal_close(journal);
+    }
+    return cbm_hook_mutation_deny_response_for_dialect(dialect_name, reason);
+}
+
 static char *ha_mutation_process(cbm_mcp_server_t *srv, const char *input_json,
                                  const char *forced_event,
                                  ha_lifecycle_dialect_t dialect) {
@@ -2172,83 +2291,146 @@ static char *ha_mutation_process(cbm_mcp_server_t *srv, const char *input_json,
     }
     /* Pure reads pass through without touching Union session state or the
      * mutation journal. Unknown tool names remain possible writes. */
-    if (ha_mutation_readonly_tool(tool_name)) {
+    if (ha_mutation_readonly_tool(tool_name) ||
+        ha_mutation_coordination_tool(tool_name) ||
+        ha_mutation_readonly_shell(tool_name, tool_input)) {
         yyjson_doc_free(doc);
         return NULL;
     }
 
-    CbmMutationAttempt attempt = {0};
-    attempt.host_context.host = dialect == HA_DIALECT_ANTIGRAVITY_MUTATION
-                                    ? CBM_MUTATION_HOST_ANTIGRAVITY
-                                    : CBM_MUTATION_HOST_CODEX;
-    attempt.operation = ha_mutation_operation_for_tool(tool_name);
-    char patch_target[CBM_MUTATION_TARGET_PATH_MAX] = {0};
-    const char *explicit_target = NULL;
+    CbmMutationAttempt attempts[CBM_MUTATION_SCOPE_MAX_TARGETS + 1];
+    size_t attempt_count = 0U;
+
+    CbmMutationHost host = dialect == HA_DIALECT_ANTIGRAVITY_MUTATION
+                               ? CBM_MUTATION_HOST_ANTIGRAVITY
+                               : CBM_MUTATION_HOST_CODEX;
+
     if (strcmp(tool_name, "apply_patch") == 0) {
         const char *patch = ha_obj_str(tool_input, "input");
         if (!patch) patch = ha_obj_str(tool_input, "patch");
-        if (ha_mutation_parse_single_patch_target(patch, patch_target,
-                                                  sizeof(patch_target),
-                                                  &attempt.operation)) {
-            explicit_target = patch_target;
-        } else {
-            attempt.operation = CBM_MUTATION_OPERATION_UNKNOWN;
+        CbmParsedPatchTarget parsed_targets[5];
+        size_t parsed_count = 0U;
+        HaPatchParseResult parse_res = ha_mutation_parse_patch_targets(
+            patch, parsed_targets, sizeof(parsed_targets) / sizeof(parsed_targets[0]),
+            &parsed_count);
+        if (parse_res == HA_PATCH_PARSE_ERR_CAPACITY || parsed_count > CBM_MUTATION_SCOPE_MAX_TARGETS) {
+            yyjson_doc_free(doc);
+            return cbm_hook_mutation_deny_response_for_dialect(
+                dialect_name, "Patch exceeds the maximum supported targets (4); repository write blocked.");
         }
-    }
-    if (attempt.operation == CBM_MUTATION_OPERATION_RENAME) {
-        const char *rename_source = NULL;
-        const char *rename_destination = NULL;
-        if (!ha_mutation_rename_paths(tool_input, &rename_source, &rename_destination)) {
-            attempt.operation = CBM_MUTATION_OPERATION_UNKNOWN;
-            attempt.scope = CBM_MUTATION_SCOPE_UNKNOWN;
-        } else {
-            CbmMutationScope source_scope = ha_mutation_scope_for_target(
-                srv, root, tool_input, rename_source, attempt.operation,
-                attempt.target_path, sizeof(attempt.target_path));
-            CbmMutationScope destination_scope = ha_mutation_scope_for_target(
-                srv, root, tool_input, rename_destination, attempt.operation,
-                attempt.secondary_target_path, sizeof(attempt.secondary_target_path));
-            if (source_scope == CBM_MUTATION_SCOPE_UNKNOWN ||
-                destination_scope == CBM_MUTATION_SCOPE_UNKNOWN) {
-                attempt.scope = CBM_MUTATION_SCOPE_UNKNOWN;
-            } else if (source_scope == CBM_MUTATION_SCOPE_REPOSITORY ||
-                       destination_scope == CBM_MUTATION_SCOPE_REPOSITORY) {
-                attempt.scope = CBM_MUTATION_SCOPE_REPOSITORY;
-            } else if (source_scope == CBM_MUTATION_SCOPE_OUTSIDE &&
-                       destination_scope == CBM_MUTATION_SCOPE_OUTSIDE) {
-                attempt.scope = CBM_MUTATION_SCOPE_OUTSIDE;
+        if (parse_res != HA_PATCH_PARSE_OK || parsed_count == 0U) {
+            yyjson_doc_free(doc);
+            return cbm_hook_mutation_deny_response_for_dialect(
+                dialect_name, "Malformed patch format: failed to parse patch targets.");
+        }
+        for (size_t i = 0; i < parsed_count; i++) {
+            memset(&attempts[i], 0, sizeof(attempts[i]));
+            attempts[i].host_context.host = host;
+            attempts[i].operation = parsed_targets[i].operation;
+            if (attempts[i].operation == CBM_MUTATION_OPERATION_RENAME) {
+                CbmMutationScope source_scope = ha_mutation_scope_for_target(
+                    srv, root, tool_input, parsed_targets[i].target_path, attempts[i].operation,
+                    attempts[i].target_path, sizeof(attempts[i].target_path));
+                CbmMutationScope destination_scope = ha_mutation_scope_for_target(
+                    srv, root, tool_input, parsed_targets[i].secondary_target_path, attempts[i].operation,
+                    attempts[i].secondary_target_path, sizeof(attempts[i].secondary_target_path));
+                if (source_scope == CBM_MUTATION_SCOPE_UNKNOWN ||
+                    destination_scope == CBM_MUTATION_SCOPE_UNKNOWN) {
+                    attempts[i].scope = CBM_MUTATION_SCOPE_UNKNOWN;
+                } else if (source_scope == CBM_MUTATION_SCOPE_REPOSITORY ||
+                           destination_scope == CBM_MUTATION_SCOPE_REPOSITORY) {
+                    attempts[i].scope = CBM_MUTATION_SCOPE_REPOSITORY;
+                } else if (source_scope == CBM_MUTATION_SCOPE_OUTSIDE &&
+                           destination_scope == CBM_MUTATION_SCOPE_OUTSIDE) {
+                    attempts[i].scope = CBM_MUTATION_SCOPE_OUTSIDE;
+                } else {
+                    attempts[i].scope = CBM_MUTATION_SCOPE_UNKNOWN;
+                }
             } else {
-                attempt.scope = CBM_MUTATION_SCOPE_UNKNOWN;
+                attempts[i].scope = ha_mutation_scope_for_target(
+                    srv, root, tool_input, parsed_targets[i].target_path,
+                    attempts[i].operation,
+                    attempts[i].target_path,
+                    sizeof(attempts[i].target_path));
+            }
+            if (attempts[i].operation == CBM_MUTATION_OPERATION_CREATE && attempts[i].target_path[0] &&
+                cbm_file_exists(attempts[i].target_path)) {
+                attempts[i].operation = CBM_MUTATION_OPERATION_MODIFY;
             }
         }
+        attempt_count = parsed_count;
     } else {
-        attempt.scope = ha_mutation_scope_for_target(srv, root, tool_input, explicit_target,
-                                                     attempt.operation,
-                                                     attempt.target_path,
-                                                     sizeof(attempt.target_path));
+        memset(&attempts[0], 0, sizeof(attempts[0]));
+        attempts[0].host_context.host = host;
+        attempts[0].operation = ha_mutation_operation_for_tool(tool_name);
+        if (attempts[0].operation == CBM_MUTATION_OPERATION_RENAME) {
+            const char *rename_source = NULL;
+            const char *rename_destination = NULL;
+            if (!ha_mutation_rename_paths(tool_input, &rename_source, &rename_destination)) {
+                attempts[0].operation = CBM_MUTATION_OPERATION_UNKNOWN;
+                attempts[0].scope = CBM_MUTATION_SCOPE_UNKNOWN;
+            } else {
+                CbmMutationScope source_scope = ha_mutation_scope_for_target(
+                    srv, root, tool_input, rename_source, attempts[0].operation,
+                    attempts[0].target_path, sizeof(attempts[0].target_path));
+                CbmMutationScope destination_scope = ha_mutation_scope_for_target(
+                    srv, root, tool_input, rename_destination, attempts[0].operation,
+                    attempts[0].secondary_target_path, sizeof(attempts[0].secondary_target_path));
+                if (source_scope == CBM_MUTATION_SCOPE_UNKNOWN ||
+                    destination_scope == CBM_MUTATION_SCOPE_UNKNOWN) {
+                    attempts[0].scope = CBM_MUTATION_SCOPE_UNKNOWN;
+                } else if (source_scope == CBM_MUTATION_SCOPE_REPOSITORY ||
+                           destination_scope == CBM_MUTATION_SCOPE_REPOSITORY) {
+                    attempts[0].scope = CBM_MUTATION_SCOPE_REPOSITORY;
+                } else if (source_scope == CBM_MUTATION_SCOPE_OUTSIDE &&
+                           destination_scope == CBM_MUTATION_SCOPE_OUTSIDE) {
+                    attempts[0].scope = CBM_MUTATION_SCOPE_OUTSIDE;
+                } else {
+                    attempts[0].scope = CBM_MUTATION_SCOPE_UNKNOWN;
+                }
+            }
+        } else {
+            attempts[0].scope = ha_mutation_scope_for_target(
+                srv, root, tool_input, NULL,
+                attempts[0].operation,
+                attempts[0].target_path,
+                sizeof(attempts[0].target_path));
+        }
+        if (attempts[0].operation == CBM_MUTATION_OPERATION_CREATE && attempts[0].target_path[0] &&
+            cbm_file_exists(attempts[0].target_path)) {
+            attempts[0].operation = CBM_MUTATION_OPERATION_MODIFY;
+        }
+        attempt_count = 1U;
     }
-    if (attempt.operation == CBM_MUTATION_OPERATION_CREATE && attempt.target_path[0] &&
-        cbm_file_exists(attempt.target_path)) {
-        attempt.operation = CBM_MUTATION_OPERATION_MODIFY;
+
+    bool all_outside = true;
+    for (size_t i = 0; i < attempt_count; i++) {
+        if (cbm_mutation_classify(attempts[i].operation, attempts[i].scope) !=
+            CBM_MUTATION_EFFECT_OUTSIDE_REPOSITORY) {
+            all_outside = false;
+            break;
+        }
     }
-    if (cbm_mutation_classify(attempt.operation, attempt.scope) ==
-        CBM_MUTATION_EFFECT_OUTSIDE_REPOSITORY) {
+    if (all_outside) {
         yyjson_doc_free(doc);
         return NULL;
     }
-    if (!ha_string_copy_bounded(attempt.host_context.context_id,
-                                sizeof(attempt.host_context.context_id), context_id)) {
-        yyjson_doc_free(doc);
-        return cbm_hook_mutation_deny_response_for_dialect(
-            dialect_name, "The host context identity is missing or exceeds the supported size.");
-    }
+
     const char *attempt_id = ha_obj_str(root, "tool_call_id");
     if (!attempt_id) attempt_id = ha_obj_str(root, "call_id");
     if (!attempt_id) attempt_id = ha_obj_str(root, "stepIdx");
-    if (attempt_id) {
-        (void)snprintf(attempt.attempt_id, sizeof(attempt.attempt_id), "%s", attempt_id);
-    } else {
-        (void)snprintf(attempt.attempt_id, sizeof(attempt.attempt_id), "%s", tool_name);
+    for (size_t i = 0; i < attempt_count; i++) {
+        if (!ha_string_copy_bounded(attempts[i].host_context.context_id,
+                                    sizeof(attempts[i].host_context.context_id), context_id)) {
+            yyjson_doc_free(doc);
+            return cbm_hook_mutation_deny_response_for_dialect(
+                dialect_name, "The host context identity is missing or exceeds the supported size.");
+        }
+        if (attempt_id) {
+            (void)snprintf(attempts[i].attempt_id, sizeof(attempts[i].attempt_id), "%s", attempt_id);
+        } else {
+            (void)snprintf(attempts[i].attempt_id, sizeof(attempts[i].attempt_id), "%s", tool_name);
+        }
     }
     yyjson_doc_free(doc);
 
@@ -2257,14 +2439,75 @@ static char *ha_mutation_process(cbm_mcp_server_t *srv, const char *input_json,
         return cbm_hook_mutation_deny_response_for_dialect(
             dialect_name, "The durable CBM mutation journal is unavailable; write blocked.");
     }
-    CbmMutationDecision decision = cbm_mutation_authorize_repository_write(
-        &journal, &attempt);
+
+    CbmMutationSessionBinding binding = {0};
+    bool other_context = false;
+    CbmMutationJournalResult lookup = cbm_mutation_journal_find_session(
+        &journal, &attempts[0].host_context, &binding, &other_context);
+    if (lookup == CBM_MUTATION_JOURNAL_ERR_NOT_FOUND) {
+        CbmMutationDecision decision = {0};
+        decision.refusal.code = other_context ? CBM_MUTATION_REFUSAL_SESSION_STALE
+                                              : CBM_MUTATION_REFUSAL_SESSION_UNBOUND;
+        return ha_mutation_refuse_and_journal(
+            &journal, dialect_name, "", &attempts[0], tool_name, &decision);
+    }
+    if (lookup != CBM_MUTATION_JOURNAL_OK) {
+        cbm_mutation_journal_close(&journal);
+        return cbm_hook_mutation_deny_response_for_dialect(
+            dialect_name, "Durable Union session authority could not be read.");
+    }
+    if (!cbm_change_grounding_is_valid(&binding.grounding)) {
+        CbmMutationDecision decision = {0};
+        decision.refusal.code = CBM_MUTATION_REFUSAL_GROUNDING_MISSING;
+        return ha_mutation_refuse_and_journal(
+            &journal, dialect_name, binding.horizon_id, &attempts[0], tool_name, &decision);
+    }
+
+    /* Atomic pre-validation: verify all attempts before committing any intent */
+    for (size_t i = 0; i < attempt_count; i++) {
+        CbmMutationEffect effect = cbm_mutation_classify(attempts[i].operation, attempts[i].scope);
+        if (effect == CBM_MUTATION_EFFECT_READ || effect == CBM_MUTATION_EFFECT_OUTSIDE_REPOSITORY) {
+            continue;
+        }
+        if (effect != CBM_MUTATION_EFFECT_REPOSITORY_WRITE &&
+            effect != CBM_MUTATION_EFFECT_AMBIGUOUS) {
+            CbmMutationDecision decision = {0};
+            decision.refusal.code = CBM_MUTATION_REFUSAL_EFFECT_UNKNOWN;
+            return ha_mutation_refuse_and_journal(
+                &journal, dialect_name, binding.horizon_id, &attempts[i], tool_name, &decision);
+        }
+        if (!cbm_mutation_intent_covers_attempt(&binding.grounding, &attempts[i])) {
+            CbmMutationDecision decision = {0};
+            decision.refusal.code = CBM_MUTATION_REFUSAL_INTENT_SCOPE_MISMATCH;
+            return ha_mutation_refuse_and_journal(
+                &journal, dialect_name, binding.horizon_id, &attempts[i], tool_name, &decision);
+        }
+    }
+
+    /* All attempts verified! Commit write intents for all repository writes */
+    for (size_t i = 0; i < attempt_count; i++) {
+        CbmMutationEffect effect = cbm_mutation_classify(attempts[i].operation, attempts[i].scope);
+        if (effect != CBM_MUTATION_EFFECT_REPOSITORY_WRITE) {
+            continue;
+        }
+        char write_id[CBM_MUTATION_WRITE_ID_MAX] = {0};
+        CbmMutationJournalResult commit_res = cbm_mutation_journal_commit_intent(
+            &journal, binding.horizon_id, &attempts[i], &binding.grounding,
+            write_id, sizeof(write_id));
+        if (commit_res != CBM_MUTATION_JOURNAL_OK) {
+            const char *reason_str = "The write intent could not be committed durably.";
+            (void)cbm_mutation_journal_record_hook_refusal(
+                &journal, binding.horizon_id, attempts[i].host_context.host,
+                attempts[i].host_context.context_id, tool_name,
+                attempts[i].target_path, attempts[i].operation, reason_str);
+            cbm_mutation_journal_close(&journal);
+            return cbm_hook_mutation_deny_response_for_dialect(
+                dialect_name, reason_str);
+        }
+    }
+
     cbm_mutation_journal_close(&journal);
-    if (decision.permitted) return NULL;
-    char refusal_reason[768];
-    return cbm_hook_mutation_deny_response_for_dialect(
-        dialect_name, ha_mutation_refusal_reason(&decision, &attempt, refusal_reason,
-                                                 sizeof(refusal_reason)));
+    return NULL;
 }
 
 static char *ha_process(cbm_mcp_server_t *srv, const char *input_json, const char *forced_event,

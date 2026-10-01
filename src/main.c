@@ -3179,9 +3179,24 @@ int main(int argc, char **argv) {
         }
         (void)fprintf(stderr, "codebase-memory-mcp: %s\n",
                       formatted ? message : "client exact-build admission failed");
-        if (role == CBM_DAEMON_PROCESS_HOOK_CLIENT &&
-            client_cohort_status == CBM_VERSION_COHORT_CONFLICT) {
-            main_hook_report_conflicted_daemon(hook_dialect);
+        if (role == CBM_DAEMON_PROCESS_HOOK_CLIENT) {
+            if (cbm_hook_mutation_invocation_supported(hook_event, hook_dialect)) {
+                char *input = cbm_hook_augment_read_stdin();
+                if (input) {
+                    char *resp = cbm_hook_augment_process_for(NULL, input, hook_event, hook_dialect);
+                    if (!resp) {
+                        free(input);
+                        (void)main_version_cohort_close(&client_cohort_lease, &client_cohort_manager);
+                        cbm_daemon_ipc_endpoint_free(endpoint);
+                        return EXIT_SUCCESS;
+                    }
+                    free(resp);
+                    free(input);
+                }
+            }
+            if (client_cohort_status == CBM_VERSION_COHORT_CONFLICT) {
+                main_hook_report_conflicted_daemon(hook_dialect);
+            }
         }
         main_hook_emit_mutation_denial(
             hook_event, hook_dialect,
@@ -3198,6 +3213,19 @@ int main(int argc, char **argv) {
             endpoint, &identity, MAIN_HOOK_CONNECT_TIMEOUT_MS, &hook_connect);
         cbm_daemon_ipc_endpoint_free(endpoint);
         if (!hook_client) {
+            if (cbm_hook_mutation_invocation_supported(hook_event, hook_dialect)) {
+                char *input = cbm_hook_augment_read_stdin();
+                if (input) {
+                    char *resp = cbm_hook_augment_process_for(NULL, input, hook_event, hook_dialect);
+                    if (!resp) {
+                        free(input);
+                        (void)main_version_cohort_close(&client_cohort_lease, &client_cohort_manager);
+                        return EXIT_SUCCESS;
+                    }
+                    free(resp);
+                    free(input);
+                }
+            }
             if (hook_connect.status == CBM_DAEMON_RUNTIME_CONNECT_CONFLICT) {
                 char conflict_detail[CBM_DAEMON_CONFLICT_MESSAGE_SIZE];
                 if (cbm_daemon_conflict_format(&hook_connect.conflict, conflict_detail,
