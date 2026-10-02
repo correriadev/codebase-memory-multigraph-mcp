@@ -1,0 +1,96 @@
+[
+  {
+    "client": "A",
+    "method": "initialize",
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "protocolVersion": "2024-11-05",
+        "serverInfo": {
+          "name": "codebase-memory-mcp",
+          "version": "dev"
+        },
+        "capabilities": {
+          "tools": {
+            "listChanged": false
+          },
+          "prompts": {
+            "listChanged": false
+          }
+        },
+        "instructions": "Graph first: search_graph for symbols, trace_path for relationships, get_code_snippet for source, query_graph for multi-hop, and get_architecture for overview. Use search_code/grep for literals or coverage gaps. Indexes auto-refresh. Check cited-path coverage; paginate."
+      }
+    }
+  },
+  {
+    "time": "2026-10-01T22:04:16.596211+00:00",
+    "client": "A",
+    "tool": "list_projects",
+    "arguments": {
+      "detail": "stats",
+      "format": "json"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"projects\":[{\"name\":\"C-Users-corre-Documents-codebase-memory-mcp\",\"root_path\":\"C:/Users/corre/Documents/codebase-memory-mcp\",\"branch\":\"main\",\"nodes\":28394,\"edges\":144418,\"size_bytes\":154271744},{\"name\":\"C-Users-corre-Documents-harness-kit\",\"root_path\":\"C:/Users/corre/Documents/harness-kit\",\"branch\":\"feature/web-sdk\",\"nodes\":4457,\"edges\":14274,\"size_bytes\":17039360},{\"name\":\"C-Users-corre-Documents-harness-memory\",\"root_path\":\"C:/Users/corre/Documents/harness-memory\",\"branch\":\"feature/project-link\",\"nodes\":5013,\"edges\":24654,\"size_bytes\":25821184},{\"name\":\"C-Users-corre-Documents-minecraft-agent\",\"root_path\":\"C:/Users/corre/Documents/minecraft-agent\",\"branch\":\"main\",\"nodes\":68002,\"edges\":71517,\"size_bytes\":171704320},{\"name\":\"cbm_e2e_121e5b05\",\"root_path\":\"C:\\\\Users\\\\corre\\\\AppData\\\\Local\\\\Temp\\\\proj_121e5b05_k2s8qcbu\",\"nodes\":20,\"edges\":0,\"size_bytes\":40960}],\"total\":5,\"offset\":0,\"limit\":50,\"returned\":5,\"has_more\":false}"
+          }
+        ],
+        "structuredContent": {
+          "projects": [
+            {
+              "name": "C-Users-corre-Documents-codebase-memory-mcp",
+              "root_path": "C:/Users/corre/Documents/codebase-memory-mcp",
+              "branch": "main",
+              "nodes": 28394,
+              "edges": 144418,
+              "size_bytes": 154271744
+            },
+            {
+              "name": "C-Users-corre-Documents-harness-kit",
+              "root_path": "C:/Users/corre/Documents/harness-kit",
+              "branch": "feature/web-sdk",
+              "nodes": 4457,
+              "edges": 14274,
+              "size_bytes": 17039360
+            },
+            {
+              "name": "C-Users-corre-Documents-harness-memory",
+              "root_path": "C:/Users/corre/Documents/harness-memory",
+              "branch": "feature/project-link",
+              "nodes": 5013,
+              "edges": 24654,
+              "size_bytes": 25821184
+            },
+            {
+              "name": "C-Users-corre-Documents-minecraft-agent",
+              "root_path": "C:/Users/corre/Documents/minecraft-agent",
+              "branch": "main",
+              "nodes": 68002,
+              "edges": 71517,
+              "size_bytes": 171704320
+            },
+            {
+              "name": "cbm_e2e_121e5b05",
+              "root_path": "C:\\Users\\corre\\AppData\\Local\\Temp\\proj_121e5b05_k2s8qcbu",
+              "nodes": 20,
+              "edges": 0,
+              "size_bytes": 40960
+            }
+          ],
+          "total": 5,
+          "offset": 0,
+          "limit": 50,
+          "returned": 5,
+          "has_more": false
+        },
+        "isError": false
+      }
+    }
+  }
+]

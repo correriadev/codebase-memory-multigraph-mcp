@@ -57,6 +57,9 @@ int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const c
 /* Transparently fetches or reopens an SQLite handle with LRU eviction */
 int cbm_horizon_pool_get(HorizonConnectionPool *pool, const char *horizon_id, sqlite3 **out_db);
 
+/* Persist an explicit project binding; refuses reassignment to another project. */
+int cbm_horizon_bind_project(sqlite3 *db, const char *project);
+
 /* Transition horizon status */
 int cbm_horizon_set_status(HorizonConnectionPool *pool, const char *horizon_id, HorizonStatus status);
 

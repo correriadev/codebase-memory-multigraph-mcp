@@ -112,6 +112,7 @@ char *cbm_mcp_handle_federated_search_graph(cbm_mcp_server_t *srv, const char *a
 char *cbm_mcp_handle_federated_query_graph(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 char *cbm_mcp_handle_federated_trace_path(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 char *handle_create_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
+char *handle_list_horizons(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool, AdmissionGate *gate);
 char *handle_sync_horizon_spec(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 char *handle_validate_scope_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
@@ -137,5 +138,4 @@ CbmContestRegistry *cbm_mcp_server_contest_registry(cbm_mcp_server_t *srv);
 HorizonConnectionPool *cbm_mcp_server_horizon_pool(cbm_mcp_server_t *srv);
 
 #endif
-
 

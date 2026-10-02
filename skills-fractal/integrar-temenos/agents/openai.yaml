@@ -1,0 +1,6 @@
+interface:
+  display_name: "Integrar Temenos"
+  short_description: "Consolide memória e preserve perguntas abertas"
+  default_prompt: "Use $integrar-temenos para consolidar ou retomar o registro desta conversa sem forçar uma conclusão."
+policy:
+  allow_implicit_invocation: false

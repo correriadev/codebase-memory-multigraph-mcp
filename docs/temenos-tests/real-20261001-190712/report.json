@@ -1,0 +1,68 @@
+{
+  "started_at": "2026-10-01T22:07:12.050340+00:00",
+  "binary": "C:\\Users\\corre\\.local\\bin\\codebase-memory-mcp.exe",
+  "binary_sha256": "2096604345b0a4ce4410d14bc476cc2f85c52e8a426a563ac5822f087551c978",
+  "project": "C-Users-corre-Documents-harness-kit",
+  "output": "C:\\Users\\corre\\Documents\\codebase-memory-mcp\\docs\\temenos-tests\\real-20261001-190712",
+  "checks": {
+    "required_tools": {
+      "passed": true,
+      "detail": null
+    },
+    "existing_real_project": {
+      "passed": true,
+      "detail": null
+    },
+    "real_decision_evidence": {
+      "passed": true,
+      "detail": null
+    },
+    "compiled_revision_1": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_fractal_real_20261001_190712",
+        "file_path": "docs/temenos/h_fractal_real_20261001_190712/revisoes/r001.md",
+        "nodes_compiled": 6,
+        "edges_compiled": 8,
+        "sections_indexed": 3
+      }
+    },
+    "connected_revision_1": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_fractal_real_20261001_190712",
+        "isolated_nodes_count": 0,
+        "unresolved_dependencies_count": 0,
+        "status": "VALID"
+      }
+    },
+    "parallel_content_recovery": {
+      "passed": true,
+      "detail": null
+    }
+  },
+  "scope": "Existing real project; new horizon; no index, promotion or base mutation",
+  "reader_inputs": [
+    "project",
+    "horizon_id"
+  ],
+  "reader_reads_document": false,
+  "project_catalog_entry": {
+    "name": "C-Users-corre-Documents-harness-kit",
+    "root_path": "C:/Users/corre/Documents/harness-kit",
+    "branch": "feature/web-sdk",
+    "nodes": 4457,
+    "edges": 14274,
+    "size_bytes": 17039360
+  },
+  "source": {
+    "path": "C:\\Users\\corre\\Documents\\harness-kit\\docs\\temenos\\t-20261001-1754\\registro.md",
+    "sha256": "b07933f4f5f47b33efefa34e59d97c5b22c0f45de2dba50ea0b3f5ae2ebf3e86"
+  },
+  "horizon_id": "h_fractal_real_20261001_190712",
+  "horizon_owner_pid": 19400,
+  "result": "FAILED",
+  "error": "AttributeError(\"'NoneType' object has no attribute 'get'\")"
+}

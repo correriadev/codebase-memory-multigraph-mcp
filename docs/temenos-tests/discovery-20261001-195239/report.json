@@ -1,0 +1,47 @@
+{
+  "project": "C-Users-corre-Documents-harness-kit",
+  "reader_inputs": [
+    "project"
+  ],
+  "reads_human_files": false,
+  "reads_cache_files": false,
+  "mutations": false,
+  "checks": {
+    "explicit_catalog_exposed": false,
+    "project_only_discovers_test_horizon": false
+  },
+  "horizon_tools": [
+    {
+      "name": "create_horizon",
+      "description": "Create or update an ephemeral cognitive horizon overlay with speculative nodes and virtual edges"
+    },
+    {
+      "name": "promote_horizon",
+      "description": "Validate Two-Tier anchors and admit a horizon into the base graph"
+    },
+    {
+      "name": "sync_horizon_spec",
+      "description": "Sync and compile tactical specification markdown into an ephemeral horizon overlay"
+    },
+    {
+      "name": "validate_scope_horizon",
+      "description": "Validate scope adjacency and detect isolated dangling nodes in a horizon overlay"
+    },
+    {
+      "name": "union_session_get",
+      "description": "Query the live state of an open session horizon"
+    },
+    {
+      "name": "union_session_close",
+      "description": "Close a session horizon, emitting a typed closure event and destroying speculative content"
+    },
+    {
+      "name": "union_claim_capture",
+      "description": "Capture a conversational claim into a session horizon as PROPOSED (Scope C03)"
+    }
+  ],
+  "catalog_tool_candidates": [],
+  "discovered_test_horizons": [],
+  "result": "NOT_DISCOVERABLE_WITH_CURRENT_MCP",
+  "stderr": ""
+}

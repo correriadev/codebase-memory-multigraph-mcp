@@ -321,10 +321,11 @@ char *cbm_mcp_handle_federated_query_graph(cbm_mcp_server_t *srv, const char *ar
             if (sqlite3_prepare_v2(hdb, esql, -1, &estmt, NULL) == SQLITE_OK) {
                 while (sqlite3_step(estmt) == SQLITE_ROW) {
                     yyjson_mut_val *e = yyjson_mut_obj(mdoc);
-                    yyjson_mut_obj_add_str(mdoc, e, "source", (const char *)sqlite3_column_text(estmt, 0));
-                    yyjson_mut_obj_add_str(mdoc, e, "target", (const char *)sqlite3_column_text(estmt, 1));
-                    yyjson_mut_obj_add_str(mdoc, e, "type", (const char *)sqlite3_column_text(estmt, 2));
-                    yyjson_mut_obj_add_str(mdoc, e, "origin_horizon", (const char *)sqlite3_column_text(estmt, 3));
+                    /* SQLite column storage expires at step/finalize; JSON outlives the statement. */
+                    yyjson_mut_obj_add_strcpy(mdoc, e, "source", (const char *)sqlite3_column_text(estmt, 0));
+                    yyjson_mut_obj_add_strcpy(mdoc, e, "target", (const char *)sqlite3_column_text(estmt, 1));
+                    yyjson_mut_obj_add_strcpy(mdoc, e, "type", (const char *)sqlite3_column_text(estmt, 2));
+                    yyjson_mut_obj_add_strcpy(mdoc, e, "origin_horizon", (const char *)sqlite3_column_text(estmt, 3));
                     yyjson_mut_arr_add_val(edges_arr, e);
                 }
                 sqlite3_finalize(estmt);
@@ -441,4 +442,3 @@ char *cbm_mcp_handle_federated_trace_path(cbm_mcp_server_t *srv, const char *arg
     free(base_result);
     return json;
 }
-

@@ -1,0 +1,130 @@
+{
+  "started_at": "2026-10-01T22:41:14.780631+00:00",
+  "binary": "C:\\Users\\corre\\.local\\bin\\codebase-memory-mcp.exe",
+  "binary_sha256": "698d4b008882b1f2af18344e5bbc4eb52005495ea540776eb2947a76e560f0a3",
+  "project": "C-Users-corre-Documents-harness-kit",
+  "output": "C:\\Users\\corre\\Documents\\codebase-memory-mcp\\docs\\temenos-tests\\real-20261001-194114",
+  "checks": {
+    "required_tools": {
+      "passed": true,
+      "detail": null
+    },
+    "existing_real_project": {
+      "passed": true,
+      "detail": null
+    },
+    "real_decision_evidence": {
+      "passed": true,
+      "detail": null
+    },
+    "compiled_revision_1": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_fractal_real_20261001_194114",
+        "file_path": "docs/temenos/h_fractal_real_20261001_194114/revisoes/r001.md",
+        "nodes_compiled": 6,
+        "edges_compiled": 8,
+        "sections_indexed": 3
+      }
+    },
+    "connected_revision_1": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_fractal_real_20261001_194114",
+        "isolated_nodes_count": 0,
+        "unresolved_dependencies_count": 0,
+        "status": "VALID"
+      }
+    },
+    "parallel_content_recovery": {
+      "passed": true,
+      "detail": null
+    },
+    "parallel_relation_recovery": {
+      "passed": true,
+      "detail": [
+        "columns",
+        "has_more",
+        "horizon_edges",
+        "horizon_nodes",
+        "returned",
+        "rows",
+        "total",
+        "total_relation",
+        "truncated"
+      ]
+    },
+    "compiled_revision_2": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_fractal_real_20261001_194114",
+        "file_path": "docs/temenos/h_fractal_real_20261001_194114/revisoes/r002.md",
+        "nodes_compiled": 7,
+        "edges_compiled": 11,
+        "sections_indexed": 3
+      }
+    },
+    "connected_revision_2": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_fractal_real_20261001_194114",
+        "isolated_nodes_count": 0,
+        "unresolved_dependencies_count": 0,
+        "status": "VALID"
+      }
+    },
+    "reader_sees_revision_without_restart": {
+      "passed": true,
+      "detail": null
+    },
+    "prior_revision_preserved": {
+      "passed": true,
+      "detail": null
+    },
+    "revision_relation_recovered": {
+      "passed": true,
+      "detail": null
+    },
+    "immediate_recovery_after_writer_exit": {
+      "passed": true,
+      "detail": null
+    },
+    "fresh_client_recovery": {
+      "passed": true,
+      "detail": null
+    }
+  },
+  "scope": "Existing real project; new horizon; no index, promotion or base mutation",
+  "reader_inputs": [
+    "project",
+    "horizon_id"
+  ],
+  "reader_reads_document": false,
+  "project_catalog_entry": {
+    "name": "C-Users-corre-Documents-harness-kit",
+    "root_path": "C:/Users/corre/Documents/harness-kit",
+    "branch": "feature/web-sdk",
+    "nodes": 4457,
+    "edges": 14274,
+    "size_bytes": 17039360
+  },
+  "source": {
+    "path": "C:\\Users\\corre\\Documents\\harness-kit\\docs\\temenos\\t-20261001-1754\\registro.md",
+    "sha256": "b07933f4f5f47b33efefa34e59d97c5b22c0f45de2dba50ea0b3f5ae2ebf3e86"
+  },
+  "horizon_id": "h_fractal_real_20261001_194114",
+  "horizon_owner_pid": 16884,
+  "writer_stopped": true,
+  "result": "PASSED_BOUNDED_REAL_GRAPH_PROOF",
+  "not_proven": [
+    "Recovery after orphan TTL/daemon lifecycle",
+    "Automatic horizon discovery",
+    "Full Cypher filtering over horizon",
+    "Host UI invocation",
+    "Institutional promotion"
+  ]
+}

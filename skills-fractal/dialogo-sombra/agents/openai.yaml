@@ -1,0 +1,6 @@
+interface:
+  display_name: "Diálogo Sombra"
+  short_description: "Examine consequências dentro do contexto compartilhado"
+  default_prompt: "Use $dialogo-sombra no temenos ativo para examinar os pressupostos e as consequências desta proposta."
+policy:
+  allow_implicit_invocation: false

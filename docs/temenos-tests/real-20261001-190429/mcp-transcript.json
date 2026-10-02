@@ -1,0 +1,159 @@
+[
+  {
+    "client": "A",
+    "method": "initialize",
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "protocolVersion": "2024-11-05",
+        "serverInfo": {
+          "name": "codebase-memory-mcp",
+          "version": "dev"
+        },
+        "capabilities": {
+          "tools": {
+            "listChanged": false
+          },
+          "prompts": {
+            "listChanged": false
+          }
+        },
+        "instructions": "Graph first: search_graph for symbols, trace_path for relationships, get_code_snippet for source, query_graph for multi-hop, and get_architecture for overview. Use search_code/grep for literals or coverage gaps. Indexes auto-refresh. Check cited-path coverage; paginate."
+      }
+    }
+  },
+  {
+    "time": "2026-10-01T22:04:33.137610+00:00",
+    "client": "A",
+    "tool": "list_projects",
+    "arguments": {
+      "detail": "stats",
+      "format": "json"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"projects\":[{\"name\":\"C-Users-corre-Documents-codebase-memory-mcp\",\"root_path\":\"C:/Users/corre/Documents/codebase-memory-mcp\",\"branch\":\"main\",\"nodes\":28394,\"edges\":144418,\"size_bytes\":154271744},{\"name\":\"C-Users-corre-Documents-harness-kit\",\"root_path\":\"C:/Users/corre/Documents/harness-kit\",\"branch\":\"feature/web-sdk\",\"nodes\":4457,\"edges\":14274,\"size_bytes\":17039360},{\"name\":\"C-Users-corre-Documents-harness-memory\",\"root_path\":\"C:/Users/corre/Documents/harness-memory\",\"branch\":\"feature/project-link\",\"nodes\":5013,\"edges\":24654,\"size_bytes\":25821184},{\"name\":\"C-Users-corre-Documents-minecraft-agent\",\"root_path\":\"C:/Users/corre/Documents/minecraft-agent\",\"branch\":\"main\",\"nodes\":68002,\"edges\":71517,\"size_bytes\":171704320},{\"name\":\"cbm_e2e_121e5b05\",\"root_path\":\"C:\\\\Users\\\\corre\\\\AppData\\\\Local\\\\Temp\\\\proj_121e5b05_k2s8qcbu\",\"nodes\":20,\"edges\":0,\"size_bytes\":40960}],\"total\":5,\"offset\":0,\"limit\":50,\"returned\":5,\"has_more\":false}"
+          }
+        ],
+        "structuredContent": {
+          "projects": [
+            {
+              "name": "C-Users-corre-Documents-codebase-memory-mcp",
+              "root_path": "C:/Users/corre/Documents/codebase-memory-mcp",
+              "branch": "main",
+              "nodes": 28394,
+              "edges": 144418,
+              "size_bytes": 154271744
+            },
+            {
+              "name": "C-Users-corre-Documents-harness-kit",
+              "root_path": "C:/Users/corre/Documents/harness-kit",
+              "branch": "feature/web-sdk",
+              "nodes": 4457,
+              "edges": 14274,
+              "size_bytes": 17039360
+            },
+            {
+              "name": "C-Users-corre-Documents-harness-memory",
+              "root_path": "C:/Users/corre/Documents/harness-memory",
+              "branch": "feature/project-link",
+              "nodes": 5013,
+              "edges": 24654,
+              "size_bytes": 25821184
+            },
+            {
+              "name": "C-Users-corre-Documents-minecraft-agent",
+              "root_path": "C:/Users/corre/Documents/minecraft-agent",
+              "branch": "main",
+              "nodes": 68002,
+              "edges": 71517,
+              "size_bytes": 171704320
+            },
+            {
+              "name": "cbm_e2e_121e5b05",
+              "root_path": "C:\\Users\\corre\\AppData\\Local\\Temp\\proj_121e5b05_k2s8qcbu",
+              "nodes": 20,
+              "edges": 0,
+              "size_bytes": 40960
+            }
+          ],
+          "total": 5,
+          "offset": 0,
+          "limit": 50,
+          "returned": 5,
+          "has_more": false
+        },
+        "isError": false
+      }
+    }
+  },
+  {
+    "time": "2026-10-01T22:04:33.170056+00:00",
+    "client": "A",
+    "tool": "create_horizon",
+    "arguments": {
+      "horizon_id": "h_fractal_real_20261001_190429",
+      "project": "C-Users-corre-Documents-harness-kit"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"success\":true,\"horizon_id\":\"h_fractal_real_20261001_190429\",\"status\":\"ACTIVE\",\"client_pid\":19400,\"based_on_seq\":\"0\",\"nodes_count\":0,\"edges_count\":0}"
+          }
+        ],
+        "structuredContent": {
+          "success": true,
+          "horizon_id": "h_fractal_real_20261001_190429",
+          "status": "ACTIVE",
+          "client_pid": 19400,
+          "based_on_seq": "0",
+          "nodes_count": 0,
+          "edges_count": 0
+        },
+        "isError": false
+      }
+    }
+  },
+  {
+    "time": "2026-10-01T22:04:33.186068+00:00",
+    "client": "A",
+    "tool": "sync_horizon_spec",
+    "arguments": {
+      "horizon_id": "h_fractal_real_20261001_190429",
+      "project": "C-Users-corre-Documents-harness-kit",
+      "file_path": "docs/temenos/h_fractal_real_20261001_190429/revisoes/r001.md",
+      "content": "# Temenos h_fractal_real_20261001_190429\n\n## Revisao 1\nContexto: C-Users-corre-Documents-harness-kit. Decisao real de persistencia em Markdown; implementacao nao verificada.\n\n## Grafo\n```tactical-spec\n{\n  \"nodes\": [\n    {\n      \"symbol\": \"T-01\",\n      \"type\": \"FractalTemenos\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#T-01\",\n      \"description\": \"{\\\"id\\\":\\\"T-01\\\",\\\"temenos_id\\\":\\\"h_fractal_real_20261001_190429\\\",\\\"context\\\":\\\"C-Users-corre-Documents-harness-kit\\\",\\\"cycle\\\":\\\"ABERTO\\\",\\\"purpose\\\":\\\"Verificar memoria compartilhada de uma decisao real\\\",\\\"source\\\":\\\"C:\\\\\\\\Users\\\\\\\\corre\\\\\\\\Documents\\\\\\\\harness-kit\\\\\\\\docs\\\\\\\\temenos\\\\\\\\t-20261001-1754\\\\\\\\registro.md\\\"}\"\n    },\n    {\n      \"symbol\": \"C-01\",\n      \"type\": \"FractalContext\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#C-01\",\n      \"description\": \"{\\\"id\\\":\\\"C-01\\\",\\\"temenos_id\\\":\\\"h_fractal_real_20261001_190429\\\",\\\"project\\\":\\\"C-Users-corre-Documents-harness-kit\\\",\\\"root\\\":\\\"C:/Users/corre/Documents/harness-kit\\\",\\\"knowledge\\\":\\\"VERIFICADO\\\",\\\"evidence\\\":\\\"list_projects returned existing project; user requested a real graph\\\"}\"\n    },\n    {\n      \"symbol\": \"D-03-R1\",\n      \"type\": \"FractalDecision\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#D-03-R1\",\n      \"description\": \"{\\\"id\\\":\\\"D-03-R1\\\",\\\"temenos_id\\\":\\\"h_fractal_real_20261001_190429\\\",\\\"predicate\\\":\\\"Persistir os cards em Markdown com frontmatter em docs/backlog/*.md\\\",\\\"knowledge\\\":\\\"DECLARADO\\\",\\\"destination\\\":\\\"CONSOLIDADO_LOCAL\\\",\\\"author\\\":\\\"Humano/Antigravity na sessao original\\\",\\\"evidence\\\":{\\\"source\\\":\\\"C:\\\\\\\\Users\\\\\\\\corre\\\\\\\\Documents\\\\\\\\harness-kit\\\\\\\\docs\\\\\\\\temenos\\\\\\\\t-20261001-1754\\\\\\\\registro.md\\\",\\\"item\\\":\\\"D-03\\\",\\\"human_quote\\\":\\\"essa abordagem esta boa\\\"},\\\"implementation\\\":\\\"NAO_VERIFICADA\\\"}\"\n    },\n    {\n      \"symbol\": \"Q-03-R1\",\n      \"type\": \"FractalQuestion\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#Q-03-R1\",\n      \"description\": \"{\\\"id\\\":\\\"Q-03-R1\\\",\\\"temenos_id\\\":\\\"h_fractal_real_20261001_190429\\\",\\\"predicate\\\":\\\"Qual e o proximo passo operacional para implementacao?\\\",\\\"knowledge\\\":\\\"DECLARADO\\\",\\\"destination\\\":\\\"MANTIDO_ABERTO\\\",\\\"author\\\":\\\"Antigravity na sessao original\\\",\\\"evidence\\\":{\\\"source\\\":\\\"C:\\\\\\\\Users\\\\\\\\corre\\\\\\\\Documents\\\\\\\\harness-kit\\\\\\\\docs\\\\\\\\temenos\\\\\\\\t-20261001-1754\\\\\\\\registro.md\\\",\\\"item\\\":\\\"Q-03\\\"}}\"\n    },\n    {\n      \"symbol\": \"K-01-R1\",\n      \"type\": \"FractalConsequence\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#K-01-R1\",\n      \"description\": \"{\\\"id\\\":\\\"K-01-R1\\\",\\\"temenos_id\\\":\\\"h_fractal_real_20261001_190429\\\",\\\"predicate\\\":\\\"A persistencia em Markdown pode manter rastreabilidade Git e transparencia humana\\\",\\\"knowledge\\\":\\\"HIPOTESE\\\",\\\"destination\\\":\\\"MANTIDO_ABERTO\\\",\\\"evidence\\\":{\\\"source\\\":\\\"C:\\\\\\\\Users\\\\\\\\corre\\\\\\\\Documents\\\\\\\\harness-kit\\\\\\\\docs\\\\\\\\temenos\\\\\\\\t-20261001-1754\\\\\\\\registro.md\\\",\\\"item\\\":\\\"D-03, alternativas/consequencias\\\"}}\"\n    }\n  ],\n  \"edges\": [\n    {\n      \"source\": \"T-01\",\n      \"target\": \"C-01\",\n      \"type\": \"IN_CONTEXT\"\n    },\n    {\n      \"source\": \"T-01\",\n      \"target\": \"D-03-R1\",\n      \"type\": \"CONTAINS\"\n    },\n    {\n      \"source\": \"T-01\",\n      \"target\": \"Q-03-R1\",\n      \"type\": \"CONTAINS\"\n    },\n    {\n      \"source\": \"D-03-R1\",\n      \"target\": \"K-01-R1\",\n      \"type\": \"HAS_CONSEQUENCE\"\n    },\n    {\n      \"source\": \"Q-03-R1\",\n      \"target\": \"D-03-R1\",\n      \"type\": \"CONCERNS\"\n    }\n  ]\n}\n```\n"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"success\":true,\"horizon_id\":\"h_fractal_real_20261001_190429\",\"file_path\":\"docs/temenos/h_fractal_real_20261001_190429/revisoes/r001.md\",\"nodes_compiled\":0,\"edges_compiled\":0,\"sections_indexed\":3}"
+          }
+        ],
+        "structuredContent": {
+          "success": true,
+          "horizon_id": "h_fractal_real_20261001_190429",
+          "file_path": "docs/temenos/h_fractal_real_20261001_190429/revisoes/r001.md",
+          "nodes_compiled": 0,
+          "edges_compiled": 0,
+          "sections_indexed": 3
+        },
+        "isError": false
+      }
+    }
+  }
+]

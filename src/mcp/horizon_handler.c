@@ -2,6 +2,8 @@
 #include "mcp_internal.h"
 #include "../core/horizon_pool.h"
 #include "../foundation/platform.h"
+#include "../foundation/compat_fs.h"
+#include "../daemon/horizon_reaper.h"
 #include <yyjson/yyjson.h>
 #if defined(__has_include)
   #if __has_include(<sqlite3.h>)
@@ -24,6 +26,167 @@
 #else
   #include <unistd.h>
 #endif
+
+static int compare_horizon_names(const void *a, const void *b) {
+    return strcmp(*(const char *const *)a, *(const char *const *)b);
+}
+
+char *handle_list_horizons(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool) {
+    (void)srv;
+    yyjson_doc *args = args_json ? yyjson_read(args_json, strlen(args_json), 0) : NULL;
+    yyjson_val *root = args ? yyjson_doc_get_root(args) : NULL;
+    const char *project = yyjson_get_str(yyjson_obj_get(root, "project"));
+    const char *status = yyjson_get_str(yyjson_obj_get(root, "status"));
+    if (!status) status = "ACTIVE";
+    yyjson_val *vo = yyjson_obj_get(root, "offset"), *vl = yyjson_obj_get(root, "limit");
+    int64_t offset = vo ? yyjson_get_sint(vo) : 0, limit = vl ? yyjson_get_sint(vl) : 50;
+    if (!yyjson_is_obj(root) || !project || !project[0] ||
+        (yyjson_obj_get(root, "status") && !yyjson_is_str(yyjson_obj_get(root, "status"))) ||
+        (vo && !yyjson_is_int(vo)) || (vl && !yyjson_is_int(vl)) ||
+        offset < 0 || limit < 1 || limit > 500 ||
+        (strcmp(status, "ACTIVE") && strcmp(status, "PROMOTED") && strcmp(status, "DISCARDED") && strcmp(status, "ALL"))) {
+        yyjson_doc_free(args);
+        return cbm_mcp_text_result("{\"code\":\"INVALID_PARAMS\",\"message\":\"project required; valid status and integer paging required\"}", true);
+    }
+    char directory[CBM_PATH_MAX];
+    const char *base = pool ? pool->base_dir : cbm_resolve_cache_dir();
+    int n = snprintf(directory, sizeof(directory), "%s/horizons", base && base[0] ? base : ".");
+    if (n < 0 || (size_t)n >= sizeof(directory)) {
+        yyjson_doc_free(args);
+        return cbm_mcp_text_result("{\"code\":\"CATALOG_UNAVAILABLE\"}", true);
+    }
+    cbm_dir_t *dir = cbm_opendir(directory);
+    cbm_path_info_t info;
+    if (!dir && cbm_path_info_utf8(directory, &info) != CBM_PATH_INFO_ABSENT) {
+        yyjson_doc_free(args);
+        return cbm_mcp_text_result("{\"code\":\"CATALOG_UNAVAILABLE\",\"message\":\"Cannot read horizon directory\"}", true);
+    }
+    char **names = NULL;
+    size_t count = 0;
+    bool allocation_failed = false;
+    cbm_dirent_t *entry;
+    while (dir && (entry = cbm_readdir(dir)) != NULL) {
+        size_t len = strlen(entry->name);
+        if (entry->is_dir || len <= 3 || len >= CBM_HORIZON_ID_MAX + 3 || strcmp(entry->name + len - 3, ".db")) continue;
+        char **grown = realloc(names, (count + 1) * sizeof(*names));
+        if (!grown) { allocation_failed = true; break; }
+        names = grown;
+        names[count] = strdup(entry->name);
+        if (!names[count]) { allocation_failed = true; break; }
+        count++;
+    }
+    if (dir) cbm_closedir(dir);
+    if (allocation_failed) {
+        for (size_t i = 0; i < count; i++) free(names[i]);
+        free(names);
+        yyjson_doc_free(args);
+        return cbm_mcp_text_result("{\"code\":\"CATALOG_UNAVAILABLE\",\"message\":\"Allocation failed\"}", true);
+    }
+    if (count > 1) qsort(names, count, sizeof(*names), compare_horizon_names);
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *out = yyjson_mut_obj(doc), *items = yyjson_mut_arr(doc);
+    yyjson_mut_doc_set_root(doc, out);
+    yyjson_mut_obj_add_val(doc, out, "horizons", items);
+    yyjson_mut_obj_add_strcpy(doc, out, "project", project);
+    size_t total = 0, returned = 0, unreadable = 0;
+    for (size_t i = 0; i < count; i++) {
+        char path[CBM_PATH_MAX];
+        n = snprintf(path, sizeof(path), "%s/%s", directory, names[i]);
+        if (n < 0 || (size_t)n >= sizeof(path) || cbm_path_info_utf8(path, &info) != CBM_PATH_INFO_OK ||
+            !info.is_regular || info.is_symlink) { unreadable++; continue; }
+        sqlite3 *db = NULL;
+        if (sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
+            if (db) sqlite3_close_v2(db);
+            unreadable++; continue;
+        }
+        sqlite3_busy_timeout(db, 1000);
+        sqlite3_stmt *stmt = NULL;
+        bool bound = false, matches = false;
+        if (sqlite3_prepare_v2(db, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='horizon_context'", -1, &stmt, NULL) != SQLITE_OK ||
+            sqlite3_step(stmt) != SQLITE_ROW) {
+            sqlite3_finalize(stmt); sqlite3_close_v2(db); unreadable++; continue;
+        }
+        bool has_binding_table = sqlite3_column_int(stmt, 0) > 0;
+        sqlite3_finalize(stmt);
+        stmt = NULL;
+        if (has_binding_table) {
+            if (sqlite3_prepare_v2(db, "SELECT project FROM horizon_context WHERE singleton=1", -1, &stmt, NULL) != SQLITE_OK ||
+                sqlite3_step(stmt) != SQLITE_ROW) {
+                sqlite3_finalize(stmt); sqlite3_close_v2(db); unreadable++; continue;
+            }
+            bound = true;
+            matches = strcmp((const char *)sqlite3_column_text(stmt, 0), project) == 0;
+        }
+        sqlite3_finalize(stmt);
+        stmt = NULL;
+        if (!bound) {
+            /* Legacy horizons: exact URI authority, never wildcard or guessed project. */
+            const char *sql = "SELECT 1 FROM symbolic_nodes WHERE substr(cbm_uri,1,6)='cbm://' "
+                              "AND substr(cbm_uri,7,instr(substr(cbm_uri,7),'/')-1)=? LIMIT 1";
+            if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+                sqlite3_close_v2(db); unreadable++; continue;
+            }
+            sqlite3_bind_text(stmt, 1, project, -1, SQLITE_TRANSIENT);
+            int step = sqlite3_step(stmt);
+            matches = step == SQLITE_ROW;
+            if (step != SQLITE_ROW && step != SQLITE_DONE) unreadable++;
+            sqlite3_finalize(stmt);
+            stmt = NULL;
+        }
+        if (!matches) { sqlite3_close_v2(db); continue; }
+        const char *sql = "SELECT horizon_id,status,client_pid,created_at,last_heartbeat,based_on_seq FROM horizon_metadata LIMIT 1";
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK || sqlite3_step(stmt) != SQLITE_ROW) {
+            sqlite3_finalize(stmt); sqlite3_close_v2(db); unreadable++; continue;
+        }
+        const char *stored_status = (const char *)sqlite3_column_text(stmt, 1);
+        if (strcmp(status, "ALL") && strcmp(status, stored_status)) {
+            sqlite3_finalize(stmt); sqlite3_close_v2(db); continue;
+        }
+        total++;
+        if (total <= (uint64_t)offset || returned >= (uint64_t)limit) {
+            sqlite3_finalize(stmt); sqlite3_close_v2(db); continue;
+        }
+        yyjson_mut_val *item = yyjson_mut_obj(doc);
+        yyjson_mut_obj_add_strcpy(doc, item, "horizon_id", (const char *)sqlite3_column_text(stmt, 0));
+        yyjson_mut_obj_add_strcpy(doc, item, "status", stored_status);
+        yyjson_mut_obj_add_strcpy(doc, item, "association_source", bound ? "explicit_project" : "legacy_node_uri");
+        uint32_t pid = (uint32_t)sqlite3_column_int64(stmt, 2);
+        yyjson_mut_obj_add_uint(doc, item, "client_pid", pid);
+        yyjson_mut_obj_add_bool(doc, item, "owner_alive", cbm_is_pid_alive(pid));
+        yyjson_mut_obj_add_int(doc, item, "created_at", sqlite3_column_int64(stmt, 3));
+        yyjson_mut_obj_add_int(doc, item, "last_heartbeat", sqlite3_column_int64(stmt, 4));
+        yyjson_mut_obj_add_strcpy(doc, item, "based_on_seq", (const char *)sqlite3_column_text(stmt, 5));
+        sqlite3_finalize(stmt);
+        stmt = NULL;
+        if (sqlite3_prepare_v2(db, "SELECT cbm_uri,substr(code_snippet,1,1000),length(code_snippet)>1000 "
+                                 "FROM symbolic_nodes WHERE label='FractalTemenos' ORDER BY cbm_uri LIMIT 1", -1, &stmt, NULL) == SQLITE_OK &&
+            sqlite3_step(stmt) == SQLITE_ROW) {
+            yyjson_mut_obj_add_strcpy(doc, item, "context_uri", (const char *)sqlite3_column_text(stmt, 0));
+            const char *preview = (const char *)sqlite3_column_text(stmt, 1);
+            if (preview) yyjson_mut_obj_add_strcpy(doc, item, "context_preview", preview);
+            yyjson_mut_obj_add_bool(doc, item, "preview_truncated", sqlite3_column_int(stmt, 2) != 0);
+        }
+        sqlite3_finalize(stmt);
+        sqlite3_close_v2(db);
+        yyjson_mut_arr_add_val(items, item);
+        returned++;
+    }
+    for (size_t i = 0; i < count; i++) free(names[i]);
+    free(names);
+    yyjson_mut_obj_add_uint(doc, out, "total", total);
+    yyjson_mut_obj_add_uint(doc, out, "returned", returned);
+    yyjson_mut_obj_add_int(doc, out, "offset", offset);
+    yyjson_mut_obj_add_int(doc, out, "limit", limit);
+    yyjson_mut_obj_add_bool(doc, out, "has_more", total > (uint64_t)offset + returned);
+    yyjson_mut_obj_add_uint(doc, out, "unreadable_entries", unreadable);
+    yyjson_mut_obj_add_bool(doc, out, "partial", unreadable > 0);
+    char *json = yyjson_mut_write(doc, 0, NULL);
+    char *result = cbm_mcp_text_result(json ? json : "{\"code\":\"CATALOG_SERIALIZE_FAILED\"}", json == NULL);
+    free(json);
+    yyjson_mut_doc_free(doc);
+    yyjson_doc_free(args);
+    return result;
+}
 
 char *handle_create_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool) {
     if (!args_json) {
@@ -90,6 +253,25 @@ char *handle_create_horizon(cbm_mcp_server_t *srv, const char *args_json, Horizo
         }
     }
 
+    const char *project = yyjson_get_str(yyjson_obj_get(root, "project"));
+    /* Refuse a conflicting binding before create can reactivate/update metadata. */
+    if (h_id_str && project && project[0]) {
+        sqlite3 *existing = NULL;
+        if (cbm_horizon_pool_get(pool, h_id_str, &existing) == 0 && existing) {
+            sqlite3_stmt *binding = NULL;
+            bool conflict = false;
+            if (sqlite3_prepare_v2(existing, "SELECT project FROM horizon_context WHERE singleton=1", -1, &binding, NULL) == SQLITE_OK &&
+                sqlite3_step(binding) == SQLITE_ROW) {
+                conflict = strcmp((const char *)sqlite3_column_text(binding, 0), project) != 0;
+            }
+            sqlite3_finalize(binding);
+            if (conflict) {
+                yyjson_doc_free(doc);
+                if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+                return cbm_mcp_text_result("{\"code\":\"HORIZON_PROJECT_CONFLICT\",\"message\":\"Horizon belongs to another project\"}", true);
+            }
+        }
+    }
     char actual_id[CBM_HORIZON_ID_MAX] = {0};
     int rc = cbm_create_horizon(pool, pid, h_id_str, seq_str, actual_id, sizeof(actual_id));
     if (rc != 0) {
@@ -108,6 +290,12 @@ char *handle_create_horizon(cbm_mcp_server_t *srv, const char *args_json, Horizo
     }
 
     sqlite3_exec(hdb, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
+    if (project && project[0] && cbm_horizon_bind_project(hdb, project) != 0) {
+        sqlite3_exec(hdb, "ROLLBACK;", NULL, NULL, NULL);
+        yyjson_doc_free(doc);
+        if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+        return cbm_mcp_text_result("{\"code\":\"HORIZON_PROJECT_CONFLICT\",\"message\":\"Cannot bind horizon to this project\"}", true);
+    }
     uint64_t now = (uint64_t)time(NULL);
     size_t nodes_count = 0;
     size_t edges_count = 0;

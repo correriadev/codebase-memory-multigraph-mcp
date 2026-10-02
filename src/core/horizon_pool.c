@@ -68,6 +68,24 @@ static bool is_valid_horizon_id(const char *id) {
     return true;
 }
 
+int cbm_horizon_bind_project(sqlite3 *db, const char *project) {
+    if (!db || !project || !project[0]) return -1;
+    if (sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS horizon_context "
+                        "(singleton INTEGER PRIMARY KEY CHECK(singleton=1), project TEXT NOT NULL)",
+                     NULL, NULL, NULL) != SQLITE_OK) return -1;
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(db, "INSERT OR IGNORE INTO horizon_context VALUES(1,?)", -1, &stmt, NULL) != SQLITE_OK) return -1;
+    sqlite3_bind_text(stmt, 1, project, -1, SQLITE_TRANSIENT);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) return -1;
+    if (sqlite3_prepare_v2(db, "SELECT project FROM horizon_context WHERE singleton=1", -1, &stmt, NULL) != SQLITE_OK) return -1;
+    rc = sqlite3_step(stmt);
+    bool matches = rc == SQLITE_ROW && strcmp((const char *)sqlite3_column_text(stmt, 0), project) == 0;
+    sqlite3_finalize(stmt);
+    return matches ? 0 : -1;
+}
+
 static int make_horizon_path(const HorizonConnectionPool *pool, const char *horizon_id, char *out_path, size_t out_sz) {
     if (!pool || !is_valid_horizon_id(horizon_id) || !out_path || out_sz == 0) {
         if (out_path && out_sz > 0) out_path[0] = '\0';

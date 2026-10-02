@@ -1,0 +1,62 @@
+[
+  {
+    "format": "yaml",
+    "arguments": {
+      "project": "C-Users-corre-Documents-harness-kit",
+      "horizon_id": "h_fractal_real_20261001_190429",
+      "file_path": "docs/temenos/h_fractal_real_20261001_190429/format-yaml.md",
+      "content": "# Formato de memoria CBM\n\n## Grafo\n```tactical-spec\nnodes:\n  - symbol: T-01\n    type: 'FractalTemenos'\n    cbm_uri: 'cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#T-01'\n    description: '{\"id\":\"T-01\",\"temenos_id\":\"h_fractal_real_20261001_190429\",\"context\":\"C-Users-corre-Documents-harness-kit\",\"cycle\":\"ABERTO\",\"purpose\":\"Verificar memoria compartilhada de uma decisao real\",\"source\":\"C:\\\\Users\\\\corre\\\\Documents\\\\harness-kit\\\\docs\\\\temenos\\\\t-20261001-1754\\\\registro.md\"}'\n  - symbol: C-01\n    type: 'FractalContext'\n    cbm_uri: 'cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#C-01'\n    description: '{\"id\":\"C-01\",\"temenos_id\":\"h_fractal_real_20261001_190429\",\"project\":\"C-Users-corre-Documents-harness-kit\",\"root\":\"C:/Users/corre/Documents/harness-kit\",\"knowledge\":\"VERIFICADO\",\"evidence\":\"list_projects returned existing project; user requested a real graph\"}'\n  - symbol: D-03-R1\n    type: 'FractalDecision'\n    cbm_uri: 'cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#D-03-R1'\n    description: '{\"id\":\"D-03-R1\",\"temenos_id\":\"h_fractal_real_20261001_190429\",\"predicate\":\"Persistir os cards em Markdown com frontmatter em docs/backlog/*.md\",\"knowledge\":\"DECLARADO\",\"destination\":\"CONSOLIDADO_LOCAL\",\"author\":\"Humano/Antigravity na sessao original\",\"evidence\":{\"source\":\"C:\\\\Users\\\\corre\\\\Documents\\\\harness-kit\\\\docs\\\\temenos\\\\t-20261001-1754\\\\registro.md\",\"item\":\"D-03\",\"human_quote\":\"essa abordagem esta boa\"},\"implementation\":\"NAO_VERIFICADA\"}'\n  - symbol: Q-03-R1\n    type: 'FractalQuestion'\n    cbm_uri: 'cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#Q-03-R1'\n    description: '{\"id\":\"Q-03-R1\",\"temenos_id\":\"h_fractal_real_20261001_190429\",\"predicate\":\"Qual e o proximo passo operacional para implementacao?\",\"knowledge\":\"DECLARADO\",\"destination\":\"MANTIDO_ABERTO\",\"author\":\"Antigravity na sessao original\",\"evidence\":{\"source\":\"C:\\\\Users\\\\corre\\\\Documents\\\\harness-kit\\\\docs\\\\temenos\\\\t-20261001-1754\\\\registro.md\",\"item\":\"Q-03\"}}'\n  - symbol: K-01-R1\n    type: 'FractalConsequence'\n    cbm_uri: 'cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#K-01-R1'\n    description: '{\"id\":\"K-01-R1\",\"temenos_id\":\"h_fractal_real_20261001_190429\",\"predicate\":\"A persistencia em Markdown pode manter rastreabilidade Git e transparencia humana\",\"knowledge\":\"HIPOTESE\",\"destination\":\"MANTIDO_ABERTO\",\"evidence\":{\"source\":\"C:\\\\Users\\\\corre\\\\Documents\\\\harness-kit\\\\docs\\\\temenos\\\\t-20261001-1754\\\\registro.md\",\"item\":\"D-03, alternativas/consequencias\"}}'\nedges:\n  - source: T-01\n    target: C-01\n    type: IN_CONTEXT\n  - source: T-01\n    target: D-03-R1\n    type: CONTAINS\n  - source: T-01\n    target: Q-03-R1\n    type: CONTAINS\n  - source: D-03-R1\n    target: K-01-R1\n    type: HAS_CONSEQUENCE\n  - source: Q-03-R1\n    target: D-03-R1\n    type: CONCERNS\n\n```\n"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"success\":true,\"horizon_id\":\"h_fractal_real_20261001_190429\",\"file_path\":\"docs/temenos/h_fractal_real_20261001_190429/format-yaml.md\",\"nodes_compiled\":5,\"edges_compiled\":5,\"sections_indexed\":2}"
+          }
+        ],
+        "structuredContent": {
+          "success": true,
+          "horizon_id": "h_fractal_real_20261001_190429",
+          "file_path": "docs/temenos/h_fractal_real_20261001_190429/format-yaml.md",
+          "nodes_compiled": 5,
+          "edges_compiled": 5,
+          "sections_indexed": 2
+        },
+        "isError": false
+      }
+    }
+  },
+  {
+    "format": "json-short",
+    "arguments": {
+      "project": "C-Users-corre-Documents-harness-kit",
+      "horizon_id": "h_fractal_real_20261001_190429",
+      "file_path": "docs/temenos/h_fractal_real_20261001_190429/format-json-short.md",
+      "content": "# Formato de memoria CBM\n\n## Grafo\n```tactical-spec\n{\n  \"nodes\": [\n    {\n      \"symbol\": \"D-03-PROBE\",\n      \"type\": \"FractalDecision\",\n      \"description\": \"Persistencia dos cards em Markdown, aceita pelo humano na sessao original; implementacao nao verificada.\"\n    }\n  ],\n  \"edges\": []\n}\n```\n"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"success\":true,\"horizon_id\":\"h_fractal_real_20261001_190429\",\"file_path\":\"docs/temenos/h_fractal_real_20261001_190429/format-json-short.md\",\"nodes_compiled\":1,\"edges_compiled\":0,\"sections_indexed\":2}"
+          }
+        ],
+        "structuredContent": {
+          "success": true,
+          "horizon_id": "h_fractal_real_20261001_190429",
+          "file_path": "docs/temenos/h_fractal_real_20261001_190429/format-json-short.md",
+          "nodes_compiled": 1,
+          "edges_compiled": 0,
+          "sections_indexed": 2
+        },
+        "isError": false
+      }
+    }
+  }
+]

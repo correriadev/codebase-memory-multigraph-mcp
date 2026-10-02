@@ -1,0 +1,1 @@
+codebase-memory-mcp: secure daemon endpoint could not be created: C:\Users\corre\AppData\Local: DACL entry 0 grants mutation rights 0x00010112 to untrusted identity (other S-1-5-21-65035917-1743823488-2632788341-1002)

@@ -1,0 +1,164 @@
+{
+  "project": "C-Users-corre-Documents-harness-kit",
+  "reader_inputs": [
+    "project"
+  ],
+  "reads_human_files": false,
+  "reads_cache_files": false,
+  "mutations": false,
+  "checks": {
+    "stable_pagination": true,
+    "repeated_page_is_stable": true,
+    "invalid_parameters_rejected": true,
+    "project_isolation": true,
+    "discovered_content_recovered": true,
+    "discovered_relations_recovered": true,
+    "context_and_memory_categories_recovered": true,
+    "revision_relation_recovered": true,
+    "explicit_catalog_exposed": true,
+    "project_only_discovers_test_horizon": true
+  },
+  "horizon_tools": [
+    {
+      "name": "list_horizons",
+      "description": "Discover stored horizons for an exact project; stable ID paging, metadata and context previews. Does not activate or mutate horizons."
+    },
+    {
+      "name": "create_horizon",
+      "description": "Create or update an ephemeral cognitive horizon overlay with speculative nodes and virtual edges"
+    },
+    {
+      "name": "promote_horizon",
+      "description": "Validate Two-Tier anchors and admit a horizon into the base graph"
+    },
+    {
+      "name": "sync_horizon_spec",
+      "description": "Sync and compile tactical specification markdown into an ephemeral horizon overlay"
+    },
+    {
+      "name": "validate_scope_horizon",
+      "description": "Validate scope adjacency and detect isolated dangling nodes in a horizon overlay"
+    },
+    {
+      "name": "union_session_get",
+      "description": "Query the live state of an open session horizon"
+    },
+    {
+      "name": "union_session_close",
+      "description": "Close a session horizon, emitting a typed closure event and destroying speculative content"
+    },
+    {
+      "name": "union_claim_capture",
+      "description": "Capture a conversational claim into a session horizon as PROPOSED (Scope C03)"
+    }
+  ],
+  "catalog_tool_candidates": [
+    "list_horizons"
+  ],
+  "catalog": [
+    {
+      "horizon_id": "h_fractal_real_20261001_190429",
+      "status": "ACTIVE",
+      "association_source": "legacy_node_uri",
+      "client_pid": 19400,
+      "owner_alive": false,
+      "created_at": 1790892273,
+      "last_heartbeat": 1790892273,
+      "based_on_seq": "0",
+      "context_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190429/registro.md#T-01",
+      "context_preview": "{\"id\":\"T-01\",\"temenos_id\":\"h_fractal_real_20261001_190429\",\"context\":\"C-Users-corre-Documents-harness-kit\",\"cycle\":\"ABERTO\",\"purpose\":\"Verificar memoria compartilhada de uma decisao real\",\"source\":\"C:\\\\Users\\\\corre\\\\Documents\\\\harness-kit\\\\docs\\\\temenos\\\\t-20261001-1754\\\\registro.md\"}",
+      "preview_truncated": false
+    },
+    {
+      "horizon_id": "h_fractal_real_20261001_190712",
+      "status": "ACTIVE",
+      "association_source": "legacy_node_uri",
+      "client_pid": 19400,
+      "owner_alive": false,
+      "created_at": 1790892435,
+      "last_heartbeat": 1790892435,
+      "based_on_seq": "0",
+      "context_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190712/registro.md#T-01",
+      "context_preview": "{\"id\":\"T-01\",\"temenos_id\":\"h_fractal_real_20261001_190712\",\"context\":\"C-Users-corre-Documents-harness-kit\",\"cycle\":\"ABERTO\",\"purpose\":\"Prova de memoria da decisao real\",\"evidence\":\"E-01\"}",
+      "preview_truncated": false
+    },
+    {
+      "horizon_id": "h_fractal_real_20261001_190755",
+      "status": "ACTIVE",
+      "association_source": "legacy_node_uri",
+      "client_pid": 19400,
+      "owner_alive": false,
+      "created_at": 1790892479,
+      "last_heartbeat": 1790892479,
+      "based_on_seq": "0",
+      "context_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_190755/registro.md#T-01",
+      "context_preview": "{\"id\":\"T-01\",\"temenos_id\":\"h_fractal_real_20261001_190755\",\"context\":\"C-Users-corre-Documents-harness-kit\",\"cycle\":\"ABERTO\",\"purpose\":\"Prova de memoria da decisao real\",\"evidence\":\"E-01\"}",
+      "preview_truncated": false
+    },
+    {
+      "horizon_id": "h_fractal_real_20261001_194114",
+      "status": "ACTIVE",
+      "association_source": "legacy_node_uri",
+      "client_pid": 16884,
+      "owner_alive": false,
+      "created_at": 1790894478,
+      "last_heartbeat": 1790894478,
+      "based_on_seq": "0",
+      "context_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_194114/registro.md#T-01",
+      "context_preview": "{\"id\":\"T-01\",\"temenos_id\":\"h_fractal_real_20261001_194114\",\"context\":\"C-Users-corre-Documents-harness-kit\",\"cycle\":\"ABERTO\",\"purpose\":\"Prova de memoria da decisao real\",\"evidence\":\"E-01\"}",
+      "preview_truncated": false
+    },
+    {
+      "horizon_id": "h_fractal_real_20261001_194147",
+      "status": "ACTIVE",
+      "association_source": "legacy_node_uri",
+      "client_pid": 16884,
+      "owner_alive": false,
+      "created_at": 1790894511,
+      "last_heartbeat": 1790894511,
+      "based_on_seq": "0",
+      "context_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_194147/registro.md#T-01",
+      "context_preview": "{\"id\":\"T-01\",\"temenos_id\":\"h_fractal_real_20261001_194147\",\"context\":\"C-Users-corre-Documents-harness-kit\",\"cycle\":\"ABERTO\",\"purpose\":\"Prova de memoria da decisao real\",\"evidence\":\"E-01\"}",
+      "preview_truncated": false
+    },
+    {
+      "horizon_id": "h_fractal_real_20261001_200159",
+      "status": "ACTIVE",
+      "association_source": "explicit_project",
+      "client_pid": 5452,
+      "owner_alive": false,
+      "created_at": 1790895725,
+      "last_heartbeat": 1790895725,
+      "based_on_seq": "0",
+      "context_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_200159/registro.md#T-01",
+      "context_preview": "{\"id\":\"T-01\",\"temenos_id\":\"h_fractal_real_20261001_200159\",\"context\":\"C-Users-corre-Documents-harness-kit\",\"cycle\":\"ABERTO\",\"purpose\":\"Prova de memoria da decisao real\",\"evidence\":\"E-01\"}",
+      "preview_truncated": false
+    },
+    {
+      "horizon_id": "h_fractal_real_20261001_200609",
+      "status": "ACTIVE",
+      "association_source": "explicit_project",
+      "client_pid": 4932,
+      "owner_alive": true,
+      "created_at": 1790895975,
+      "last_heartbeat": 1790895975,
+      "based_on_seq": "0",
+      "context_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_fractal_real_20261001_200609/registro.md#T-01",
+      "context_preview": "{\"id\":\"T-01\",\"temenos_id\":\"h_fractal_real_20261001_200609\",\"context\":\"C-Users-corre-Documents-harness-kit\",\"cycle\":\"ABERTO\",\"purpose\":\"Prova de memoria da decisao real\",\"evidence\":\"E-01\"}",
+      "preview_truncated": false
+    }
+  ],
+  "human_selection_required": true,
+  "recovered_discovered_horizon": "h_fractal_real_20261001_200609",
+  "discovered_test_horizons": [
+    "h_fractal_real_20261001_190429",
+    "h_fractal_real_20261001_190712",
+    "h_fractal_real_20261001_190755",
+    "h_fractal_real_20261001_194114",
+    "h_fractal_real_20261001_194147",
+    "h_fractal_real_20261001_200159",
+    "h_fractal_real_20261001_200609"
+  ],
+  "result": "PASSED_REAL_DISCOVERY_AND_RECOVERY",
+  "stderr": ""
+}

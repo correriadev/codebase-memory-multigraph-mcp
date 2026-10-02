@@ -755,6 +755,11 @@ static const tool_def_t TOOLS[] = {
      "\"count\":{\"type\":\"integer\"}},\"additionalProperties\":false}},\"project\":{\"type\":"
      "\"string\"}},\"required\":[\"traces\",\"project\"]}"},
 
+    {"list_horizons", "Discover stored horizons for an exact project; stable ID paging, metadata and context previews. Does not activate or mutate horizons.",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\",\"minLength\":1},"
+     "\"status\":{\"type\":\"string\",\"enum\":[\"ACTIVE\",\"PROMOTED\",\"DISCARDED\",\"ALL\"],\"default\":\"ACTIVE\"},"
+     "\"offset\":{\"type\":\"integer\",\"minimum\":0,\"default\":0},"
+     "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":500,\"default\":50}},\"required\":[\"project\"]}"},
     {"create_horizon", "Create or update an ephemeral cognitive horizon overlay with speculative nodes and virtual edges",
      "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
      "\"Identifier for the horizon (e.g. h_calculadora_mobile)\"},\"project\":{\"type\":\"string\","
@@ -941,6 +946,7 @@ static const tool_annotation_def_t TOOL_ANNOTATIONS[] = {
     {"detect_changes", true, false, true, false},
     {"manage_adr", false, true, false, false},
     {"ingest_traces", false, false, false, false},
+    {"list_horizons", true, false, true, false},
     {"create_horizon", false, false, true, false},
     {"promote_horizon", false, false, false, false},
     {"sync_horizon_spec", false, false, true, false},
@@ -17616,6 +17622,9 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
     }
     if (strcmp(tool_name, "ingest_traces") == 0) {
         return handle_ingest_traces(srv, args_json);
+    }
+    if (strcmp(tool_name, "list_horizons") == 0) {
+        return handle_list_horizons(srv, args_json, &srv->horizon_pool);
     }
     if (strcmp(tool_name, "create_horizon") == 0) {
         return handle_create_horizon(srv, args_json, &srv->horizon_pool);

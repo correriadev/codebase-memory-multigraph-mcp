@@ -1,0 +1,6 @@
+interface:
+  display_name: "Temenos"
+  short_description: "Delimite contexto e memória sem presumir finalidade"
+  default_prompt: "Use $temenos para delimitar o contexto desta conversa e registrar o que sabemos e o que permanece aberto."
+policy:
+  allow_implicit_invocation: false

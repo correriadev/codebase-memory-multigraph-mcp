@@ -97,6 +97,12 @@ char *handle_sync_horizon_spec(cbm_mcp_server_t *srv, const char *args_json, Hor
         return cbm_mcp_text_result("{\"isError\":true,\"code\":\"HORIZON_NOT_FOUND\",\"message\":\"horizon not found\"}", true);
     }
 
+    if (proj_str && proj_str[0] && cbm_horizon_bind_project(hdb, proj_str) != 0) {
+        yyjson_doc_free(doc);
+        if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+        return cbm_mcp_text_result("{\"code\":\"HORIZON_PROJECT_CONFLICT\",\"message\":\"Cannot bind horizon to this project\"}", true);
+    }
+
     /* 6. Read content from disk if not provided */
     char *disk_content = NULL;
     const char *final_content = content_str;

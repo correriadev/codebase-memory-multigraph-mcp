@@ -1,0 +1,540 @@
+[
+  {
+    "tool": "list_projects",
+    "arguments": {
+      "detail": "stats",
+      "format": "json"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"projects\":[{\"name\":\"C-Users-corre-Documents-codebase-memory-mcp\",\"root_path\":\"C:/Users/corre/Documents/codebase-memory-mcp\",\"branch\":\"main\",\"nodes\":28394,\"edges\":144418,\"size_bytes\":154271744},{\"name\":\"C-Users-corre-Documents-harness-kit\",\"root_path\":\"C:/Users/corre/Documents/harness-kit\",\"branch\":\"feature/web-sdk\",\"nodes\":4457,\"edges\":14274,\"size_bytes\":17039360},{\"name\":\"C-Users-corre-Documents-harness-memory\",\"root_path\":\"C:/Users/corre/Documents/harness-memory\",\"branch\":\"feature/project-link\",\"nodes\":5013,\"edges\":24654,\"size_bytes\":25821184},{\"name\":\"C-Users-corre-Documents-minecraft-agent\",\"root_path\":\"C:/Users/corre/Documents/minecraft-agent\",\"branch\":\"main\",\"nodes\":68002,\"edges\":71517,\"size_bytes\":171704320},{\"name\":\"cbm_e2e_121e5b05\",\"root_path\":\"C:\\\\Users\\\\corre\\\\AppData\\\\Local\\\\Temp\\\\proj_121e5b05_k2s8qcbu\",\"nodes\":20,\"edges\":0,\"size_bytes\":40960}],\"total\":5,\"offset\":0,\"limit\":50,\"returned\":5,\"has_more\":false}"
+          }
+        ],
+        "structuredContent": {
+          "projects": [
+            {
+              "name": "C-Users-corre-Documents-codebase-memory-mcp",
+              "root_path": "C:/Users/corre/Documents/codebase-memory-mcp",
+              "branch": "main",
+              "nodes": 28394,
+              "edges": 144418,
+              "size_bytes": 154271744
+            },
+            {
+              "name": "C-Users-corre-Documents-harness-kit",
+              "root_path": "C:/Users/corre/Documents/harness-kit",
+              "branch": "feature/web-sdk",
+              "nodes": 4457,
+              "edges": 14274,
+              "size_bytes": 17039360
+            },
+            {
+              "name": "C-Users-corre-Documents-harness-memory",
+              "root_path": "C:/Users/corre/Documents/harness-memory",
+              "branch": "feature/project-link",
+              "nodes": 5013,
+              "edges": 24654,
+              "size_bytes": 25821184
+            },
+            {
+              "name": "C-Users-corre-Documents-minecraft-agent",
+              "root_path": "C:/Users/corre/Documents/minecraft-agent",
+              "branch": "main",
+              "nodes": 68002,
+              "edges": 71517,
+              "size_bytes": 171704320
+            },
+            {
+              "name": "cbm_e2e_121e5b05",
+              "root_path": "C:\\Users\\corre\\AppData\\Local\\Temp\\proj_121e5b05_k2s8qcbu",
+              "nodes": 20,
+              "edges": 0,
+              "size_bytes": 40960
+            }
+          ],
+          "total": 5,
+          "offset": 0,
+          "limit": 50,
+          "returned": 5,
+          "has_more": false
+        },
+        "isError": false
+      }
+    }
+  },
+  {
+    "tool": "search_graph",
+    "arguments": {
+      "project": "C-Users-corre-Documents-harness-kit",
+      "label": "FractalTemenos",
+      "limit": 100,
+      "format": "json"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"qn_rule\":\"qn = qn_prefix == \\\"\\\" ? name : qn_prefix + \\\".\\\" + name\",\"cols\":[\"name\",\"label\",\"lines\",\"in\",\"out\"],\"groups\":[],\"hint\":\"No nodes have this label; inspect get_graph_schema.\",\"total\":0,\"returned\":0,\"count\":0,\"has_more\":false,\"truncated\":false}"
+          }
+        ],
+        "structuredContent": {
+          "qn_rule": "qn = qn_prefix == \"\" ? name : qn_prefix + \".\" + name",
+          "cols": [
+            "name",
+            "label",
+            "lines",
+            "in",
+            "out"
+          ],
+          "groups": [],
+          "hint": "No nodes have this label; inspect get_graph_schema.",
+          "total": 0,
+          "returned": 0,
+          "count": 0,
+          "has_more": false,
+          "truncated": false
+        },
+        "isError": false
+      }
+    }
+  },
+  {
+    "tool": "search_graph",
+    "arguments": {
+      "project": "C-Users-corre-Documents-harness-kit",
+      "name_pattern": "(?i)temenos|horizon|fractal",
+      "limit": 100,
+      "format": "json"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"qn_rule\":\"qn = qn_prefix == \\\"\\\" ? name : qn_prefix + \\\".\\\" + name\",\"cols\":[\"name\",\"label\",\"lines\",\"in\",\"out\"],\"groups\":[{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_PTBR.4\",\"file\":\"docs/PRD/PRD_PTBR.md\",\"rows\":[[\"1-COMO-o-sistema-funciona:-Contenção-(o-Temenos)\",\"Section\",\"166-167\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD.4\",\"file\":\"docs/PRD/PRD.md\",\"rows\":[[\"1-HOW-the-system-works:-Containment-(the-Temenos)\",\"Section\",\"166-167\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD.6\",\"file\":\"docs/PRD/PRD.md\",\"rows\":[[\"-Requirements-(The-Law-Book-of-the-Temenos)\",\"Section\",\"233-234\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_PTBR.6\",\"file\":\"docs/PRD/PRD_PTBR.md\",\"rows\":[[\"-Requisitos-(O-Livro-de-Leis-do-Temenos)\",\"Section\",\"233-234\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V2.6\",\"file\":\"docs/PRD/PRD_V2.md\",\"rows\":[[\"-The-Fractal-Law-(Amended)\",\"Section\",\"158-159\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V1.6\",\"file\":\"docs/PRD/PRD_V1.md\",\"rows\":[[\"-The-Fractal-Law-(Scale-Invariance-of-the-Cycle)\",\"Section\",\"135-136\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V1.7\",\"file\":\"docs/PRD/PRD_V1.md\",\"rows\":[[\"-Requirements-(The-Law-Book-of-the-Temenos)\",\"Section\",\"185-186\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V2.7\",\"file\":\"docs/PRD/PRD_V2.md\",\"rows\":[[\"-Requirements-(The-Law-Book-of-the-Temenos,-Second-Edition)\",\"Section\",\"180-181\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union.SCOPE-A01-session-horizon-protocol\",\"file\":\"docs/PRD/specs/cbm-union/SCOPE-A01-session-horizon-protocol.md\",\"rows\":[[\"SCOPE-A01-—-Session-Horizon-Protocol\",\"Section\",\"1-2\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union.SCOPE-A06-horizon-budget-ledger\",\"file\":\"docs/PRD/specs/cbm-union/SCOPE-A06-horizon-budget-ledger.md\",\"rows\":[[\"SCOPE-A06-—-Horizon-Budget-Ledger\",\"Section\",\"1-2\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.harnesskit-skills.SCOPE-B02-horizon-deliberator\",\"file\":\"docs/PRD/specs/harnesskit-skills/SCOPE-B02-horizon-deliberator.md\",\"rows\":[[\"SCOPE-B02-—-`horizon-deliberator`-(DELIBERATE-station)\",\"Section\",\"1-2\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union.SCOPE-A01-session-horizon-protocol.md\",\"file\":\"docs/PRD/specs/cbm-union/SCOPE-A01-session-horizon-protocol.md\",\"rows\":[[\"__file__\",\"File\",\"\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union.SCOPE-A06-horizon-budget-ledger.md\",\"file\":\"docs/PRD/specs/cbm-union/SCOPE-A06-horizon-budget-ledger.md\",\"rows\":[[\"__file__\",\"File\",\"\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.harnesskit-skills.SCOPE-B02-horizon-deliberator.md\",\"file\":\"docs/PRD/specs/harnesskit-skills/SCOPE-B02-horizon-deliberator.md\",\"rows\":[[\"__file__\",\"File\",\"\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union\",\"file\":\"docs/PRD/specs/cbm-union/SCOPE-A01-session-horizon-protocol.md\",\"rows\":[[\"SCOPE-A01-session-horizon-protocol\",\"Module\",\"1-37\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union\",\"file\":\"docs/PRD/specs/cbm-union/SCOPE-A06-horizon-budget-ledger.md\",\"rows\":[[\"SCOPE-A06-horizon-budget-ledger\",\"Module\",\"1-38\",0,0]]},{\"qn_prefix\":\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.harnesskit-skills\",\"file\":\"docs/PRD/specs/harnesskit-skills/SCOPE-B02-horizon-deliberator.md\",\"rows\":[[\"SCOPE-B02-horizon-deliberator\",\"Module\",\"1-35\",0,0]]}],\"total\":17,\"returned\":17,\"count\":17,\"has_more\":false,\"truncated\":false}"
+          }
+        ],
+        "structuredContent": {
+          "qn_rule": "qn = qn_prefix == \"\" ? name : qn_prefix + \".\" + name",
+          "cols": [
+            "name",
+            "label",
+            "lines",
+            "in",
+            "out"
+          ],
+          "groups": [
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_PTBR.4",
+              "file": "docs/PRD/PRD_PTBR.md",
+              "rows": [
+                [
+                  "1-COMO-o-sistema-funciona:-Contenção-(o-Temenos)",
+                  "Section",
+                  "166-167",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.PRD.4",
+              "file": "docs/PRD/PRD.md",
+              "rows": [
+                [
+                  "1-HOW-the-system-works:-Containment-(the-Temenos)",
+                  "Section",
+                  "166-167",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.PRD.6",
+              "file": "docs/PRD/PRD.md",
+              "rows": [
+                [
+                  "-Requirements-(The-Law-Book-of-the-Temenos)",
+                  "Section",
+                  "233-234",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_PTBR.6",
+              "file": "docs/PRD/PRD_PTBR.md",
+              "rows": [
+                [
+                  "-Requisitos-(O-Livro-de-Leis-do-Temenos)",
+                  "Section",
+                  "233-234",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V2.6",
+              "file": "docs/PRD/PRD_V2.md",
+              "rows": [
+                [
+                  "-The-Fractal-Law-(Amended)",
+                  "Section",
+                  "158-159",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V1.6",
+              "file": "docs/PRD/PRD_V1.md",
+              "rows": [
+                [
+                  "-The-Fractal-Law-(Scale-Invariance-of-the-Cycle)",
+                  "Section",
+                  "135-136",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V1.7",
+              "file": "docs/PRD/PRD_V1.md",
+              "rows": [
+                [
+                  "-Requirements-(The-Law-Book-of-the-Temenos)",
+                  "Section",
+                  "185-186",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V2.7",
+              "file": "docs/PRD/PRD_V2.md",
+              "rows": [
+                [
+                  "-Requirements-(The-Law-Book-of-the-Temenos,-Second-Edition)",
+                  "Section",
+                  "180-181",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union.SCOPE-A01-session-horizon-protocol",
+              "file": "docs/PRD/specs/cbm-union/SCOPE-A01-session-horizon-protocol.md",
+              "rows": [
+                [
+                  "SCOPE-A01-—-Session-Horizon-Protocol",
+                  "Section",
+                  "1-2",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union.SCOPE-A06-horizon-budget-ledger",
+              "file": "docs/PRD/specs/cbm-union/SCOPE-A06-horizon-budget-ledger.md",
+              "rows": [
+                [
+                  "SCOPE-A06-—-Horizon-Budget-Ledger",
+                  "Section",
+                  "1-2",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.specs.harnesskit-skills.SCOPE-B02-horizon-deliberator",
+              "file": "docs/PRD/specs/harnesskit-skills/SCOPE-B02-horizon-deliberator.md",
+              "rows": [
+                [
+                  "SCOPE-B02-—-`horizon-deliberator`-(DELIBERATE-station)",
+                  "Section",
+                  "1-2",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union.SCOPE-A01-session-horizon-protocol.md",
+              "file": "docs/PRD/specs/cbm-union/SCOPE-A01-session-horizon-protocol.md",
+              "rows": [
+                [
+                  "__file__",
+                  "File",
+                  "",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union.SCOPE-A06-horizon-budget-ledger.md",
+              "file": "docs/PRD/specs/cbm-union/SCOPE-A06-horizon-budget-ledger.md",
+              "rows": [
+                [
+                  "__file__",
+                  "File",
+                  "",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.specs.harnesskit-skills.SCOPE-B02-horizon-deliberator.md",
+              "file": "docs/PRD/specs/harnesskit-skills/SCOPE-B02-horizon-deliberator.md",
+              "rows": [
+                [
+                  "__file__",
+                  "File",
+                  "",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union",
+              "file": "docs/PRD/specs/cbm-union/SCOPE-A01-session-horizon-protocol.md",
+              "rows": [
+                [
+                  "SCOPE-A01-session-horizon-protocol",
+                  "Module",
+                  "1-37",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union",
+              "file": "docs/PRD/specs/cbm-union/SCOPE-A06-horizon-budget-ledger.md",
+              "rows": [
+                [
+                  "SCOPE-A06-horizon-budget-ledger",
+                  "Module",
+                  "1-38",
+                  0,
+                  0
+                ]
+              ]
+            },
+            {
+              "qn_prefix": "C-Users-corre-Documents-harness-kit.docs.PRD.specs.harnesskit-skills",
+              "file": "docs/PRD/specs/harnesskit-skills/SCOPE-B02-horizon-deliberator.md",
+              "rows": [
+                [
+                  "SCOPE-B02-horizon-deliberator",
+                  "Module",
+                  "1-35",
+                  0,
+                  0
+                ]
+              ]
+            }
+          ],
+          "total": 17,
+          "returned": 17,
+          "count": 17,
+          "has_more": false,
+          "truncated": false
+        },
+        "isError": false
+      }
+    }
+  },
+  {
+    "tool": "search_graph",
+    "arguments": {
+      "project": "C-Users-corre-Documents-harness-kit",
+      "query": "temenos",
+      "limit": 100,
+      "format": "json"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"cols\":[\"qn\",\"label\",\"file\",\"lines\",\"rank\"],\"rows\":[[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD.6.-Requirements-(The-Law-Book-of-the-Temenos)\",\"Section\",\"docs/PRD/PRD.md\",\"233-234\",-8.955011034350225],[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V1.7.-Requirements-(The-Law-Book-of-the-Temenos)\",\"Section\",\"docs/PRD/PRD_V1.md\",\"185-186\",-8.853386297694838],[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_PTBR.6.-Requisitos-(O-Livro-de-Leis-do-Temenos)\",\"Section\",\"docs/PRD/PRD_PTBR.md\",\"233-234\",-8.853386297694838],[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V2.7.-Requirements-(The-Law-Book-of-the-Temenos,-Second-Edition)\",\"Section\",\"docs/PRD/PRD_V2.md\",\"180-181\",-8.56189573579056],[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD.4.1-HOW-the-system-works:-Containment-(the-Temenos)\",\"Section\",\"docs/PRD/PRD.md\",\"166-167\",-6.5353323385841815],[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_PTBR.4.1-COMO-o-sistema-funciona:-Contenção-(o-Temenos)\",\"Section\",\"docs/PRD/PRD_PTBR.md\",\"166-167\",-6.510541796592926],[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD.1.-Vision-Statement\",\"Section\",\"docs/PRD/PRD.md\",\"10-11\",-1.3248606331931887],[\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union.SCOPE-A01-session-horizon-protocol.Problem\",\"Section\",\"docs/PRD/specs/cbm-union/SCOPE-A01-session-horizon-protocol.md\",\"7-8\",-1.302737281098597],[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V1.1.-Vision-Statement\",\"Section\",\"docs/PRD/PRD_V1.md\",\"9-10\",-1.2919503830293222],[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_PTBR.1.-Declaração-de-Visão\",\"Section\",\"docs/PRD/PRD_PTBR.md\",\"10-11\",-1.2813406528748865],[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V2.1.-Vision-Statement\",\"Section\",\"docs/PRD/PRD_V2.md\",\"10-11\",-1.2813406528748865],[\"C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V2.6.1-Self-Similarity-Across-Scales-—-Now-Topological\",\"Section\",\"docs/PRD/PRD_V2.md\",\"160-161\",-1.1931550106438324],[\"C-Users-corre-Documents-harness-kit.docs.PRD.specs.harnesskit-skills.SCOPE-B08-level-graduator.SCOPE-B08-—-`level-graduator`-(rebirth-/-non-regression-gate)\",\"Section\",\"docs/PRD/specs/harnesskit-skills/SCOPE-B08-level-graduator.md\",\"1-2\",-1.1841002031182906],[\"C-Users-corre-Documents-harness-kit.docs.PRD.ADR_V1.3.1-The-Skill-Invocation-Protocol-(runtime-loop)\",\"Section\",\"docs/PRD/ADR_V1.md\",\"34-35\",-1.1005777784395312]],\"total\":14,\"total_relation\":\"eq\",\"search_mode\":\"bm25\",\"returned\":14,\"count\":14,\"has_more\":false,\"truncated\":false}"
+          }
+        ],
+        "structuredContent": {
+          "cols": [
+            "qn",
+            "label",
+            "file",
+            "lines",
+            "rank"
+          ],
+          "rows": [
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD.6.-Requirements-(The-Law-Book-of-the-Temenos)",
+              "Section",
+              "docs/PRD/PRD.md",
+              "233-234",
+              -8.955011034350225
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V1.7.-Requirements-(The-Law-Book-of-the-Temenos)",
+              "Section",
+              "docs/PRD/PRD_V1.md",
+              "185-186",
+              -8.853386297694838
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_PTBR.6.-Requisitos-(O-Livro-de-Leis-do-Temenos)",
+              "Section",
+              "docs/PRD/PRD_PTBR.md",
+              "233-234",
+              -8.853386297694838
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V2.7.-Requirements-(The-Law-Book-of-the-Temenos,-Second-Edition)",
+              "Section",
+              "docs/PRD/PRD_V2.md",
+              "180-181",
+              -8.56189573579056
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD.4.1-HOW-the-system-works:-Containment-(the-Temenos)",
+              "Section",
+              "docs/PRD/PRD.md",
+              "166-167",
+              -6.5353323385841815
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_PTBR.4.1-COMO-o-sistema-funciona:-Contenção-(o-Temenos)",
+              "Section",
+              "docs/PRD/PRD_PTBR.md",
+              "166-167",
+              -6.510541796592926
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD.1.-Vision-Statement",
+              "Section",
+              "docs/PRD/PRD.md",
+              "10-11",
+              -1.3248606331931887
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.specs.cbm-union.SCOPE-A01-session-horizon-protocol.Problem",
+              "Section",
+              "docs/PRD/specs/cbm-union/SCOPE-A01-session-horizon-protocol.md",
+              "7-8",
+              -1.302737281098597
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V1.1.-Vision-Statement",
+              "Section",
+              "docs/PRD/PRD_V1.md",
+              "9-10",
+              -1.2919503830293222
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_PTBR.1.-Declaração-de-Visão",
+              "Section",
+              "docs/PRD/PRD_PTBR.md",
+              "10-11",
+              -1.2813406528748865
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V2.1.-Vision-Statement",
+              "Section",
+              "docs/PRD/PRD_V2.md",
+              "10-11",
+              -1.2813406528748865
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.PRD_V2.6.1-Self-Similarity-Across-Scales-—-Now-Topological",
+              "Section",
+              "docs/PRD/PRD_V2.md",
+              "160-161",
+              -1.1931550106438324
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.specs.harnesskit-skills.SCOPE-B08-level-graduator.SCOPE-B08-—-`level-graduator`-(rebirth-/-non-regression-gate)",
+              "Section",
+              "docs/PRD/specs/harnesskit-skills/SCOPE-B08-level-graduator.md",
+              "1-2",
+              -1.1841002031182906
+            ],
+            [
+              "C-Users-corre-Documents-harness-kit.docs.PRD.ADR_V1.3.1-The-Skill-Invocation-Protocol-(runtime-loop)",
+              "Section",
+              "docs/PRD/ADR_V1.md",
+              "34-35",
+              -1.1005777784395312
+            ]
+          ],
+          "total": 14,
+          "total_relation": "eq",
+          "search_mode": "bm25",
+          "returned": 14,
+          "count": 14,
+          "has_more": false,
+          "truncated": false
+        },
+        "isError": false
+      }
+    }
+  },
+  {
+    "tool": "query_graph",
+    "arguments": {
+      "project": "C-Users-corre-Documents-harness-kit",
+      "query": "MATCH (t:FractalTemenos) RETURN t LIMIT 100",
+      "format": "json"
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"columns\":[\"t\"],\"rows\":[],\"returned\":0,\"total\":0,\"total_relation\":\"eq\",\"has_more\":false,\"truncated\":false,\"hint\":\"Query returned no results. Use get_graph_schema() to see available labels and edge types.\"}"
+          }
+        ],
+        "structuredContent": {
+          "columns": [
+            "t"
+          ],
+          "rows": [],
+          "returned": 0,
+          "total": 0,
+          "total_relation": "eq",
+          "has_more": false,
+          "truncated": false,
+          "hint": "Query returned no results. Use get_graph_schema() to see available labels and edge types."
+        },
+        "isError": false
+      }
+    }
+  }
+]
