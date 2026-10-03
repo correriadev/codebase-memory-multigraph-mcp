@@ -365,6 +365,49 @@ static char *result_from_mut_doc(yyjson_mut_doc *doc, bool is_error) {
     return res;
 }
 
+static const char *theme_status_text(CbmThemeStatus status) {
+    switch (status) {
+        case CBM_THEME_DEPRECATED: return "DEPRECATED";
+        case CBM_THEME_ABSENT: return "ABSENT";
+        default: return "ACTIVE";
+    }
+}
+
+static bool theme_backing_project(const char *uri, char *out, size_t out_size) {
+    const char *value = NULL;
+    if (uri && strncmp(uri, "cbm-project://", 14) == 0) value = uri + 14;
+    else if (uri && strncmp(uri, "cbm://", 6) == 0) value = uri + 6;
+    if (!value || !value[0] || !out || out_size == 0) return false;
+    size_t length = strcspn(value, "/?#");
+    if (value[length] != '\0') return false;
+    if (!length || length >= out_size) return false;
+    memcpy(out, value, length);
+    out[length] = '\0';
+    return true;
+}
+
+static void theme_add_entry_json(yyjson_mut_doc *doc, yyjson_mut_val *obj,
+                                 const CbmThemeEntry *entry) {
+    yyjson_mut_obj_add_strcpy(doc, obj, "theme_id", entry->theme_id);
+    yyjson_mut_obj_add_strcpy(doc, obj, "name", entry->name);
+    yyjson_mut_obj_add_strcpy(doc, obj, "namespace", entry->namespace);
+    yyjson_mut_obj_add_strcpy(doc, obj, "target_uri", entry->target_uri);
+    yyjson_mut_obj_add_strcpy(doc, obj, "version", entry->version);
+    yyjson_mut_obj_add_strcpy(doc, obj, "curator", entry->curator);
+    yyjson_mut_obj_add_strcpy(doc, obj, "status", theme_status_text(entry->status));
+    yyjson_mut_obj_add_strcpy(doc, obj, "description", entry->description);
+    yyjson_mut_obj_add_strcpy(doc, obj, "aliases", entry->aliases);
+    yyjson_mut_obj_add_strcpy(doc, obj, "tags", entry->tags);
+    yyjson_mut_obj_add_strcpy(doc, obj, "founding_provenance", entry->founding_provenance);
+    yyjson_mut_obj_add_bool(doc, obj, "backing_graph_declared", entry->target_uri[0] != '\0');
+    char project[CBM_THEME_URI_MAX] = {0};
+    if (theme_backing_project(entry->target_uri, project, sizeof(project))) {
+        yyjson_mut_obj_add_strcpy(doc, obj, "target_graph_project", project);
+        yyjson_mut_obj_add_strcpy(doc, obj, "navigation_tools",
+                                  "theme_graph_search, theme_graph_query");
+    }
+}
+
 static char *json_error_result(const char *code, const char *message) {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = yyjson_mut_obj(doc);
@@ -891,6 +934,61 @@ char *handle_classify_activity(cbm_mcp_server_t *srv, const char *args_json) {
     return result_from_mut_doc(out_doc, false);
 }
 
+typedef enum {
+    THEME_ANCHOR_FOUND = 0,
+    THEME_ANCHOR_NOT_FOUND,
+    THEME_ANCHOR_UNAVAILABLE
+} ThemeAnchorResolution;
+
+static ThemeAnchorResolution theme_resolve_citation(cbm_mcp_server_t *srv,
+                                                     const CbmCanonCitation *citation) {
+    if (!citation || !citation->theme_id[0] || !citation->pinned_version[0] || !citation->node_uri[0]) {
+        return THEME_ANCHOR_NOT_FOUND;
+    }
+    const char *qualified_name = strrchr(citation->node_uri, '#');
+    if (!qualified_name || !qualified_name[1]) return THEME_ANCHOR_NOT_FOUND;
+    qualified_name++;
+    yyjson_mut_doc *args_doc = yyjson_mut_doc_new(NULL);
+    if (!args_doc) return THEME_ANCHOR_UNAVAILABLE;
+    yyjson_mut_val *args = yyjson_mut_obj(args_doc);
+    yyjson_mut_doc_set_root(args_doc, args);
+    yyjson_mut_obj_add_strcpy(args_doc, args, "theme_id", citation->theme_id);
+    yyjson_mut_obj_add_strcpy(args_doc, args, "version", citation->pinned_version);
+    yyjson_mut_obj_add_strcpy(args_doc, args, "query", qualified_name);
+    yyjson_mut_obj_add_uint(args_doc, args, "limit", 500);
+    yyjson_mut_obj_add_strcpy(args_doc, args, "format", "json");
+    char *serialized = yyjson_mut_write(args_doc, 0, NULL);
+    yyjson_mut_doc_free(args_doc);
+    if (!serialized) return THEME_ANCHOR_UNAVAILABLE;
+    char *response = handle_theme_graph_search(srv, serialized);
+    free(serialized);
+    if (!response) return THEME_ANCHOR_UNAVAILABLE;
+    yyjson_doc *doc = yyjson_read(response, strlen(response), 0);
+    free(response);
+    if (!doc) return THEME_ANCHOR_UNAVAILABLE;
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    yyjson_val *structured = root ? yyjson_obj_get(root, "structuredContent") : NULL;
+    yyjson_val *success = structured ? yyjson_obj_get(structured, "success") : NULL;
+    if (!success || !yyjson_is_true(success)) {
+        yyjson_doc_free(doc);
+        return THEME_ANCHOR_UNAVAILABLE;
+    }
+    yyjson_val *citations = yyjson_obj_get(structured, "citation_candidates");
+    bool found = false;
+    if (citations && yyjson_is_arr(citations)) {
+        for (size_t i = 0; i < yyjson_arr_size(citations); i++) {
+            yyjson_val *candidate = yyjson_arr_get(citations, i);
+            yyjson_val *uri = candidate ? yyjson_obj_get(candidate, "node_uri") : NULL;
+            if (uri && yyjson_is_str(uri) && strcmp(yyjson_get_str(uri), citation->node_uri) == 0) {
+                found = true;
+                break;
+            }
+        }
+    }
+    yyjson_doc_free(doc);
+    return found ? THEME_ANCHOR_FOUND : THEME_ANCHOR_NOT_FOUND;
+}
+
 /* W04: validate_provenance */
 char *handle_validate_provenance(cbm_mcp_server_t *srv, const char *args_json) {
     if (!args_json) {
@@ -936,7 +1034,20 @@ char *handle_validate_provenance(cbm_mcp_server_t *srv, const char *args_json) {
 
     char err_buf[256] = {0};
     CbmRefusalCode refusal = cbm_validate_specialty_provenance(&j, get_themes(srv), err_buf, sizeof(err_buf));
+    ThemeAnchorResolution anchor = THEME_ANCHOR_FOUND;
+    if (refusal == CBM_REFUSAL_OK && j.kind == CBM_PROVENANCE_CANON_CITATION) {
+        anchor = theme_resolve_citation(srv, &j.citation);
+        if (anchor == THEME_ANCHOR_NOT_FOUND) {
+            refusal = CBM_REFUSAL_ANCHOR_NOT_FOUND;
+            snprintf(err_buf, sizeof(err_buf), "cited node URI was not returned by the pinned thematic graph");
+        }
+    }
     yyjson_doc_free(doc);
+
+    if (anchor == THEME_ANCHOR_UNAVAILABLE) {
+        return json_error_result("THEME_GRAPH_UNAVAILABLE",
+                                 "could not resolve the cited node against its pinned thematic graph");
+    }
 
     if (refusal != CBM_REFUSAL_OK) {
         cbm_refusal_emit(refusal, "provenance", err_buf);
@@ -950,6 +1061,14 @@ char *handle_validate_provenance(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_mut_doc_set_root(out_doc, out_root);
     yyjson_mut_obj_add_bool(out_doc, out_root, "valid", true);
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "provenance_class", p_class);
+    if (j.kind == CBM_PROVENANCE_CANON_CITATION) {
+        yyjson_mut_obj_add_bool(out_doc, out_root, "anchor_verified", true);
+        yyjson_mut_obj_add_strcpy(out_doc, out_root, "theme_id", j.citation.theme_id);
+        yyjson_mut_obj_add_strcpy(out_doc, out_root, "pinned_version", j.citation.pinned_version);
+        yyjson_mut_obj_add_strcpy(out_doc, out_root, "node_uri", j.citation.node_uri);
+    } else {
+        yyjson_mut_obj_add_strcpy(out_doc, out_root, "rationale", j.invention.rationale);
+    }
     return result_from_mut_doc(out_doc, false);
 }
 
@@ -964,30 +1083,32 @@ char *handle_theme_lookup(cbm_mcp_server_t *srv, const char *args_json) {
     }
     yyjson_val *root = yyjson_doc_get_root(doc);
     yyjson_val *v_tid = root ? yyjson_obj_get(root, "theme_id") : NULL;
-    if (!v_tid || !yyjson_is_str(v_tid)) {
+    yyjson_val *v_ver = root ? yyjson_obj_get(root, "version") : NULL;
+    if (!v_tid || !yyjson_is_str(v_tid) || (v_ver && !yyjson_is_str(v_ver))) {
         yyjson_doc_free(doc);
-        return json_error_result("INVALID_PARAMS", "theme_id is required");
+        return json_error_result("INVALID_PARAMS",
+                                 "theme_id is required and version must be a string when supplied");
     }
     const char *theme_id = yyjson_get_str(v_tid);
 
     CbmThemeEntry entry;
-    CbmRefusalCode rc = cbm_theme_registry_lookup(get_themes(srv), theme_id, &entry);
+    CbmRefusalCode rc = v_ver
+        ? cbm_theme_registry_lookup_version(get_themes(srv), theme_id, yyjson_get_str(v_ver), &entry)
+        : cbm_theme_registry_lookup(get_themes(srv), theme_id, &entry);
     yyjson_doc_free(doc);
 
     if (rc != CBM_REFUSAL_OK) {
-        return json_error_result("THEME_UNKNOWN", "theme not found in registry");
+        return json_error_result(cbm_refusal_code_string(rc),
+                                 rc == CBM_REFUSAL_THEME_UNKNOWN
+                                     ? "theme/version not found in registry"
+                                     : "thematic catalog unavailable");
     }
 
-    const char *st_str = (entry.status == CBM_THEME_ABSENT) ? "ABSENT" : "ACTIVE";
     yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *out_root = yyjson_mut_obj(out_doc);
     yyjson_mut_doc_set_root(out_doc, out_root);
     yyjson_mut_obj_add_bool(out_doc, out_root, "success", true);
-    yyjson_mut_obj_add_strcpy(out_doc, out_root, "theme_id", entry.theme_id);
-    yyjson_mut_obj_add_strcpy(out_doc, out_root, "namespace", entry.namespace);
-    yyjson_mut_obj_add_strcpy(out_doc, out_root, "curator", entry.curator);
-    yyjson_mut_obj_add_strcpy(out_doc, out_root, "version", entry.version);
-    yyjson_mut_obj_add_strcpy(out_doc, out_root, "status", st_str);
+    theme_add_entry_json(out_doc, out_root, &entry);
     return result_from_mut_doc(out_doc, false);
 }
 
@@ -1013,17 +1134,38 @@ char *handle_theme_register(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_val *v_ns = yyjson_obj_get(root, "namespace");
     yyjson_val *v_cur = yyjson_obj_get(root, "curator");
     yyjson_val *v_ver = yyjson_obj_get(root, "version");
+    yyjson_val *v_name = yyjson_obj_get(root, "name");
 
     if (v_tid && yyjson_is_str(v_tid)) strncpy(entry.theme_id, yyjson_get_str(v_tid), sizeof(entry.theme_id) - 1);
     if (v_ns && yyjson_is_str(v_ns)) strncpy(entry.namespace, yyjson_get_str(v_ns), sizeof(entry.namespace) - 1);
     if (v_cur && yyjson_is_str(v_cur)) strncpy(entry.curator, yyjson_get_str(v_cur), sizeof(entry.curator) - 1);
+    if (v_name && yyjson_is_str(v_name)) strncpy(entry.name, yyjson_get_str(v_name), sizeof(entry.name) - 1);
     if (v_ver && yyjson_is_str(v_ver)) strncpy(entry.version, yyjson_get_str(v_ver), sizeof(entry.version) - 1);
+    yyjson_val *v_target = yyjson_obj_get(root, "target_uri");
+    yyjson_val *v_desc = yyjson_obj_get(root, "description");
+    yyjson_val *v_aliases = yyjson_obj_get(root, "aliases");
+    yyjson_val *v_tags = yyjson_obj_get(root, "tags");
+    yyjson_val *v_prov = yyjson_obj_get(root, "founding_provenance");
+    if (v_target && yyjson_is_str(v_target)) strncpy(entry.target_uri, yyjson_get_str(v_target), sizeof(entry.target_uri) - 1);
+    if (v_desc && yyjson_is_str(v_desc)) strncpy(entry.description, yyjson_get_str(v_desc), sizeof(entry.description) - 1);
+    if (v_aliases && yyjson_is_str(v_aliases)) strncpy(entry.aliases, yyjson_get_str(v_aliases), sizeof(entry.aliases) - 1);
+    if (v_tags && yyjson_is_str(v_tags)) strncpy(entry.tags, yyjson_get_str(v_tags), sizeof(entry.tags) - 1);
+    if (v_prov && yyjson_is_str(v_prov)) strncpy(entry.founding_provenance, yyjson_get_str(v_prov), sizeof(entry.founding_provenance) - 1);
 
     entry.status = CBM_THEME_ACTIVE;
     yyjson_val *v_st = yyjson_obj_get(root, "status");
-    if (v_st && yyjson_is_str(v_st) && strcmp(yyjson_get_str(v_st), "ABSENT") == 0) {
-        entry.status = CBM_THEME_ABSENT;
-    }
+    if (v_st && yyjson_is_str(v_st)) {
+        const char *status = yyjson_get_str(v_st);
+        if (strcmp(status, "ABSENT") == 0) entry.status = CBM_THEME_ABSENT;
+        else if (strcmp(status, "DEPRECATED") == 0) entry.status = CBM_THEME_DEPRECATED;
+        else if (strcmp(status, "ACTIVE") != 0) {
+            yyjson_doc_free(doc);
+            return json_error_result("INVALID_PARAMS", "status must be ACTIVE, DEPRECATED, or ABSENT");
+        }
+    } else if (v_st) {
+        yyjson_doc_free(doc);
+        return json_error_result("INVALID_PARAMS", "status must be a string");
+      }
 
     char err_buf[256] = {0};
     CbmRefusalCode rc = cbm_theme_registry_register(get_themes(srv), &entry, err_buf, sizeof(err_buf));
@@ -1038,8 +1180,287 @@ char *handle_theme_register(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_mut_doc_set_root(out_doc, out_root);
     yyjson_mut_obj_add_bool(out_doc, out_root, "success", true);
     yyjson_mut_obj_add_strcpy(out_doc, out_root, "theme_id", entry.theme_id);
-    yyjson_mut_obj_add_strcpy(out_doc, out_root, "status", entry.status == CBM_THEME_ABSENT ? "ABSENT" : "ACTIVE");
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "status", theme_status_text(entry.status));
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "version", entry.version);
     return result_from_mut_doc(out_doc, false);
+}
+
+static char *handle_theme_catalog(cbm_mcp_server_t *srv, const char *args_json,
+                                  bool require_query) {
+    if (!args_json) return json_error_result("INVALID_PARAMS", "missing arguments");
+    yyjson_doc *doc = yyjson_read(args_json, strlen(args_json), 0);
+    if (!doc) return json_error_result("INVALID_PARAMS", "malformed JSON arguments");
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    if (!root || !yyjson_is_obj(root)) {
+        yyjson_doc_free(doc);
+        return json_error_result("INVALID_PARAMS", "arguments must be an object");
+    }
+    yyjson_val *v_query = yyjson_obj_get(root, "query");
+    const char *query = "";
+    if (v_query) {
+        if (!yyjson_is_str(v_query)) {
+            yyjson_doc_free(doc);
+            return json_error_result("INVALID_PARAMS", "query must be a string");
+        }
+        query = yyjson_get_str(v_query);
+    } else if (require_query) {
+        yyjson_doc_free(doc);
+        return json_error_result("INVALID_PARAMS", "query is required");
+    }
+    yyjson_val *v_namespace = yyjson_obj_get(root, "namespace");
+    yyjson_val *v_status = yyjson_obj_get(root, "status");
+    if ((v_namespace && !yyjson_is_str(v_namespace)) || (v_status && !yyjson_is_str(v_status))) {
+        yyjson_doc_free(doc);
+        return json_error_result("INVALID_PARAMS", "namespace and status must be strings");
+    }
+    const char *namespace_filter = v_namespace ? yyjson_get_str(v_namespace) : "";
+    const char *status_filter = v_status ? yyjson_get_str(v_status) : "";
+    if (status_filter[0] && strcmp(status_filter, "ACTIVE") != 0 &&
+        strcmp(status_filter, "DEPRECATED") != 0 && strcmp(status_filter, "ABSENT") != 0) {
+        yyjson_doc_free(doc);
+        return json_error_result("INVALID_PARAMS", "status must be ACTIVE, DEPRECATED, or ABSENT");
+    }
+    int limit_arg = cbm_mcp_get_int_arg(args_json, "limit", 20);
+    int offset_arg = cbm_mcp_get_int_arg(args_json, "offset", 0);
+    if (limit_arg < 1 || limit_arg > 100 || offset_arg < 0) {
+        yyjson_doc_free(doc);
+        return json_error_result("INVALID_PARAMS", "limit must be 1..100 and offset must be non-negative");
+    }
+    CbmThemeSearchHit hits[100];
+    size_t total = 0, count = 0;
+    CbmRefusalCode rc = cbm_theme_registry_search(get_themes(srv), query,
+        namespace_filter, status_filter, (size_t)offset_arg, (size_t)limit_arg,
+        hits, sizeof(hits) / sizeof(hits[0]), &total, &count);
+    if (rc != CBM_REFUSAL_OK) {
+        yyjson_doc_free(doc);
+        return json_error_result(cbm_refusal_code_string(rc),
+                                 "thematic catalog is unavailable; no search result was produced");
+    }
+
+    yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
+    if (!out_doc) {
+        yyjson_doc_free(doc);
+        return json_error_result("INTERNAL_ERROR", "failed to allocate catalog response");
+    }
+    yyjson_mut_val *out_root = yyjson_mut_obj(out_doc);
+    yyjson_mut_doc_set_root(out_doc, out_root);
+    yyjson_mut_obj_add_bool(out_doc, out_root, "success", true);
+    yyjson_mut_obj_add_strcpy(out_doc, out_root, "query", query);
+    yyjson_doc_free(doc);
+    yyjson_mut_obj_add_uint(out_doc, out_root, "total", total);
+    yyjson_mut_obj_add_uint(out_doc, out_root, "offset", (uint64_t)offset_arg);
+    yyjson_mut_obj_add_uint(out_doc, out_root, "limit", (uint64_t)limit_arg);
+    yyjson_mut_obj_add_bool(out_doc, out_root, "has_more",
+                            (size_t)offset_arg + count < total);
+    yyjson_mut_val *results = yyjson_mut_arr(out_doc);
+    yyjson_mut_obj_add_val(out_doc, out_root, "results", results);
+    for (size_t i = 0; i < count; i++) {
+        yyjson_mut_val *item = yyjson_mut_obj(out_doc);
+        theme_add_entry_json(out_doc, item, &hits[i].entry);
+        yyjson_mut_obj_add_uint(out_doc, item, "match_score", hits[i].score);
+        yyjson_mut_arr_add_val(results, item);
+    }
+    return result_from_mut_doc(out_doc, false);
+}
+
+char *handle_theme_search(cbm_mcp_server_t *srv, const char *args_json) {
+    return handle_theme_catalog(srv, args_json, true);
+}
+
+char *handle_theme_list(cbm_mcp_server_t *srv, const char *args_json) {
+    return handle_theme_catalog(srv, args_json, false);
+}
+
+static void theme_add_citation_candidate(yyjson_mut_doc *doc, yyjson_mut_val *citations,
+                                         const char *project, const char *file,
+                                         const char *qualified_name) {
+    if (!doc || !citations || !project || !file || !qualified_name || !qualified_name[0]) return;
+    char uri[CBM_THEME_URI_MAX * 3];
+    int written = snprintf(uri, sizeof(uri), "cbm://%s/%s#%s", project, file, qualified_name);
+    if (written < 0 || (size_t)written >= sizeof(uri)) return;
+    yyjson_mut_val *citation = yyjson_mut_obj(doc);
+    if (!citation) return;
+    yyjson_mut_obj_add_strcpy(doc, citation, "node_uri", uri);
+    yyjson_mut_obj_add_strcpy(doc, citation, "qualified_name", qualified_name);
+    yyjson_mut_arr_add_val(citations, citation);
+}
+
+/* search_graph has two JSON result shapes: BM25 returns flat qn/file rows,
+ * while its graph-search fallback groups rows by qn prefix and file. */
+static yyjson_mut_val *theme_build_citation_candidates(yyjson_mut_doc *doc,
+                                                       yyjson_val *structured,
+                                                       const char *project) {
+    yyjson_mut_val *citations = yyjson_mut_arr(doc);
+    yyjson_val *cols = structured ? yyjson_obj_get(structured, "cols") : NULL;
+    if (!citations || !cols || !yyjson_is_arr(cols)) return citations;
+
+    size_t qn_col = SIZE_MAX, file_col = SIZE_MAX, name_col = SIZE_MAX;
+    for (size_t i = 0; i < yyjson_arr_size(cols); i++) {
+        yyjson_val *col = yyjson_arr_get(cols, i);
+        if (!col || !yyjson_is_str(col)) continue;
+        const char *column = yyjson_get_str(col);
+        if (strcmp(column, "qn") == 0) qn_col = i;
+        else if (strcmp(column, "file") == 0) file_col = i;
+        else if (strcmp(column, "name") == 0) name_col = i;
+    }
+
+    yyjson_val *rows = yyjson_obj_get(structured, "rows");
+    if (rows && yyjson_is_arr(rows) && qn_col != SIZE_MAX && file_col != SIZE_MAX) {
+        for (size_t i = 0; i < yyjson_arr_size(rows); i++) {
+            yyjson_val *row = yyjson_arr_get(rows, i);
+            yyjson_val *qn = row && yyjson_is_arr(row) ? yyjson_arr_get(row, qn_col) : NULL;
+            yyjson_val *file = row && yyjson_is_arr(row) ? yyjson_arr_get(row, file_col) : NULL;
+            if (qn && file && yyjson_is_str(qn) && yyjson_is_str(file)) {
+                theme_add_citation_candidate(doc, citations, project,
+                                             yyjson_get_str(file), yyjson_get_str(qn));
+            }
+        }
+        return citations;
+    }
+
+    yyjson_val *groups = yyjson_obj_get(structured, "groups");
+    if (!groups || !yyjson_is_arr(groups) || name_col == SIZE_MAX) return citations;
+    for (size_t i = 0; i < yyjson_arr_size(groups); i++) {
+        yyjson_val *group = yyjson_arr_get(groups, i);
+        yyjson_val *prefix_value = group ? yyjson_obj_get(group, "qn_prefix") : NULL;
+        yyjson_val *file_value = group ? yyjson_obj_get(group, "file") : NULL;
+        yyjson_val *group_rows = group ? yyjson_obj_get(group, "rows") : NULL;
+        if (!prefix_value || !yyjson_is_str(prefix_value) || !file_value ||
+            !yyjson_is_str(file_value) || !group_rows || !yyjson_is_arr(group_rows)) continue;
+        const char *prefix = yyjson_get_str(prefix_value);
+        const char *file = yyjson_get_str(file_value);
+        for (size_t j = 0; j < yyjson_arr_size(group_rows); j++) {
+            yyjson_val *row = yyjson_arr_get(group_rows, j);
+            yyjson_val *name = row && yyjson_is_arr(row) ? yyjson_arr_get(row, name_col) : NULL;
+            if (!name || !yyjson_is_str(name) || !yyjson_get_str(name)[0]) continue;
+            char qualified_name[CBM_THEME_URI_MAX * 2];
+            int written = prefix[0]
+                ? snprintf(qualified_name, sizeof(qualified_name), "%s.%s", prefix, yyjson_get_str(name))
+                : snprintf(qualified_name, sizeof(qualified_name), "%s", yyjson_get_str(name));
+            if (written < 0 || (size_t)written >= sizeof(qualified_name)) continue;
+            theme_add_citation_candidate(doc, citations, project, file, qualified_name);
+        }
+    }
+    return citations;
+}
+
+static char *handle_theme_graph_read(cbm_mcp_server_t *srv, const char *args_json,
+                                     bool query_graph) {
+    if (!args_json) return json_error_result("INVALID_PARAMS", "missing arguments");
+    yyjson_doc *input = yyjson_read(args_json, strlen(args_json), 0);
+    if (!input) return json_error_result("INVALID_PARAMS", "malformed JSON arguments");
+    yyjson_val *root = yyjson_doc_get_root(input);
+    yyjson_val *v_id = root ? yyjson_obj_get(root, "theme_id") : NULL;
+    yyjson_val *v_query = root ? yyjson_obj_get(root, "query") : NULL;
+    yyjson_val *v_version = root ? yyjson_obj_get(root, "version") : NULL;
+    if (!v_id || !yyjson_is_str(v_id) || !v_query || !yyjson_is_str(v_query) ||
+        (v_version && !yyjson_is_str(v_version))) {
+        yyjson_doc_free(input);
+        return json_error_result("INVALID_PARAMS", "theme_id and query are required strings; version must be a string when supplied");
+    }
+    CbmThemeEntry entry;
+    CbmRefusalCode lookup_rc = v_version && yyjson_is_str(v_version)
+        ? cbm_theme_registry_lookup_version(get_themes(srv), yyjson_get_str(v_id), yyjson_get_str(v_version), &entry)
+        : cbm_theme_registry_lookup(get_themes(srv), yyjson_get_str(v_id), &entry);
+    if (lookup_rc != CBM_REFUSAL_OK) {
+        yyjson_doc_free(input);
+        return json_error_result(cbm_refusal_code_string(lookup_rc),
+                                 lookup_rc == CBM_REFUSAL_THEME_UNKNOWN
+                                     ? "theme/version is not registered"
+                                     : "thematic catalog is unavailable");
+    }
+    if (entry.status == CBM_THEME_ABSENT) {
+        yyjson_doc_free(input);
+        return json_error_result("THEME_ABSENT", "thematic graph content has not been materialized");
+    }
+    char project[CBM_THEME_URI_MAX] = {0};
+    if (!theme_backing_project(entry.target_uri, project, sizeof(project))) {
+        yyjson_doc_free(input);
+        return json_error_result("THEME_GRAPH_UNAVAILABLE",
+                                 "target_uri must identify a whole registered CBM project using cbm-project://<project> or cbm://<project>");
+    }
+
+    yyjson_mut_doc *args_doc = yyjson_mut_doc_new(NULL);
+    if (!args_doc) {
+        yyjson_doc_free(input);
+        return json_error_result("INTERNAL_ERROR", "failed to allocate graph request");
+    }
+    yyjson_mut_val *args = yyjson_mut_obj(args_doc);
+    yyjson_mut_doc_set_root(args_doc, args);
+    yyjson_mut_obj_add_strcpy(args_doc, args, "project", project);
+    yyjson_mut_obj_add_strcpy(args_doc, args, "query", yyjson_get_str(v_query));
+    yyjson_mut_obj_add_strcpy(args_doc, args, "format", "json");
+    yyjson_val *v_limit = yyjson_obj_get(root, query_graph ? "max_rows" : "limit");
+    if (v_limit && yyjson_is_int(v_limit)) {
+        yyjson_mut_obj_add_int(args_doc, args, query_graph ? "max_rows" : "limit", yyjson_get_int(v_limit));
+    }
+    yyjson_val *v_offset = yyjson_obj_get(root, "offset");
+    if (v_offset && yyjson_is_int(v_offset)) yyjson_mut_obj_add_int(args_doc, args, "offset", yyjson_get_int(v_offset));
+    char *serialized_args = yyjson_mut_write(args_doc, 0, NULL);
+    yyjson_mut_doc_free(args_doc);
+    if (!serialized_args) {
+        yyjson_doc_free(input);
+        return json_error_result("INTERNAL_ERROR", "failed to serialize graph request");
+    }
+
+    char *graph_response = query_graph ? handle_query_graph(srv, serialized_args)
+                                       : handle_search_graph(srv, serialized_args);
+    free(serialized_args);
+    if (!graph_response) {
+        yyjson_doc_free(input);
+        return json_error_result("THEME_GRAPH_UNAVAILABLE", "backing CBM graph could not be queried");
+    }
+    yyjson_doc *graph_doc = yyjson_read(graph_response, strlen(graph_response), 0);
+    free(graph_response);
+    if (!graph_doc) {
+        yyjson_doc_free(input);
+        return json_error_result("THEME_GRAPH_UNAVAILABLE", "backing CBM graph returned malformed data");
+    }
+    yyjson_val *graph_root = yyjson_doc_get_root(graph_doc);
+    yyjson_val *outer_error = graph_root ? yyjson_obj_get(graph_root, "isError") : NULL;
+    yyjson_val *graph_content = graph_root ? yyjson_obj_get(graph_root, "structuredContent") : NULL;
+    yyjson_val *graph_error = graph_content ? yyjson_obj_get(graph_content, "isError") : NULL;
+    yyjson_val *graph_error_text = graph_content ? yyjson_obj_get(graph_content, "error") : NULL;
+    if ((outer_error && yyjson_is_true(outer_error)) ||
+        (graph_error && yyjson_is_true(graph_error)) ||
+        (graph_error_text && yyjson_is_str(graph_error_text))) {
+        yyjson_doc_free(graph_doc);
+        yyjson_doc_free(input);
+        return json_error_result("THEME_GRAPH_UNAVAILABLE", "backing CBM graph rejected the query");
+    }
+
+    yyjson_mut_doc *out_doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *out = yyjson_mut_obj(out_doc);
+    yyjson_mut_doc_set_root(out_doc, out);
+    yyjson_mut_obj_add_bool(out_doc, out, "success", true);
+    yyjson_mut_obj_add_strcpy(out_doc, out, "theme_id", entry.theme_id);
+    yyjson_mut_obj_add_strcpy(out_doc, out, "version", entry.version);
+    yyjson_mut_obj_add_strcpy(out_doc, out, "target_uri", entry.target_uri);
+    yyjson_mut_obj_add_strcpy(out_doc, out, "query", yyjson_get_str(v_query));
+    yyjson_val *structured = graph_root ? yyjson_obj_get(graph_root, "structuredContent") : NULL;
+    if (structured) {
+        yyjson_mut_obj_add_val(out_doc, out, "graph_result", yyjson_val_mut_copy(out_doc, structured));
+        if (!query_graph) {
+            yyjson_mut_val *citations = theme_build_citation_candidates(out_doc, structured, project);
+            yyjson_mut_obj_add_val(out_doc, out, "citation_candidates", citations);
+        }
+    } else {
+        yyjson_val *content = graph_root ? yyjson_obj_get(graph_root, "content") : NULL;
+        yyjson_val *first = content && yyjson_is_arr(content) ? yyjson_arr_get(content, 0) : NULL;
+        yyjson_val *text = first ? yyjson_obj_get(first, "text") : NULL;
+        if (text && yyjson_is_str(text)) yyjson_mut_obj_add_strcpy(out_doc, out, "graph_result_text", yyjson_get_str(text));
+    }
+    yyjson_doc_free(graph_doc);
+    yyjson_doc_free(input);
+    return result_from_mut_doc(out_doc, false);
+}
+
+char *handle_theme_graph_search(cbm_mcp_server_t *srv, const char *args_json) {
+    return handle_theme_graph_read(srv, args_json, false);
+}
+
+char *handle_theme_graph_query(cbm_mcp_server_t *srv, const char *args_json) {
+    return handle_theme_graph_read(srv, args_json, true);
 }
 
 /* W05: binding_claim */

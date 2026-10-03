@@ -59,7 +59,7 @@ Coordinates session horizons, skill contract registries, effect-class gateways, 
 ```
 
 ## OVERVIEW
-The Union subsystem implements the cognitive workflow and epistemic authority layer derived from `docs/PRD/novos-paradgimas` (Track W). It exposes 14 MCP tools governing intent classification, provenance validation, thematic knowledge base registry, normative/consulted bindings, session horizons, conversational claim birth/sweep, effect-class gateways, caller-blind contestation, and theme founding.
+The Union subsystem implements the cognitive workflow and epistemic authority layer derived from `docs/PRD/novos-paradgimas` (Track W). It exposes 18 MCP tools governing intent classification, thematic knowledge discovery and traversal, provenance validation, normative/consulted bindings, session horizons, conversational claim birth/sweep, effect-class gateways, caller-blind contestation, and theme founding.
 
 ## FOLDER STRUCTURE
 <folder_structure>
@@ -75,9 +75,9 @@ src/
 ## MAIN CONCEPTS
 
 ### The Workflow Lifecycle in Novos Paradigmas
-The 14 tools follow the canonical station lifecycle specified in AUDIT-WORKFLOW §6:
-1. **Routing**: `classify_activity` routes intent to `CONSULTATIVE` or `SPECIALTY`.
-2. **Grounding**: Query themes via `theme_lookup` (`ABSENT` is queryable), register via `theme_register`, and check bindings via `binding_claim`.
+The 18 tools follow the canonical station lifecycle specified in AUDIT-WORKFLOW §6:
+1. **Routing**: `classify_activity` supplies a heuristic label. It does not decide whether the agent needs thematic knowledge; discover a method whenever the work makes a material craft choice.
+2. **Grounding**: Discover candidates via `theme_search`/`theme_list`, resolve an exact version via `theme_lookup`, search its backing graph with `theme_graph_search`, and traverse method relations with `theme_graph_query`. Search is lexical and does not bind authority. Check explicit scope through `binding_claim` when required.
 3. **Session Deliberation**: `union_session_open` binds session to contract/identity. Craft judgment requires `validate_provenance`.
 4. **Execution Gateway**: `union_record_action` gates actions (`IDEMPOTENT`, `COMPENSABLE`, `IRREVERSIBLE`).
 5. **Caller-Blind Contestation**: `contest_verify` permits evidence-backed review (`target_horizon` and delimiter scoping isolate targets). Unresolved blocking contestations halt promotion.
@@ -86,14 +86,12 @@ The 14 tools follow the canonical station lifecycle specified in AUDIT-WORKFLOW 
 ## HOW TO EXECUTE UNION WORKFLOWS
 
 ### Execution Flow
-1. Classify intent using `classify_activity`.
-2. Inspect or register craft themes using `theme_lookup` or `theme_register`.
-3. Bind architecture to craft standards using `binding_claim`.
-4. Open an authenticated session horizon via `union_session_open`.
-5. Capture and resolve conversational claims via `union_claim_capture` and `union_claim_resolve`.
-6. Authorize actions via `union_record_action`.
-7. Submit contestations via `contest_verify` when evidence disputes claims.
-8. Close the session horizon with `union_session_close` and submit proposals via `founding_propose`.
+1. Use project graph tools to establish the technologies, code patterns, and constraints that actually exist.
+2. When a methodological decision matters, search the catalog with `theme_search`; use `theme_list` to inspect the catalog and `theme_lookup` to pin an exact version.
+3. Search and traverse the backing thematic graph with `theme_graph_search` and `theme_graph_query`. Follow relevant specialization, condition, exception, and evidence relations; a catalog match alone is not the method.
+4. Record the exact theme ID, version, node URI, and the horizon decision/activity it informed. `validate_provenance` confirms the pinned version and resolves the cited node in that graph. Store the citation in a local `FractalThemeReference` horizon node linked to the decision; the separate graph relationship remains a pinned URI in its payload, not a cross-tenant edge.
+5. Use `binding_claim` only when a project-level normative or consulted relationship is explicitly established; discovery does not bind authority.
+6. Continue through session and action tools only when their separate Union workflow is being used.
 
 <code_example>
 # Session lifecycle with claim capture, resolution, gateway, and closure
@@ -136,8 +134,12 @@ Shell tools remain subject to classification. The adapter permits plain `rg --fi
 |---|---|---|---|
 | `classify_activity` | `intent` | Classify intent into `CONSULTATIVE` or `SPECIALTY`. | — |
 | `validate_provenance` | `theme_id`, `node_uri`, `pinned_version`, `declared_invention`, `rationale` | Validate provenance; refuses silent invention. | — |
-| `theme_lookup` | `theme_id` | Query theme registry (`ABSENT` is queryable). | — |
-| `theme_register` | `theme_id`, `namespace`, `curator`, `version`, `status` | Register theme (`ACTIVE` or `ABSENT`). | `status="ACTIVE"` |
+| `theme_lookup` | `theme_id`, optional exact `version` | Resolve latest or pinned immutable theme metadata (`ABSENT` is queryable). | — |
+| `theme_search` | `query`, optional namespace/status/limit/offset | Lexically search catalog metadata and return ranked candidates. | `limit=20` |
+| `theme_list` | optional namespace/status/limit/offset | List catalog entries. | `limit=20` |
+| `theme_graph_search` | `theme_id`, optional version, `query`, limit/offset | Search nodes in a registered theme graph; returns normalized structured results and citation candidates. | `limit=50` |
+| `theme_graph_query` | `theme_id`, optional version, read-only `query`, max_rows/offset | Traverse relations in that theme graph using the existing query engine. | `max_rows=200` |
+| `theme_register` | `theme_id`, `namespace`, `curator`, `version`, optional `target_uri`, description, aliases, tags, status | Persist a catalog version and its backing graph locator. Existing published versions are immutable. | `status="ACTIVE"` |
 | `binding_claim` | `claim_id`, `theme_id`, `pinned_version`, `mode`, `binding_scope`, `validated_by` | Declare binding (`NORMATIVE` or `CONSULTED`). | `mode="NORMATIVE"` |
 | `union_session_open` | Identity, contract, sequence, client; E01: host, context, grounding, intent, reference/rationale, `intent_scope` | Open bounded session; bind E01 authority when supplied. | — |
 | `union_session_get` | `horizon_id` | Query session actions, refusals, budget. | — |
@@ -150,10 +152,13 @@ Shell tools remain subject to classification. The adapter permits plain `rg --fi
 | `founding_decide` | `suggested_theme_id`, `operator_accepted`, `decided_by`, `operator_token` | Adjudicate proposal; requires host authority. | — |
 
 ## BEST PRACTICES
-REQUIRED: Classify intent via `classify_activity` at prompt start.
+OPTIONAL: Use `classify_activity` as a heuristic description; never use it to skip thematic discovery when a craft method matters.
+REQUIRED: Discover, read, and cite applicable thematic knowledge for material craft judgments, or state the gap/proposed source explicitly.
 REQUIRED: Declare provenance on specialty judgments via `validate_provenance`.
 REQUIRED: Validate all mutations through `union_record_action`.
 REQUIRED: Provide concrete evidence when invoking `contest_verify`.
+REQUIRED: When a craft method affects a material judgment, discover candidates by `theme_search`, read its method nodes and relevant relations from the backing graph, then record exact theme ID/version/node URI in the horizon.
+REQUIRED: Treat catalog search as candidate discovery; only a separately declared binding establishes normative or consulted authority.
 PROHIBITED: Autonomous founding or self-approval without host operator credentials.
 PROHIBITED: Promoting horizons with active blocking/invalidating contestations.
 

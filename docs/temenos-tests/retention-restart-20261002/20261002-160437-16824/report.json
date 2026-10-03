@@ -1,0 +1,432 @@
+{
+  "run_id": "20261002-160437-16824",
+  "started_at_utc": "2026-10-02T19:04:37.132604+00:00",
+  "result": "FAILED",
+  "project": "C-Users-corre-Documents-harness-kit",
+  "scope": "isolated SQLite snapshot of the real HarnessKit base graph; no writes to shared cache",
+  "binary": "C:\\Users\\corre\\.local\\bin\\codebase-memory-mcp.exe",
+  "binary_sha256": "63e3c0a6056601aa5b66047083c1c9b4792f562b48f7a3acf0e9a17033e9df55",
+  "source_graph_db": "C:\\Users\\corre\\.cache\\codebase-memory-mcp\\C-Users-corre-Documents-harness-kit.db",
+  "source_graph_db_sha256": "6b6dcb5ee3aeed5bfbca71f01b659d7a2eb60edb504c0066f15fe0d3e87d655d",
+  "test_cache_dir": "C:\\Users\\corre\\.cache\\retention-test-cache-20261002-160437-16824",
+  "test_runtime_dir": "C:\\Users\\corre\\.cache\\codebase-memory-mcp\\fractal-runtime\\retention-test-runtime-20261002-160437-16824",
+  "mcp_reader_reads_human_artifact": false,
+  "events": [
+    {
+      "client": "writer",
+      "initialize": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "serverInfo": {
+            "name": "codebase-memory-mcp",
+            "version": "dev"
+          },
+          "capabilities": {
+            "tools": {
+              "listChanged": false
+            },
+            "prompts": {
+              "listChanged": false
+            }
+          },
+          "instructions": "Graph first: search_graph for symbols, trace_path for relationships, get_code_snippet for source, query_graph for multi-hop, and get_architecture for overview. Use search_code/grep for literals or coverage gaps. Indexes auto-refresh. Check cited-path coverage; paginate."
+        }
+      }
+    },
+    {
+      "tool": "list_projects",
+      "arguments": {
+        "detail": "stats",
+        "format": "json"
+      },
+      "response": {
+        "projects": [
+          {
+            "name": "C-Users-corre-Documents-harness-kit",
+            "root_path": "C:/Users/corre/Documents/harness-kit",
+            "branch": "feature/web-sdk",
+            "nodes": 4457,
+            "edges": 14274,
+            "size_bytes": 17039360
+          }
+        ],
+        "total": 1,
+        "offset": 0,
+        "limit": 50,
+        "returned": 1,
+        "has_more": false
+      }
+    },
+    {
+      "tool": "create_horizon",
+      "arguments": {
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "project": "C-Users-corre-Documents-harness-kit"
+      },
+      "response": {
+        "success": true,
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "status": "ACTIVE",
+        "client_pid": 18080,
+        "based_on_seq": "0",
+        "nodes_count": 0,
+        "edges_count": 0
+      }
+    },
+    {
+      "tool": "sync_horizon_spec",
+      "arguments": {
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "project": "C-Users-corre-Documents-harness-kit",
+        "file_path": "docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md",
+        "content": "# Retention probe h_retention_restart_20261002_160437_16824\n\n## Scope\nIsolated HarnessKit graph snapshot; owner exit and daemon restart.\n\n## Artifact\nArtifact ID: ART-RETENTION-2026100216043716824\nExpected SHA-256: 28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42\nExact text: retention_probe|owner_exit|daemon_restart|h_retention_restart_20261002_160437_16824\n\n## Graph\n```tactical-spec\n{\n  \"nodes\": [\n    {\n      \"symbol\": \"AR-01\",\n      \"type\": \"FractalArtifact\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AR-01\",\n      \"description\": \"{\\\"id\\\":\\\"AR-01\\\",\\\"artifact_id\\\":\\\"ART-RETENTION-2026100216043716824\\\",\\\"temenos_id\\\":\\\"h_retention_restart_20261002_160437_16824\\\",\\\"part_count\\\":2,\\\"part_ids\\\":[\\\"ART-RETENTION-2026100216043716824-P01\\\",\\\"ART-RETENTION-2026100216043716824-P02\\\"],\\\"join_policy\\\":\\\"direct\\\",\\\"byte_count\\\":83,\\\"sha256\\\":\\\"28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42\\\"}\"\n    },\n    {\n      \"symbol\": \"AP-01\",\n      \"type\": \"FractalArtifactPart\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-01\",\n      \"description\": \"{\\\"id\\\":\\\"AP-01\\\",\\\"artifact_id\\\":\\\"ART-RETENTION-2026100216043716824\\\",\\\"temenos_id\\\":\\\"h_retention_restart_20261002_160437_16824\\\",\\\"part_id\\\":\\\"ART-RETENTION-2026100216043716824-P01\\\",\\\"part_index\\\":1,\\\"total_parts\\\":2,\\\"exact_content\\\":\\\"retention_probe|owner_exit|daemon_restart\\\",\\\"byte_count\\\":41,\\\"sha256\\\":\\\"5cf584fc7934436d0c2ac78e7019b13e21a7324bf9e5d42231bbb84ce6d81d0b\\\"}\"\n    },\n    {\n      \"symbol\": \"AP-02\",\n      \"type\": \"FractalArtifactPart\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-02\",\n      \"description\": \"{\\\"id\\\":\\\"AP-02\\\",\\\"artifact_id\\\":\\\"ART-RETENTION-2026100216043716824\\\",\\\"temenos_id\\\":\\\"h_retention_restart_20261002_160437_16824\\\",\\\"part_id\\\":\\\"ART-RETENTION-2026100216043716824-P02\\\",\\\"part_index\\\":2,\\\"total_parts\\\":2,\\\"exact_content\\\":\\\"|h_retention_restart_20261002_160437_16824\\\",\\\"byte_count\\\":42,\\\"sha256\\\":\\\"95b4f92ba1dd3120af7e64a568fd04d6ede6ca2f065f4f948a3a6a2d32fc904a\\\"}\"\n    }\n  ],\n  \"edges\": [\n    {\n      \"source\": \"AR-01\",\n      \"target\": \"AP-01\",\n      \"type\": \"CONTAINS_PART\"\n    },\n    {\n      \"source\": \"AP-01\",\n      \"target\": \"AP-02\",\n      \"type\": \"NEXT_PART\"\n    },\n    {\n      \"source\": \"AR-01\",\n      \"target\": \"AP-02\",\n      \"type\": \"CONTAINS_PART\"\n    }\n  ]\n}\n```\n"
+      },
+      "response": {
+        "success": true,
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "file_path": "docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md",
+        "nodes_compiled": 3,
+        "edges_compiled": 3,
+        "sections_indexed": 4
+      }
+    },
+    {
+      "tool": "validate_scope_horizon",
+      "arguments": {
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "strict_connectivity": true
+      },
+      "response": {
+        "success": true,
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "isolated_nodes_count": 0,
+        "unresolved_dependencies_count": 0,
+        "status": "VALID"
+      }
+    },
+    {
+      "tool": "list_horizons",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "status": "ALL",
+        "limit": 100,
+        "offset": 0
+      },
+      "response": {
+        "horizons": [
+          {
+            "horizon_id": "h_retention_restart_20261002_160437_16824",
+            "status": "ACTIVE",
+            "association_source": "explicit_project",
+            "client_pid": 18080,
+            "owner_alive": true,
+            "created_at": 1790967891,
+            "last_heartbeat": 1790967891,
+            "based_on_seq": "0"
+          }
+        ],
+        "project": "C-Users-corre-Documents-harness-kit",
+        "total": 1,
+        "returned": 1,
+        "offset": 0,
+        "limit": 100,
+        "has_more": false,
+        "unreadable_entries": 0,
+        "partial": false
+      }
+    },
+    {
+      "client": "reader",
+      "initialize": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "serverInfo": {
+            "name": "codebase-memory-mcp",
+            "version": "dev"
+          },
+          "capabilities": {
+            "tools": {
+              "listChanged": false
+            },
+            "prompts": {
+              "listChanged": false
+            }
+          },
+          "instructions": "Graph first: search_graph for symbols, trace_path for relationships, get_code_snippet for source, query_graph for multi-hop, and get_architecture for overview. Use search_code/grep for literals or coverage gaps. Indexes auto-refresh. Check cited-path coverage; paginate."
+        }
+      }
+    },
+    {
+      "tool": "list_horizons",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "status": "ALL",
+        "limit": 100,
+        "offset": 0
+      },
+      "response": {
+        "horizons": [
+          {
+            "horizon_id": "h_retention_restart_20261002_160437_16824",
+            "status": "ACTIVE",
+            "association_source": "explicit_project",
+            "client_pid": 18080,
+            "owner_alive": false,
+            "created_at": 1790967891,
+            "last_heartbeat": 1790967891,
+            "based_on_seq": "0"
+          }
+        ],
+        "project": "C-Users-corre-Documents-harness-kit",
+        "total": 1,
+        "returned": 1,
+        "offset": 0,
+        "limit": 100,
+        "has_more": false,
+        "unreadable_entries": 0,
+        "partial": false
+      }
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_retention_restart_20261002_160437_16824"
+        ],
+        "limit": 100,
+        "format": "json"
+      },
+      "response": {
+        "overlay_count": 7,
+        "overlays": [
+          {
+            "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-01",
+            "payload": "FractalArtifactPart:{\"id\":\"AP-01\",\"artifact_id\":\"ART-RETENTION-2026100216043716824\",\"temenos_id\":\"h_retention_restart_20261002_160437_16824\",\"part_id\":\"ART-RETENTION-2026100216043716824-P01\",\"part_index\":1,\"total_parts\":2,\"exact_content\":\"retention_probe|owner_exit|daemon_restart\",\"byte_count\":41,\"sha256\":\"5cf584fc7934436d0c2ac78e7019b13e21a7324bf9e5d42231bbb84ce6d81d0b\"}",
+            "source": "HORIZON"
+          },
+          {
+            "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-02",
+            "payload": "FractalArtifactPart:{\"id\":\"AP-02\",\"artifact_id\":\"ART-RETENTION-2026100216043716824\",\"temenos_id\":\"h_retention_restart_20261002_160437_16824\",\"part_id\":\"ART-RETENTION-2026100216043716824-P02\",\"part_index\":2,\"total_parts\":2,\"exact_content\":\"|h_retention_restart_20261002_160437_16824\",\"byte_count\":42,\"sha256\":\"95b4f92ba1dd3120af7e64a568fd04d6ede6ca2f065f4f948a3a6a2d32fc904a\"}",
+            "source": "HORIZON"
+          },
+          {
+            "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AR-01",
+            "payload": "FractalArtifact:{\"id\":\"AR-01\",\"artifact_id\":\"ART-RETENTION-2026100216043716824\",\"temenos_id\":\"h_retention_restart_20261002_160437_16824\",\"part_count\":2,\"part_ids\":[\"ART-RETENTION-2026100216043716824-P01\",\"ART-RETENTION-2026100216043716824-P02\"],\"join_policy\":\"direct\",\"byte_count\":83,\"sha256\":\"28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42\"}",
+            "source": "HORIZON"
+          },
+          {
+            "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#artifact",
+            "payload": "Section:Artifact ID: ART-RETENTION-2026100216043716824\nExpected SHA-256: 28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42\nExact text: retention_probe|owner_exit|daemon_restart|h_retention_restart_20261002_160437_16824\n\n",
+            "source": "HORIZON"
+          },
+          {
+            "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#graph",
+            "payload": "Section:```tactical-spec\n{\n  \"nodes\": [\n    {\n      \"symbol\": \"AR-01\",\n      \"type\": \"FractalArtifact\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AR-01\",\n      \"description\": \"{\\\"id\\\":\\\"AR-01\\\",\\\"artifact_id\\\":\\\"ART-RETENTION-2026100216043716824\\\",\\\"temenos_id\\\":\\\"h_retention_restart_20261002_160437_16824\\\",\\\"part_count\\\":2,\\\"part_ids\\\":[\\\"ART-RETENTION-2026100216043716824-P01\\\",\\\"ART-RETENTION-2026100216043716824-P02\\\"],\\\"join_policy\\\":\\\"direct\\\",\\\"byte_count\\\":83,\\\"sha256\\\":\\\"28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42\\\"}\"\n    },\n    {\n      \"symbol\": \"AP-01\",\n      \"type\": \"FractalArtifactPart\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-01\",\n      \"description\": \"{\\\"id\\\":\\\"AP-01\\\",\\\"artifact_id\\\":\\\"ART-RETENTION-2026100216043716824\\\",\\\"temenos_id\\\":\\\"h_retention_restart_20261002_160437_16824\\\",\\\"part_id\\\":\\\"ART-RETENTION-2026100216043716824-P01\\\",\\\"part_index\\\":1,\\\"total_parts\\\":2,\\\"exact_content\\\":\\\"retention_probe|owner_exit|daemon_restart\\\",\\\"byte_count\\\":41,\\\"sha256\\\":\\\"5cf584fc7934436d0c2ac78e7019b13e21a7324bf9e5d42231bbb84ce6d81d0b\\\"}\"\n    },\n    {\n      \"symbol\": \"AP-02\",\n      \"type\": \"FractalArtifactPart\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-02\",\n      \"description\": \"{\\\"id\\\":\\\"AP-02\\\",\\\"artifact_id\\\":\\\"ART-RETENTION-2026100216043716824\\\",\\\"temenos_id\\\":\\\"h_retention_restart_20261002_160437_16824\\\",\\\"part_id\\\":\\\"ART-RETENTION-2026100216043716824-P02\\\",\\\"part_index\\\":2,\\\"total_parts\\\":2,\\\"exact_content\\\":\\\"|h_retention_restart_20261002_160437_16824\\\",\\\"byte_count\\\":42,\\\"sha256\\\":\\\"95b4f92ba1dd3120af7e64a568fd04d6ede6ca2f065f4f948a3a6a2d32fc904a\\\"}\"\n    }\n  ],\n  \"edges\": [\n    {\n      \"source\": \"AR-01\",\n      \"target\": \"AP-01\",\n      \"type\": \"CONTAINS_PART\"\n    },\n    {\n      \"source\": \"AP-01\",\n      \"target\": \"AP-02\",\n      \"type\": \"NEXT_PART\"\n    },\n    {\n      \"source\": \"AR-01\",\n      \"target\": \"AP-02\",\n      \"type\": \"CONTAINS_PART\"\n    }\n  ]\n}\n```\n",
+            "source": "HORIZON"
+          },
+          {
+            "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#retention-probe-h-retention-restart-20261002-160437-16824",
+            "payload": "Section:\n",
+            "source": "HORIZON"
+          },
+          {
+            "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#scope",
+            "payload": "Section:Isolated HarnessKit graph snapshot; owner exit and daemon restart.\n\n",
+            "source": "HORIZON"
+          }
+        ]
+      }
+    }
+  ],
+  "checks": {
+    "test_runtime_has_no_existing_daemon": {
+      "passed": true,
+      "detail": {
+        "active": false,
+        "returncode": 1,
+        "pid": null,
+        "output": "daemon: not running\nhint: `codebase-memory-mcp daemon start` keeps a daemon warm so CLI commands and hooks skip the per-command startup cost.\nlevel=warn msg=daemon.client.rendezvous_wait status=absent\nlevel=warn msg=daemon.client.connect_deadline status=absent\n"
+      }
+    },
+    "snapshot_integrity": {
+      "passed": true,
+      "detail": {
+        "path": "C:\\Users\\corre\\.cache\\retention-test-cache-20261002-160437-16824\\C-Users-corre-Documents-harness-kit.db",
+        "bytes": 17039360,
+        "sha256": "357f087fb5141bb375601bab67d42a4a3cb2d105c336e6ce58bae44a517f34b6",
+        "integrity_check": "ok"
+      }
+    },
+    "isolated_writer_daemon_started": {
+      "passed": true,
+      "detail": {
+        "active": true,
+        "returncode": 0,
+        "pid": 18080,
+        "output": "daemon: active (session-managed)\n  pid: 18080\n  build: dev (63e3c0a60566...)\n  committed clients: 1\n    - pid 9328\n"
+      }
+    },
+    "only_snapshot_project_visible": {
+      "passed": true,
+      "detail": [
+        "C-Users-corre-Documents-harness-kit"
+      ]
+    },
+    "specification_within_parser_line_bound": {
+      "passed": true,
+      "detail": 408
+    },
+    "horizon_created_in_snapshot": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "status": "ACTIVE",
+        "client_pid": 18080,
+        "based_on_seq": "0",
+        "nodes_count": 0,
+        "edges_count": 0
+      }
+    },
+    "recorded_owner_is_test_daemon": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "status": "ACTIVE",
+        "client_pid": 18080,
+        "based_on_seq": "0",
+        "nodes_count": 0,
+        "edges_count": 0
+      }
+    },
+    "three_nodes_and_three_edges_compiled": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "file_path": "docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md",
+        "nodes_compiled": 3,
+        "edges_compiled": 3,
+        "sections_indexed": 4
+      }
+    },
+    "strict_validation_before_exit": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "isolated_nodes_count": 0,
+        "unresolved_dependencies_count": 0,
+        "status": "VALID"
+      }
+    },
+    "catalog_says_owner_alive_before_exit": {
+      "passed": true,
+      "detail": {
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "status": "ACTIVE",
+        "association_source": "explicit_project",
+        "client_pid": 18080,
+        "owner_alive": true,
+        "created_at": 1790967891,
+        "last_heartbeat": 1790967891,
+        "based_on_seq": "0"
+      }
+    },
+    "owner_daemon_exited_before_reader": {
+      "passed": true,
+      "detail": {
+        "active": false,
+        "returncode": 1,
+        "pid": null,
+        "output": "daemon: not running\nhint: `codebase-memory-mcp daemon start` keeps a daemon warm so CLI commands and hooks skip the per-command startup cost.\n"
+      }
+    },
+    "sqlite_horizon_persisted_after_owner_exit": {
+      "passed": true,
+      "detail": {
+        "db_sha256": "c6410a2f5ce1dfcdb231202852960a7df2c71549169f82a63b29d4c3c045977a",
+        "integrity_check": "ok",
+        "client_pid": 18080,
+        "status": "ACTIVE",
+        "created_at": 1790967891,
+        "last_heartbeat": 1790967891,
+        "based_on_seq": "0",
+        "symbolic_nodes": 7,
+        "virtual_edges": 3,
+        "daemon_status": {
+          "active": false,
+          "returncode": 1,
+          "pid": null,
+          "output": "daemon: not running\nhint: `codebase-memory-mcp daemon start` keeps a daemon warm so CLI commands and hooks skip the per-command startup cost.\n"
+        }
+      }
+    },
+    "new_daemon_process_started": {
+      "passed": true,
+      "detail": {
+        "active": true,
+        "returncode": 0,
+        "pid": 6456,
+        "output": "daemon: active (session-managed)\n  pid: 6456\n  build: dev (63e3c0a60566...)\n  committed clients: 1\n    - pid 13064\n"
+      }
+    },
+    "restarted_catalog_finds_dead_owner_horizon": {
+      "passed": true,
+      "detail": {
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "status": "ACTIVE",
+        "association_source": "explicit_project",
+        "client_pid": 18080,
+        "owner_alive": false,
+        "created_at": 1790967891,
+        "last_heartbeat": 1790967891,
+        "based_on_seq": "0"
+      }
+    }
+  },
+  "shared_daemon_before": {
+    "active": true,
+    "returncode": 0,
+    "pid": 4932,
+    "output": "daemon: active (permanent)\n  pid: 4932\n  build: dev (63e3c0a60566...)\n  committed clients: 3\n    - pid 8728\n    - pid 14628\n    - pid 8700\n"
+  },
+  "snapshot_graph_db": {
+    "path": "C:\\Users\\corre\\.cache\\retention-test-cache-20261002-160437-16824\\C-Users-corre-Documents-harness-kit.db",
+    "bytes": 17039360,
+    "sha256": "357f087fb5141bb375601bab67d42a4a3cb2d105c336e6ce58bae44a517f34b6",
+    "integrity_check": "ok"
+  },
+  "writer_daemon_pid": 18080,
+  "horizon_id": "h_retention_restart_20261002_160437_16824",
+  "artifact_id": "ART-RETENTION-2026100216043716824",
+  "artifact_bytes": 83,
+  "artifact_sha256": "28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42",
+  "owner_exit_shutdown_mode": "automatic_after_last_client_exit",
+  "offline_horizon_snapshot": {
+    "db_sha256": "c6410a2f5ce1dfcdb231202852960a7df2c71549169f82a63b29d4c3c045977a",
+    "integrity_check": "ok",
+    "client_pid": 18080,
+    "status": "ACTIVE",
+    "created_at": 1790967891,
+    "last_heartbeat": 1790967891,
+    "based_on_seq": "0",
+    "symbolic_nodes": 7,
+    "virtual_edges": 3,
+    "daemon_status": {
+      "active": false,
+      "returncode": 1,
+      "pid": null,
+      "output": "daemon: not running\nhint: `codebase-memory-mcp daemon start` keeps a daemon warm so CLI commands and hooks skip the per-command startup cost.\n"
+    }
+  },
+  "reader_daemon_pid": 6456,
+  "error": "AssertionError('node payload missing after MCP retrieval: AR-01')",
+  "completed_at_utc": "2026-10-02T19:05:03.241151+00:00"
+}

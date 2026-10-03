@@ -917,14 +917,16 @@ These tools govern the **Sístole** of engineering: intent routing, craft proven
 - **Parameters**:
   | Parameter | Type | Required | Default | Description |
   | :--- | :--- | :--- | :--- | :--- |
-  | `theme_id` | string | Yes | — | Theme identifier (e.g. `"theme_clean_arch"`, `"theme_c11_standards"`). |
+| `theme_id` | string | Yes | — | Theme identifier. |
+| `version` | string | No | latest | Resolve an exact immutable catalog version. |
 
 - **Invocation Example**:
 ```json
 {
   "name": "theme_lookup",
   "arguments": {
-    "theme_id": "theme_clean_arch"
+    "theme_id": "theme_clean_arch",
+    "version": "1.4.0"
   }
 }
 ```
@@ -941,6 +943,42 @@ These tools govern the **Sístole** of engineering: intent routing, craft proven
 }
 ```
 
+### Theme discovery and graph traversal
+
+The registry tools discover catalog entries. They do not infer that a theme is binding or that a matching result is authoritative. `theme_search` uses case-insensitive text matching over the registered ID, name, namespace, description, aliases, and tags; all query words must match somewhere in those fields. It returns ranked candidates and pagination metadata. This is lexical discovery, not semantic similarity.
+
+`theme_list` returns catalog entries without a search query. `theme_lookup` can take an optional exact `version`; without one it returns the latest registered version. Published content for an existing `theme_id` and `version` is immutable. Changed content is registered under a new version, leaving old versions available for pinned references.
+
+`theme_register` accepts optional `name`, `target_uri`, `description`, `aliases`, `tags`, and `founding_provenance`. A traversable backing graph uses `target_uri="cbm-project://<project-name>"` or `target_uri="cbm://<project-name>"`, where `<project-name>` is an existing project returned by `list_projects`. The locator targets the whole registered project graph; path-qualified locators are rejected. Other URI schemes remain catalog metadata and cannot be traversed by the graph tools. Catalog metadata is persisted in the CBM cache; the backing graph remains the source of thematic nodes and relations.
+
+`theme_graph_search(theme_id, version?, query, ...)` searches the selected version's backing graph and returns citation candidates in the form `cbm://<project>/<file>#<qualified_name>`. `theme_graph_query(theme_id, version?, query, ...)` runs a read-only graph query against that same project. It traverses only typed edges already present in the indexed graph; it does not derive edges from relation labels written in Markdown prose. The current Markdown indexer exposes files and sections with `DEFINES` edges, while principles, applicability, exceptions, and evidence in section text remain searchable node content. These tools reuse the existing graph search and query engines; they do not create a separate graph format.
+
+To preserve a method in a horizon, record the exact `theme_id`, `version`, `node_uri`, and the horizon activity/decision it informed. `validate_provenance` verifies that the immutable version exists and that the exact node URI is returned by that version's backing graph. Discovery alone does not create a binding. `binding_claim` continues to express operator-authorized `NORMATIVE` or `CONSULTED` scope.
+
+The horizon-side reference is currently an ordinary semantic node in the `tactical-spec` payload, linked to the local decision node. Its `description` carries the external citation as serialized JSON because the current horizon compiler does not persist arbitrary fields as graph properties:
+
+```json
+{
+  "symbol": "REF-T01",
+  "type": "FractalThemeReference",
+  "cbm_uri": "cbm://project/docs/temenos/t-01/registro.md#REF-T01",
+  "description": "{\"theme_id\":\"@org/tdd-react-vite\",\"version\":\"1.0.0\",\"node_uri\":\"cbm://tdd-react/docs/tdd.md#Red-Green-Refactor\",\"decision_id\":\"D-03\",\"disposition\":\"CONSULTADO\",\"evidence\":\"Inspected before choosing the implementation method.\"}"
+}
+```
+
+Add a local horizon edge from the decision to the reference node (for example, `INFORMED_BY`). This makes the local decision/reference recoverable together. It does not create a physical edge to the node in the separate thematic project; that cross-graph relationship remains the verified, version-pinned `node_uri` in the reference payload.
+
+Example sequence:
+
+```text
+theme_search(query="TDD React Vite", namespace="engineering/craft")
+theme_graph_search(theme_id="@org/tdd-react-vite", version="1.0.0", query="red green refactor")
+theme_graph_query(theme_id="@org/tdd-react-vite", version="1.0.0",
+  query="MATCH (n)-[r]->(m) RETURN n, r, m LIMIT 50")
+validate_provenance(theme_id="@org/tdd-react-vite", pinned_version="1.0.0",
+  node_uri="cbm://theme-project/docs/tdd.md#theme-project.docs.tdd.Red-Green-Refactor")
+```
+
 ---
 
 ### 24. `theme_register`
@@ -952,18 +990,26 @@ These tools govern the **Sístole** of engineering: intent routing, craft proven
   | `namespace` | string | Yes | — | Hierarchy namespace. |
   | `curator` | string | Yes | — | Responsible identity or governing team. |
   | `version` | string | Yes | — | SemVer version string. |
-  | `status` | string | No | `"ACTIVE"` | State: `"ACTIVE"`, `"DRAFT"`, `"DEPRECATED"`, `"ABSENT"`. |
+  | `name`, `description`, `aliases`, `tags` | string | No | — | Human-readable and searchable catalog metadata. |
+  | `target_uri` | string | No | — | Whole backing CBM project graph (`cbm-project://<project>` or `cbm://<project>`). |
+  | `founding_provenance` | string | No | — | Originating session/horizon or historical anchor. |
+  | `status` | string | No | `"ACTIVE"` | State: `"ACTIVE"`, `"DEPRECATED"`, or `"ABSENT"`. |
 
 - **Invocation Example**:
 ```json
 {
   "name": "theme_register",
   "arguments": {
-    "theme_id": "theme_posix_c11",
-    "namespace": "system/c/standards",
-    "curator": "core_infrastructure_team",
-    "version": "2.0.0",
-    "status": "ACTIVE"
+  "theme_id": "theme_posix_c11",
+  "namespace": "system/c/standards",
+  "curator": "core_infrastructure_team",
+  "version": "2.0.0",
+  "target_uri": "cbm-project://posix-c11-theme",
+  "name": "POSIX C11 error handling",
+  "description": "Error propagation and errno handling patterns",
+  "aliases": "C11 errors, errno",
+  "tags": "C, POSIX, error handling",
+  "status": "ACTIVE"
   }
 }
 ```
@@ -971,7 +1017,8 @@ These tools govern the **Sístole** of engineering: intent routing, craft proven
 - **Response Example**:
 ```json
 {
-  "status": "REGISTERED",
+  "success": true,
+  "status": "ACTIVE",
   "theme_id": "theme_posix_c11",
   "version": "2.0.0"
 }

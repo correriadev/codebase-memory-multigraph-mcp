@@ -2137,6 +2137,11 @@ static int run_post_extraction(cbm_pipeline_t *p, cbm_pipeline_ctx_t *ctx,
         return rc;
     }
 
+    rc = cbm_pipeline_pass_theme_relations(ctx);
+    if (rc != 0 || check_cancel(p)) {
+        return rc != 0 ? rc : CBM_PIPELINE_ABORT_PRESERVE_DB;
+    }
+
     CBM_PROF_START(t_predump);
     run_predump_passes(p, ctx);
     CBM_PROF_END("pipeline", "3_predump_passes_total", t_predump);

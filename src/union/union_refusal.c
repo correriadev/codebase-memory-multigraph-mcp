@@ -41,6 +41,8 @@ static const CbmRefusalDef k_refusal_defs[CBM_REFUSAL_CODE_COUNT] = {
     {CBM_REFUSAL_AUTO_FOUNDING_FORBIDDEN, "AUTO_FOUNDING_FORBIDDEN", "autonomous founding of theme graphs is forbidden; offer proposal to operator at closure sweep"},
     {CBM_REFUSAL_THEME_SCHEMA_INVALID, "THEME_SCHEMA_INVALID", "correct the theme schema fields; theme_id, namespace, curator, and version are mandatory"},
     {CBM_REFUSAL_THEME_UNKNOWN, "THEME_UNKNOWN", "theme identifier or namespace does not exist in registry; verify or register theme"},
+    {CBM_REFUSAL_THEME_PERSISTENCE_FAILED, "THEME_PERSISTENCE_FAILED", "catalog write failed; registry change was rolled back, retry only after storage is available"},
+    {CBM_REFUSAL_THEME_VERSION_IMMUTABLE, "THEME_VERSION_IMMUTABLE", "publish a new version for changed thematic content; an existing version is immutable"},
 };
 
 static const CbmRefusalDef *find_def(CbmRefusalCode code) {

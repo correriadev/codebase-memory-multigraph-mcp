@@ -1,4 +1,4 @@
-# Contrato fractal — versão experimental 0.2
+# Contrato fractal — versão experimental 0.5
 
 ## Princípio e alcance
 
@@ -25,6 +25,14 @@ Declaração humana estabelece seleção e desejo; não prova automaticamente fa
 
 Metáforas de sombra, luz, vontade suprema e número 9 ajudam a conversar, mas não são evidência observável nem autorização. Não diagnosticar o humano, alegar conhecer seu inconsciente ou usar uma vontade presumida para decidir por ele.
 
+## Conhecimento temático e método
+
+Quando o recorte exigir escolher um método ou padrão de ofício, descobrir o COMO no catálogo temático do CBM, independentemente do rótulo retornado por `classify_activity`. A mudança do diálogo para refinamento, criação ou verificação pode exigir uma nova consulta temática dentro do mesmo temenos; não exige outra skill nem novo horizonte.
+
+`theme_search` encontra candidatos por metadados lexicais. Depois de conferir projeto, tema, versão, condições e autoridade, use `theme_graph_search` para encontrar os nós do método e `theme_graph_query` para navegar especializações, pré-condições, exceções, princípios e evidências quando essas arestas estiverem materializadas no grafo. A consulta só percorre relações tipadas existentes; uma declaração de relação na prosa de uma seção não cria uma aresta. Se o vínculo não existir, cite o texto recuperado como conteúdo do nó e registre a lacuna sem dizer que houve navegação da relação. Uma correspondência de catálogo não é o método completo nem cria vínculo normativo. Conhecimento de mundo ajuda a interpretar e propor perguntas, mas não substitui tradição temática aplicável; identifique sua origem quando ela sustentar uma proposta.
+
+Registre no horizonte os IDs e URIs reais de tema e nós, versão imutável, atividade/decisão orientada e a relação estabelecida (consultado, adotado ou aplicado com evidência). `validate_provenance` confirma a versão fixada e resolve o nó no grafo temático. Se não houver grafo, se ele estiver indisponível ou não cobrir a decisão, registre essa lacuna; qualquer método proposto pelo agente permanece hipótese até integração humana. Não fabrique ID, versão, especialização nem autoridade.
+
 ## Estados independentes
 
 | Eixo | Valores | Significado |
@@ -46,15 +54,14 @@ Usar esta estrutura mínima, preenchendo desconhecidos explicitamente:
 
 ```markdown
 # Temenos <id>
-Contrato: fractal-0.2
+Contrato: fractal-0.5
 Revisão: 1
 Criado em: <data/hora e fuso disponíveis>
 Atualizado em: <data/hora e fuso disponíveis>
 Host: <Codex/Antigravity/outro>
 Ciclo: ABERTO
 Etapa: DELIMITACAO
-Pai: <id ou nenhum>
-Filhos: <ids ou nenhum>
+Relações com outros nós/recortes: <ids/URIs e significado, se houver>
 
 ## Contexto compartilhado
 Tipo: <PROJETO_EXISTENTE/CONTEXTO_NOVO/SEM_PROJETO/INDEFINIDO>
@@ -71,7 +78,7 @@ Limites: <o que o recorte abrange e deixa fora>
 <id, arquivo/URI, versão/data, tipo de autoridade, âmbito, consulta realizada>
 
 ## Questões, decisões, sombras e clarezas
-| ID | Pai | Formulação | Autoria | Conhecimento | Evidência | Alternativas/consequências | Destino | Motivo/aceitação |
+| ID | Relações/recorte | Formulação | Autoria | Conhecimento | Evidência | Alternativas/consequências | Destino | Motivo/aceitação |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 ## Síntese comprimida
@@ -93,7 +100,28 @@ Impedimentos: <descrição ou nenhum>
 <data, revisão, evento/etapa, alteração, autoria/fonte e motivo>
 ```
 
-Atualizar após contexto solidificado, decisão relevante, mudança de recorte, pausa, integração ou encerramento. Cada alteração material exige revisão humana e sincronização confirmada no horizonte, conforme [o protocolo](memoria-cbm.md). Preservar nós, histórico e formulações anteriores quando reinterpretadas. Não regravar a cada frase nem gerar sombras artificiais. Outra sessão deve reconstruir a memória por consultas MCP, sem depender do arquivo ou da memória do modelo.
+### Regra operacional de progressão
+
+Antes de responder a cada turno do humano, compare a conversa desde a última revisão confirmada com o estado registrado. A pergunta de controle é: **se outra sessão não receber esta mudança, ela pode entender diferente o contexto, a evidência, uma decisão, uma consequência, o próximo passo ou o estado de uma questão?** Se sim, a mudança é material e deve ser registrada antes de encerrar a resposta. Se não, continue sem criar revisão.
+
+Mudanças materiais observáveis:
+
+- o humano corrige ou delimita contexto, assunto, propósito, escopo ou vínculo com o todo;
+- surge uma declaração, fonte, observação ou verificação que altera o que sabemos;
+- o agente apresenta como pertinente uma hipótese, pergunta, tensão ou consequência nova (registre autoria do agente, sem atribuí-la ao humano);
+- o humano aceita, rejeita, corrige, decide, adia ou contesta um item; ou uma questão muda de estado/destino;
+- uma relação entre itens muda, surge uma implicação para o contexto maior, ou a etapa/ciclo muda;
+- o humano pede registro, compressão, pausa, integração, retomada ou encerramento.
+
+Não são gatilhos por si só: paráfrase, repetição, cumprimento, elaboração que não muda significado, brainstorm que o agente não apresentou como relevante ou uma pergunta já registrada. Não crie sombra só para preencher o grafo. Agrupe os eventos materiais de um mesmo turno em uma revisão; não gere uma revisão por frase ou por nó.
+
+Registre um item novo assim que ele passar a fazer parte do diálogo compartilhado, com ID, tipo, recorte/relações pertinentes, autoria, conhecimento, destino e evidência. Não presuma que itens ou horizontes formem uma árvore. Hipótese ou sombra proposta pelo agente começa como `HIPOTESE` e `EM_EXAME`; a reação do humano cria uma atualização, nunca uma atribuição retroativa. Declaração humana é `DECLARADO` até haver fonte e verificação adequadas. Se não estiver claro se o humano decidiu ou só explorou, preserve como `EM_EXAME` e pergunte apenas quando a diferença mudar o próximo passo. Aceitação de uma formulação não prova viabilidade externa.
+
+Ao atingir um gatilho, atualize o registro humano e a revisão preservada, sincronize uma revisão acumulada no horizonte e confirme conteúdo e relações pelo MCP antes de dizer que foi salva. A revisão deve carregar todo o estado semântico ainda pertinente, preservar versões anteriores e ligar itens novos/alterados ao temenos, à revisão e aos itens relacionados. Se a gravação ou confirmação falhar, informe o estado real e deixe `PENDENTE`/`PARCIAL`; não continue afirmando que a memória está atualizada. Não é necessária aprovação ritual para cada gravação: autoria e estado indicam quem declarou o quê. Mostre ao humano uma síntese curta do que entrou e do estado da persistência.
+
+As etapas são rótulos do trabalho observável, não fases obrigatórias em ordem. Mude a etapa quando a atividade mudar e registre a transição junto com o evento material. Use `DELIMITACAO` enquanto identidade/limites/fontes necessárias faltarem; `SOLIDIFICADO` quando os critérios da entrada acima estiverem satisfeitos e a memória inicial for recuperável; `COMPRESSAO` ao produzir síntese retomável; `DELIBERACAO` ao examinar uma questão; `EXPANSAO` ao testar vínculos e implicações para o contexto maior; `INTEGRACAO` ao atribuir destinos e preparar pausa/encerramento. Pode repetir, pular ou retroceder; não declare progresso apenas por tempo ou quantidade de mensagens. Ciclo ABERTO/PAUSADO/ENCERRADO continua independente.
+
+Preservar nós, histórico e formulações anteriores quando reinterpretadas. Outra sessão deve reconstruir a memória por consultas MCP, sem depender do arquivo ou da memória do modelo.
 
 ## CBM: capacidades condicionais
 
@@ -118,3 +146,9 @@ Quase toda ferramenta pode ser útil em algum recorte; nenhuma lista completa de
 ## Limites de validação
 
 Este contrato é testado por comportamento observável: seleção humana preservada, contexto rastreável, incerteza legível, memória retomável e estados honestos. Skill é instrução, não garantia contra alucinação. Falha de ambiente não deve ser disfarçada de falha conceitual ou sucesso da metodologia.
+
+## Confirmação humana de conclusão
+
+Não existe etapa IMPLEMENTACAO. Codificar é uma atividade autorizada, independente da confirmação de conclusão. Registrar uma confirmação humana explícita como evento FractalCompletion, ligado por CONFIRMS à revisão/artefato exato, com autoria, fala/fonte, escopo e hash. Ela expressa que o recorte passou por compressão, expansão e integração na visão do humano; preservar os registros dessas atividades e distinguir confirmação declarada de evidência operacional ausente. Não transformar aceitação de uma ideia ou encerramento da sessão em conclusão do fractal.
+
+Na retomada, recuperar a confirmação anterior pelo MCP e verificar seu escopo/revisão. Não exigir repetição se ela já cobre as informações consultadas. Mudanças materiais posteriores ficam fora daquela confirmação até nova manifestação humana; preservar a confirmação histórica. Ausência significa NENHUMA_CONFIRMADA, nunca conclusão inferida. Conclusão não autoriza código, não elimina perguntas conscientemente abertas, não promove conteúdo e não altera automaticamente ACTIVE.

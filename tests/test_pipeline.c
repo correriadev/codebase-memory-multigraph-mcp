@@ -13788,6 +13788,67 @@ TEST(pipeline_markdown_and_config_prose_reaches_fts_body) {
     PASS();
 }
 
+TEST(pipeline_markdown_theme_relations_are_typed_and_incremental) {
+    char tmp[256];
+    snprintf(tmp, sizeof(tmp), "/tmp/cbm_theme_relations_XXXXXX");
+    ASSERT_NOT_NULL(cbm_mkdtemp(tmp));
+    char readme[512];
+    char source[512];
+    char dbpath[512];
+    snprintf(readme, sizeof(readme), "%s/README.md", tmp);
+    snprintf(source, sizeof(source), "%s/main.go", tmp);
+    snprintf(dbpath, sizeof(dbpath), "%s/theme.db", tmp);
+
+    const char *first_readme =
+        "# Theme\n\n"
+        "## T-01 Source\n\n"
+        "Graph links: `CBM_RELATIONS_V1[SUPPORTS=T-02; APPLIES_TO=T-03; "
+        "UNKNOWN=T-02; USES=T-99]`\n\n"
+        "## T-02 Spacing\n\nSpacing guidance.\n\n"
+        "## T-03 Hierarchy\n\nHierarchy guidance.\n";
+    ASSERT_EQ(th_write_file(readme, first_readme), 0);
+    ASSERT_EQ(th_write_file(source, "package main\n\nfunc main() {}\n"), 0);
+
+    cbm_pipeline_t *pipeline = cbm_pipeline_new(tmp, dbpath, CBM_MODE_FULL);
+    ASSERT_NOT_NULL(pipeline);
+    ASSERT_EQ(cbm_pipeline_run(pipeline), 0);
+    char project[256];
+    snprintf(project, sizeof(project), "%s", cbm_pipeline_project_name(pipeline));
+    cbm_pipeline_free(pipeline);
+
+    cbm_store_t *store = cbm_store_open_path(dbpath);
+    ASSERT_NOT_NULL(store);
+    ASSERT_EQ(named_edge_count(store, project, "SUPPORTS", "T-01 Source", "T-02 Spacing"), 1);
+    ASSERT_EQ(named_edge_count(store, project, "APPLIES_TO", "T-01 Source", "T-03 Hierarchy"),
+              1);
+    ASSERT_EQ(named_edge_count(store, project, "UNKNOWN", "T-01 Source", "T-02 Spacing"), 0);
+    ASSERT_EQ(named_edge_count(store, project, "USES", "T-01 Source", "T-99 Missing"), 0);
+    cbm_store_close(store);
+
+    const char *updated_readme =
+        "# Theme\n\n"
+        "## T-01 Source\n\n"
+        "Graph links: `CBM_RELATIONS_V1[USES=T-03]`\n\n"
+        "## T-02 Spacing\n\nSpacing guidance.\n\n"
+        "## T-03 Hierarchy\n\nHierarchy guidance.\n";
+    ASSERT_EQ(th_write_file(readme, updated_readme), 0);
+    pipeline = cbm_pipeline_new(tmp, dbpath, CBM_MODE_FULL);
+    ASSERT_NOT_NULL(pipeline);
+    ASSERT_EQ(cbm_pipeline_run(pipeline), 0);
+    cbm_pipeline_free(pipeline);
+
+    store = cbm_store_open_path(dbpath);
+    ASSERT_NOT_NULL(store);
+    ASSERT_EQ(named_edge_count(store, project, "SUPPORTS", "T-01 Source", "T-02 Spacing"), 0);
+    ASSERT_EQ(named_edge_count(store, project, "APPLIES_TO", "T-01 Source", "T-03 Hierarchy"),
+              0);
+    ASSERT_EQ(named_edge_count(store, project, "USES", "T-01 Source", "T-03 Hierarchy"), 1);
+    cbm_store_close(store);
+
+    th_rmtree(tmp);
+    PASS();
+}
+
 /* A graph with no Function or Method nodes at all -- a struct-only or
  * config-only project -- must run pass_semantic_edges cleanly. Its phase-1
  * scan used to hand qsort() a NULL base with count 0, before the func_count
@@ -14256,6 +14317,7 @@ SUITE(pipeline) {
     RUN_TEST(pipeline_ensemble_routing_unterminated_item_is_safe);
     RUN_TEST(pipeline_delta_patch_indexes_docstring_into_fts_body);
     RUN_TEST(pipeline_markdown_and_config_prose_reaches_fts_body);
+    RUN_TEST(pipeline_markdown_theme_relations_are_typed_and_incremental);
     RUN_TEST(pipeline_semantic_edges_no_functions);
 }
 

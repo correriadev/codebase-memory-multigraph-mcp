@@ -1,0 +1,79 @@
+{
+  "observation_date": "2026-10-02",
+  "method": "independent Session B and follow-up MCP catalog/search/query",
+  "project": "C-Users-corre-Documents-harness-kit",
+  "historical_post_writer_smoke_catalog": {
+    "returned": 10,
+    "total": 10,
+    "complete": true
+  },
+  "later_catalog": {
+    "returned": 7,
+    "total": 7,
+    "has_more": false,
+    "partial": false,
+    "unreadable_entries": 0,
+    "horizons": [
+      "h_fractal_real_20261001_194114",
+      "h_fractal_real_20261001_194147",
+      "h_fractal_real_20261001_200609",
+      "h_ui_conversation_recovery_20261002_codex",
+      "h_ui_conversation_recovery_20261002_codex_r2",
+      "h_ui_conversation_recovery_20261002_codex_r3",
+      "h_ui_visual_ideation_e2e_20261002_a1"
+    ]
+  },
+  "previously_listed_but_later_absent": [
+    {
+      "horizon_id": "h_fractal_real_20261001_190429",
+      "earlier_owner_alive": false,
+      "later_search_overlay_nodes": 0,
+      "later_query_overlay_nodes": 0,
+      "later_query_overlay_edges": 0,
+      "tool_error": false
+    },
+    {
+      "horizon_id": "h_fractal_real_20261001_190712",
+      "earlier_owner_alive": false,
+      "later_search_overlay_nodes": 0,
+      "later_query_overlay_nodes": 0,
+      "later_query_overlay_edges": 0,
+      "tool_error": false
+    },
+    {
+      "horizon_id": "h_fractal_real_20261001_190755",
+      "earlier_owner_alive": false,
+      "later_search_overlay_nodes": 0,
+      "later_query_overlay_nodes": 0,
+      "later_query_overlay_edges": 0,
+      "tool_error": false
+    },
+    {
+      "horizon_id": "h_fractal_real_20261001_200159",
+      "earlier_owner_alive": true,
+      "later_search_overlay_nodes": 0,
+      "later_query_overlay_nodes": 0,
+      "later_query_overlay_edges": 0,
+      "tool_error": false
+    }
+  ],
+  "ui_recovery_horizons": {
+    "h_ui_conversation_recovery_20261002_codex": {
+      "status": "ACTIVE",
+      "owner_pid": 4932,
+      "owner_alive": true
+    },
+    "h_ui_conversation_recovery_20261002_codex_r2": {
+      "status": "ACTIVE",
+      "owner_pid": 4932,
+      "owner_alive": true
+    },
+    "h_ui_conversation_recovery_20261002_codex_r3": {
+      "status": "ACTIVE",
+      "owner_pid": 4932,
+      "owner_alive": true
+    }
+  },
+  "causal_conclusion": "undetermined; disappearance is observed but is not attributed to TTL/reaper, daemon restart, or another cause",
+  "evidence_limit": "No owner-process exit or daemon restart was deliberately tested."
+}

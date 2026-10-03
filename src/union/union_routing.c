@@ -81,15 +81,33 @@ CbmRefusalCode cbm_validate_specialty_provenance(const CbmSpecialtyJudgment *jud
             if (err_reason && err_len > 0) snprintf(err_reason, err_len, "canon citation missing theme_id");
             return CBM_REFUSAL_ANCHOR_NOT_FOUND;
         }
+        if (judgment->citation.node_uri[0] == '\0' ||
+            judgment->citation.pinned_version[0] == '\0') {
+            if (err_reason && err_len > 0) {
+                snprintf(err_reason, err_len, "canon citation requires node_uri and an exact pinned_version");
+            }
+            return CBM_REFUSAL_ANCHOR_NOT_FOUND;
+        }
 
         if (reg) {
             CbmThemeEntry entry;
-            CbmRefusalCode code = cbm_theme_registry_lookup(reg, judgment->citation.theme_id, &entry);
+            CbmRefusalCode code = cbm_theme_registry_lookup_version(
+                reg, judgment->citation.theme_id, judgment->citation.pinned_version, &entry);
             if (code != CBM_REFUSAL_OK) {
                 if (err_reason && err_len > 0) {
-                    snprintf(err_reason, err_len, "canon citation theme not found in registry");
+                    snprintf(err_reason, err_len,
+                             code == CBM_REFUSAL_THEME_PERSISTENCE_FAILED
+                                 ? "thematic catalog is unavailable"
+                                 : "canon citation theme version not found in registry");
+                }
+                if (code == CBM_REFUSAL_THEME_PERSISTENCE_FAILED) {
+                    return code;
                 }
                 cbm_refusal_emit(CBM_REFUSAL_ANCHOR_NOT_FOUND, "routing", "citation theme not found");
+                return CBM_REFUSAL_ANCHOR_NOT_FOUND;
+            }
+            if (entry.status == CBM_THEME_ABSENT) {
+                if (err_reason && err_len > 0) snprintf(err_reason, err_len, "cited thematic graph is ABSENT");
                 return CBM_REFUSAL_ANCHOR_NOT_FOUND;
             }
         }

@@ -1,0 +1,17 @@
+{
+  "db_sha256": "68bfa0eb0ceb8c960cdacdfcb910ebaf9ed38a6649f246083b3691a91edf65a7",
+  "integrity_check": "ok",
+  "client_pid": 19200,
+  "status": "ACTIVE",
+  "created_at": 1790968368,
+  "last_heartbeat": 1790968368,
+  "based_on_seq": "0",
+  "symbolic_nodes": 7,
+  "virtual_edges": 3,
+  "daemon_status": {
+    "active": false,
+    "returncode": 1,
+    "pid": null,
+    "output": "daemon: not running\nhint: `codebase-memory-mcp daemon start` keeps a daemon warm so CLI commands and hooks skip the per-command startup cost.\n"
+  }
+}

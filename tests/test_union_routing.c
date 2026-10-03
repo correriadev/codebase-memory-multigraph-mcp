@@ -99,6 +99,24 @@ TEST(test_specialty_citation_to_unknown_theme_refused) {
     PASS();
 }
 
+TEST(test_specialty_citation_reports_catalog_storage_failure) {
+    CbmThemeRegistry reg;
+    cbm_theme_registry_init(&reg);
+    reg.storage_ready = false;
+
+    CbmSpecialtyJudgment judgment;
+    memset(&judgment, 0, sizeof(judgment));
+    judgment.kind = CBM_PROVENANCE_CANON_CITATION;
+    strncpy(judgment.citation.theme_id, "@inst/clean-arch", sizeof(judgment.citation.theme_id) - 1);
+    strncpy(judgment.citation.node_uri, "cbm://theme/rules#spacing", sizeof(judgment.citation.node_uri) - 1);
+    strncpy(judgment.citation.pinned_version, "1.0.0", sizeof(judgment.citation.pinned_version) - 1);
+
+    CbmRefusalCode code = cbm_validate_specialty_provenance(&judgment, &reg, NULL, 0);
+    ASSERT_EQ(code, CBM_REFUSAL_THEME_PERSISTENCE_FAILED);
+
+    PASS();
+}
+
 /* AC6: Declared invention with non-empty rationale is admitted */
 TEST(test_specialty_declared_invention_accepted) {
     CbmThemeRegistry reg;
@@ -128,5 +146,6 @@ SUITE(union_routing) {
     RUN_TEST(test_specialty_undeclared_invention_refused);
     RUN_TEST(test_specialty_canon_citation_accepted);
     RUN_TEST(test_specialty_citation_to_unknown_theme_refused);
+    RUN_TEST(test_specialty_citation_reports_catalog_storage_failure);
     RUN_TEST(test_specialty_declared_invention_accepted);
 }

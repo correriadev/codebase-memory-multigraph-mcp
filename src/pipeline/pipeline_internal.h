@@ -578,6 +578,10 @@ void cbm_pipeline_create_route_nodes(cbm_gbuf_t *gb);
 int cbm_pipeline_pass_definitions(cbm_pipeline_ctx_t *ctx, const cbm_file_info_t *files,
                                   int file_count);
 
+/* Materialize explicit CBM_RELATIONS_V1 links between topic Sections in the
+ * same Markdown file. Shared by full and incremental indexing paths. */
+int cbm_pipeline_pass_theme_relations(cbm_pipeline_ctx_t *ctx);
+
 int cbm_pipeline_pass_k8s(cbm_pipeline_ctx_t *ctx, const cbm_file_info_t *files, int file_count);
 
 int cbm_pipeline_pass_calls(cbm_pipeline_ctx_t *ctx, const cbm_file_info_t *files, int file_count);

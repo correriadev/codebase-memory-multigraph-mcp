@@ -1463,6 +1463,15 @@ static int run_postpasses(cbm_pipeline_ctx_t *ctx, cbm_file_info_t *changed_file
         }
     }
 
+    /* Theme links are derived from complete Section nodes. On the closure
+     * route, the gbuf contains proxies for unchanged nodes and fresh docstrings
+     * for reparsed files; inbound links from unchanged files are restored by
+     * the delta snapshot immediately after this pass. */
+    rc = cbm_pipeline_pass_theme_relations(ctx);
+    if (rc != 0 || cbm_pipeline_check_cancel(ctx)) {
+        return rc != 0 ? rc : CBM_NOT_FOUND;
+    }
+
     /* Importance last, in EVERY mode — same ordering rule as the full path: it
      * reads CALLS/USAGE (re-extraction, above) and TESTS (pass_tests, first in
      * this function).

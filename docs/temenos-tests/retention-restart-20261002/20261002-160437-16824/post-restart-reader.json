@@ -1,0 +1,167 @@
+{
+  "started_at_utc": "2026-10-02T19:08:34.701446+00:00",
+  "project": "C-Users-corre-Documents-harness-kit",
+  "horizon_id": "h_retention_restart_20261002_160437_16824",
+  "cache_dir": "C:\\Users\\corre\\.cache\\retention-test-cache-20261002-160437-16824",
+  "runtime_dir": "C:\\Users\\corre\\.cache\\codebase-memory-mcp\\fractal-runtime\\retention-test-runtime-20261002-160437-16824",
+  "expected_sha256": "28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42",
+  "expected_bytes": 83,
+  "mcp_reader_reads_human_artifact": false,
+  "checks": {
+    "isolated_test_daemon_was_down_before_reader": {
+      "passed": true,
+      "detail": {
+        "active": false,
+        "pid": null,
+        "output": "daemon: not running\nhint: `codebase-memory-mcp daemon start` keeps a daemon warm so CLI commands and hooks skip the per-command startup cost.\n",
+        "returncode": 1
+      }
+    },
+    "shared_harnesskit_db_unchanged_since_writer_snapshot": {
+      "passed": true,
+      "detail": {
+        "expected": "6b6dcb5ee3aeed5bfbca71f01b659d7a2eb60edb504c0066f15fe0d3e87d655d",
+        "actual": "6b6dcb5ee3aeed5bfbca71f01b659d7a2eb60edb504c0066f15fe0d3e87d655d"
+      }
+    },
+    "new_daemon_process_after_owner_exit": {
+      "passed": true,
+      "detail": {
+        "old_owner_pid": 18080,
+        "reader_daemon": {
+          "active": true,
+          "pid": 6568,
+          "output": "daemon: active (session-managed)\n  pid: 6568\n  build: dev (63e3c0a60566...)\n  committed clients: 1\n    - pid 4092\n",
+          "returncode": 0
+        }
+      }
+    },
+    "catalog_finds_active_horizon_with_dead_owner": {
+      "passed": true,
+      "detail": {
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "status": "ACTIVE",
+        "association_source": "explicit_project",
+        "client_pid": 18080,
+        "owner_alive": false,
+        "created_at": 1790967891,
+        "last_heartbeat": 1790967891,
+        "based_on_seq": "0"
+      }
+    },
+    "mcp_recovers_exact_artifact_bytes": {
+      "passed": true,
+      "detail": {
+        "sha256": "28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42",
+        "bytes": 83,
+        "root": {
+          "id": "AR-01",
+          "artifact_id": "ART-RETENTION-2026100216043716824",
+          "temenos_id": "h_retention_restart_20261002_160437_16824",
+          "part_count": 2,
+          "part_ids": [
+            "ART-RETENTION-2026100216043716824-P01",
+            "ART-RETENTION-2026100216043716824-P02"
+          ],
+          "join_policy": "direct",
+          "byte_count": 83,
+          "sha256": "28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42"
+        },
+        "parts": [
+          {
+            "id": "AP-01",
+            "artifact_id": "ART-RETENTION-2026100216043716824",
+            "temenos_id": "h_retention_restart_20261002_160437_16824",
+            "part_id": "ART-RETENTION-2026100216043716824-P01",
+            "part_index": 1,
+            "total_parts": 2,
+            "exact_content": "retention_probe|owner_exit|daemon_restart",
+            "byte_count": 41,
+            "sha256": "5cf584fc7934436d0c2ac78e7019b13e21a7324bf9e5d42231bbb84ce6d81d0b"
+          },
+          {
+            "id": "AP-02",
+            "artifact_id": "ART-RETENTION-2026100216043716824",
+            "temenos_id": "h_retention_restart_20261002_160437_16824",
+            "part_id": "ART-RETENTION-2026100216043716824-P02",
+            "part_index": 2,
+            "total_parts": 2,
+            "exact_content": "|h_retention_restart_20261002_160437_16824",
+            "byte_count": 42,
+            "sha256": "95b4f92ba1dd3120af7e64a568fd04d6ede6ca2f065f4f948a3a6a2d32fc904a"
+          }
+        ]
+      }
+    },
+    "mcp_recovers_all_three_edges": {
+      "passed": true,
+      "detail": [
+        "('cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-01', 'cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-02', 'NEXT_PART')",
+        "('cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AR-01', 'cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-01', 'CONTAINS_PART')",
+        "('cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AR-01', 'cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-02', 'CONTAINS_PART')"
+      ]
+    },
+    "strict_validation_after_restart": {
+      "passed": true,
+      "detail": {
+        "success": true,
+        "horizon_id": "h_retention_restart_20261002_160437_16824",
+        "isolated_nodes_count": 0,
+        "unresolved_dependencies_count": 0,
+        "status": "VALID"
+      }
+    },
+    "isolated_reader_daemon_stopped": {
+      "passed": true,
+      "detail": {
+        "before": {
+          "active": false,
+          "pid": null,
+          "output": "daemon: not running\nhint: `codebase-memory-mcp daemon start` keeps a daemon warm so CLI commands and hooks skip the per-command startup cost.\n",
+          "returncode": 1
+        },
+        "stop": null,
+        "after": {
+          "active": false,
+          "pid": null,
+          "output": "daemon: not running\nhint: `codebase-memory-mcp daemon start` keeps a daemon warm so CLI commands and hooks skip the per-command startup cost.\n",
+          "returncode": 1
+        }
+      }
+    },
+    "shared_daemon_pid_unchanged": {
+      "passed": true,
+      "detail": {
+        "active": true,
+        "pid": 4932,
+        "output": "daemon: active (permanent)\n  pid: 4932\n  build: dev (63e3c0a60566...)\n  committed clients: 3\n    - pid 8728\n    - pid 14628\n    - pid 8700\n",
+        "returncode": 0
+      }
+    },
+    "live_harnesskit_database_hash_unchanged": {
+      "passed": true,
+      "detail": "6b6dcb5ee3aeed5bfbca71f01b659d7a2eb60edb504c0066f15fe0d3e87d655d"
+    }
+  },
+  "reader_daemon_pid": 6568,
+  "payload_prefixes": {
+    "AR-01": "FractalArtifact",
+    "AP-01": "FractalArtifactPart",
+    "AP-02": "FractalArtifactPart"
+  },
+  "test_daemon_after_reader_close": {
+    "active": false,
+    "pid": null,
+    "output": "daemon: not running\nhint: `codebase-memory-mcp daemon start` keeps a daemon warm so CLI commands and hooks skip the per-command startup cost.\n",
+    "returncode": 1
+  },
+  "result": "PASSED_OWNER_EXIT_AND_DAEMON_RESTART",
+  "notes": [
+    "Writer daemon shut down after its last MCP client exited; the on-disk horizon DB remained integrity_check=ok.",
+    "A new daemon PID reopened the same private test cache and MCP recovered exact artifact bytes, all edges, and strict validation.",
+    "Test used a private SQLite snapshot of the real HarnessKit graph; it did not stop or write the live shared daemon/cache.",
+    "The first reader assertion failed because payloads are type-prefixed strings; this corrected reader parsed that envelope and completed the read-only checks.",
+    "No TTL-expiry interval was tested."
+  ],
+  "completed_at_utc": "2026-10-02T19:08:53.163621+00:00"
+}

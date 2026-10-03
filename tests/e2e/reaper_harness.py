@@ -1,7 +1,11 @@
 """
-Horizon Reaper Harness for E2E Crash Recovery Testing.
-Implements the exact OS process liveness check and TTL eviction algorithm
-from src/daemon/horizon_reaper.c.
+Test-only Python approximation for isolated horizon crash-recovery scenarios.
+
+This is not a binding to the production C reaper. It reads
+`horizon_metadata.last_heartbeat` and accepts a configurable TTL, whereas
+`src/daemon/horizon_reaper.c` reads `created_at` and uses the fixed
+`CBM_HORIZON_TTL_SECONDS`. Passing tests here do not prove the C function is
+called by production or that its expiry behavior matches this simulation.
 """
 
 import os
@@ -54,7 +58,7 @@ def is_pid_alive(pid: int) -> bool:
 def run_reaper_sweep(horizons_dir: Path, ttl_seconds: int = 0) -> Dict[str, List[str]]:
     """
     Executes a reaper scan across all horizon databases in horizons_dir.
-    Evicts orphaned horizons whose client PID is dead and whose last_heartbeat exceeds TTL.
+    Simulates eviction when the PID is dead and last_heartbeat exceeds ttl_seconds.
     """
     unlinked = []
     retained = []

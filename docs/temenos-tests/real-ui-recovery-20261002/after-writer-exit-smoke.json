@@ -1,0 +1,222 @@
+{
+  "test": "cross-client recovery smoke after writer-agent exit",
+  "reader_input": [
+    "project",
+    "topic"
+  ],
+  "physical_source_files_read": false,
+  "mutations": false,
+  "progression_decision": "No new UI fact or design choice was present in the test-continuation request; no new UI revision was written.",
+  "catalog": {
+    "returned": 10,
+    "total": 10,
+    "partial": false,
+    "has_more": false,
+    "unreadable_entries": 0
+  },
+  "selected_horizon": "h_ui_conversation_recovery_20261002_codex_r2",
+  "artifact": {
+    "artifact_id": "ART-UI-CODEX-R2",
+    "parts": 7,
+    "bytes": 3479,
+    "sha256": "53cd5a65c2aa46cba792c0242662b8788c0f941eef50c9a8aa7c151be6ba359b",
+    "all_part_checks_passed": true,
+    "all_root_checks_passed": true
+  },
+  "retrieval": {
+    "overlay_nodes": 24,
+    "query_horizon_nodes": 24,
+    "query_horizon_edges": 22,
+    "validator_status": "VALID",
+    "isolated_nodes": 0,
+    "unresolved_dependencies": 0
+  },
+  "result": "PASSED_CROSS_CLIENT_RECOVERY_OWNER_PROCESS_ALIVE",
+  "mcp_calls": [
+    {
+      "tool": "list_horizons",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "status": "ALL",
+        "offset": 0,
+        "limit": 50
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_fractal_real_20261001_190429"
+        ],
+        "qn_pattern": ".*",
+        "limit": 100,
+        "format": "json"
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_fractal_real_20261001_190712"
+        ],
+        "qn_pattern": ".*",
+        "limit": 100,
+        "format": "json"
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_fractal_real_20261001_190755"
+        ],
+        "qn_pattern": ".*",
+        "limit": 100,
+        "format": "json"
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_fractal_real_20261001_194114"
+        ],
+        "qn_pattern": ".*",
+        "limit": 100,
+        "format": "json"
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_fractal_real_20261001_194147"
+        ],
+        "qn_pattern": ".*",
+        "limit": 100,
+        "format": "json"
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_fractal_real_20261001_200159"
+        ],
+        "qn_pattern": ".*",
+        "limit": 100,
+        "format": "json"
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_fractal_real_20261001_200609"
+        ],
+        "qn_pattern": ".*",
+        "limit": 100,
+        "format": "json"
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_ui_conversation_recovery_20261002_codex"
+        ],
+        "qn_pattern": ".*",
+        "limit": 100,
+        "format": "json"
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_ui_conversation_recovery_20261002_codex_r2"
+        ],
+        "qn_pattern": ".*",
+        "limit": 100,
+        "format": "json"
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "search_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_ui_visual_ideation_e2e_20261002_a1"
+        ],
+        "qn_pattern": ".*",
+        "limit": 100,
+        "format": "json"
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "query_graph",
+      "arguments": {
+        "project": "C-Users-corre-Documents-harness-kit",
+        "active_horizons": [
+          "h_ui_conversation_recovery_20261002_codex_r2"
+        ],
+        "query": "MATCH (f:File) RETURN f.path LIMIT 1",
+        "format": "json",
+        "max_rows": 10
+      },
+      "error": null,
+      "isError": false
+    },
+    {
+      "tool": "validate_scope_horizon",
+      "arguments": {
+        "horizon_id": "h_ui_conversation_recovery_20261002_codex_r2",
+        "strict_connectivity": true
+      },
+      "error": null,
+      "isError": false
+    }
+  ],
+  "writer_agent_exited": true,
+  "owner_process_exit_tested": false,
+  "owner_process_observation": {
+    "client_pid": 4932,
+    "owner_alive": true,
+    "observation": "follow-up MCP catalog identified the horizon owner process still alive; see catalog-retention-followup.json"
+  },
+  "limitations": [
+    "Does not prove retention after the horizon-owning process exits.",
+    "Does not test daemon restart or TTL expiry."
+  ]
+}

@@ -13,11 +13,22 @@ Today, project memory spaces exist either as isolated single-tenant indexes or t
 **In:**
 - **KnowledgeBase Registry Graph Model**:
   - Theme entry node anatomy: `theme_id` (namespaced identifier, e.g., `@inst/frontend-clean-arch`), `name`, `namespace` (personal / institutional / public), `target_uri` (URI of the backing graph), `version` (semver), `curator` (identity), `status` ∈ {`ACTIVE`, `DEPRECATED`, `ABSENT`}, `founding_provenance` (origin session/horizon or historical anchor), `created_at`, `updated_at`.
+- **Agent-facing catalog discovery and immutable version resolution**:
+  - `theme_search` searches ID, name, namespace, description, aliases, and tags; it returns ranked candidates with paging and does not establish authority.
+  - `theme_list` enumerates catalog records with optional exact filters; `theme_lookup(theme_id, version?)` resolves the latest or exact immutable version.
+  - Traversable locators identify a whole registered CBM project (`cbm-project://<project>` or `cbm://<project>`); path-qualified locators are rejected so the route cannot silently widen or narrow the declared graph.
+  - Existing versions cannot be edited in place except lifecycle status; content changes require a new version ID and preserve earlier references.
+  - Current implementation persists catalog entries in `<cache>/theme_registry.json`; thematic nodes remain in the target CBM graph. This file-backed registry is an implementation stage toward the dedicated KnowledgeBase registry graph model.
+- **Read-only thematic graph traversal**:
+  - `theme_graph_search` and `theme_graph_query` resolve the catalog entry's `target_uri` to an existing CBM project, then reuse the normal project graph search and read-only query engines.
+  - Search results include canonical candidate node URIs. `validate_provenance` resolves the pinned version and verifies the exact URI against that version's target graph before returning `anchor_verified=true`.
 - **Queryable Absence Semantics**:
   - Querying an unregistered or not-yet-materialized theme returns an `ABSENT` status node containing catalog metadata, allowing downstream agents to reason explicitly about missing canon without throwing host exceptions.
 - **Validation & Refusals (extends A04)**:
   - `THEME_SCHEMA_INVALID`: emitted when registration lacks mandatory fields (`theme_id`, `namespace`, `curator`, `version`).
   - `THEME_UNKNOWN`: emitted when a queried namespace or theme ID does not exist in the catalog.
+  - `THEME_PERSISTENCE_FAILED`: emitted when the durable catalog cannot be read or a catalog update cannot be committed; in-memory writes are rolled back.
+  - `THEME_VERSION_IMMUTABLE`: emitted when an existing theme ID/version is submitted with changed content; publish a new version.
 - **Scale-Invariance (Fractal Law)**:
   - Each material theme graph pointed to by `target_uri` is a full union tenant (possessing its own admission, recall, provenance, and refutation mechanics).
 

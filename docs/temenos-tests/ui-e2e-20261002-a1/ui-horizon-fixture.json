@@ -1,0 +1,162 @@
+{
+  "horizon_id": "h_ui_visual_ideation_e2e_20261002_a1",
+  "project": "C-Users-corre-Documents-harness-kit",
+  "nodes": [
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#01-experience-and-flow",
+      "label": "Section",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "Section:Fixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nPrimary flow: open a conversation, read assistant and user turns, compose a prompt, send it, observe a streaming response, then copy or retry the answer.\nInformation order: workspace header; conversation transcript; composer; optional context drawer. The transcript owns the central column; the composer stays visible at the bottom.\nSample content and labels are placeholders. Unknown: product name, supported tools, conversation retention, and real user tasks.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#02-screens-and-components",
+      "label": "Section",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "Section:Fixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nSingle workspace screen: left navigation rail 256 px; central transcript column 720 px max; right context drawer 320 px when open; 24 px gaps. At a 1440 px viewport, center the transcript and allow both rails. Header height 56 px; composer shell 96 px minimum.\nComponents: workspace switcher, new-conversation button, recent-conversation list, transcript turn, assistant avatar, inline code block, copy/retry actions, prompt textarea, send button, attachment button, and context drawer.\nUnknown: whether navigation or context drawer belongs in the eventual product.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#03-visual-tokens-and-typography",
+      "label": "Section",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "Section:Fixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nPalette fixture: canvas #F7F8FA; surface #FFFFFF; primary text #17202A; muted text #657182; border #DCE2E8; accent #3157D5; success #25845A; warning #B76D12; focus ring #3157D5.\nTypography fixture: system sans stack; body 15 px / 1.55 line height; secondary text 13 px / 1.45; page title 18 px / 1.3, weight 600; code 13 px monospace.\nSpacing fixture uses 4 px increments: 8 px inline gap, 16 px component padding, 24 px section gap, 32 px page inset. Radius: 8 px controls, 12 px cards. All color and type values are synthetic and unreviewed.\nUnknown: brand palette, font licensing, dark theme, localization, and design-system compatibility.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#04-states-and-interactions",
+      "label": "Section",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "Section:Fixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nComposer states: empty, focused, text entered, sending, disabled, and recoverable error. Enter sends; Shift+Enter inserts a line break; send button is disabled while empty or sending.\nAssistant states: streaming, complete, interrupted, and error. Show a small live status while streaming; expose retry on recoverable error; copy action appears on completed answers and reports copied feedback for 2 seconds.\nNavigation states: selected conversation, hover, keyboard focus, and collapsed rail. Context drawer opens by button and closes by button or Escape.\nUnknown: actual keyboard map, retry semantics, cancellation behavior, and persistence of drafts.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#05-responsive-layout-and-accessibility",
+      "label": "Section",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "Section:Fixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nAt widths below 1100 px hide the context drawer by default; below 760 px collapse navigation to a 56 px icon rail; below 520 px use one column, 16 px side padding, and full-width composer. No horizontal scrolling at 360 px.\nUse semantic landmarks, visible focus, accessible names for icon buttons, keyboard-operable navigation, live announcement for response completion, and contrast target WCAG 2.2 AA for text and focus indicators. Respect reduced-motion preference; do not rely on color alone.\nUnknown: final conformance target, screen-reader matrix, touch target minimums, and supported browsers.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#06-e2e-fixture-scenario-and-explicit-unknowns",
+      "label": "Section",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "Section:Fixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nScenario: at 1440×900, open the synthetic conversation “Release notes”, type “Summarize the latest changes”, send, observe streaming, then copy the completed answer. At 390×844, verify one-column layout and reachable composer.\nFixture checks: transcript remains readable; composer remains reachable; focus stays visible; streaming and copied feedback are announced; no horizontal overflow.\nExplicit unknowns: product identity, actual workflows, approved copy, real content, data sensitivity, brand system, backend capabilities, localization, platform/browser support, and acceptance ownership. No fixture choice is user approval or a shipping decision.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#artifact",
+      "label": "FractalArtifact: UI-E2E-20261002-A1 | revision=1 | author=synthetic-test-fixture | completeness=COMPLETE_FOR_ROUND_TRIP | parts=6 | order=01..06 | digest_status=PENDING_POST_ROUND_TRIP | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "FractalArtifact: UI-E2E-20261002-A1 | revision=1 | author=synthetic-test-fixture | completeness=COMPLETE_FOR_ROUND_TRIP | parts=6 | order=01..06 | digest_status=PENDING_POST_ROUND_TRIP | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE:Artifact UI-E2E-20261002-A1. Synthetic assistant-conversation workspace visual ideation, revision 1. Six ordered parts. Digest is intentionally pending until after MCP retrieval verification. All values are a synthetic test fixture declared only for this E2E; no user or product approval is represented."
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-01",
+      "label": "FractalArtifactPart: UI-E2E-20261002-A1 | part=01/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "FractalArtifactPart: UI-E2E-20261002-A1 | part=01/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE:# UI Visual Ideation E2E — synthetic conversation workspace\nFixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nScope: visual concept for a desktop-first assistant conversation workspace. This is ideation data for the E2E memory round trip, not a product requirement.\n## 01. Experience and flow\nFixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nPrimary flow: open a conversation, read assistant and user turns, compose a prompt, send it, observe a streaming response, then copy or retry the answer.\nInformation order: workspace header; conversation transcript; composer; optional context drawer. The transcript owns the central column; the composer stays visible at the bottom.\nSample content and labels are placeholders. Unknown: product name, supported tools, conversation retention, and real user tasks.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-02",
+      "label": "FractalArtifactPart: UI-E2E-20261002-A1 | part=02/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "FractalArtifactPart: UI-E2E-20261002-A1 | part=02/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE:## 02. Screens and components\nFixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nSingle workspace screen: left navigation rail 256 px; central transcript column 720 px max; right context drawer 320 px when open; 24 px gaps. At a 1440 px viewport, center the transcript and allow both rails. Header height 56 px; composer shell 96 px minimum.\nComponents: workspace switcher, new-conversation button, recent-conversation list, transcript turn, assistant avatar, inline code block, copy/retry actions, prompt textarea, send button, attachment button, and context drawer.\nUnknown: whether navigation or context drawer belongs in the eventual product.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-03",
+      "label": "FractalArtifactPart: UI-E2E-20261002-A1 | part=03/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "FractalArtifactPart: UI-E2E-20261002-A1 | part=03/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE:## 03. Visual tokens and typography\nFixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nPalette fixture: canvas #F7F8FA; surface #FFFFFF; primary text #17202A; muted text #657182; border #DCE2E8; accent #3157D5; success #25845A; warning #B76D12; focus ring #3157D5.\nTypography fixture: system sans stack; body 15 px / 1.55 line height; secondary text 13 px / 1.45; page title 18 px / 1.3, weight 600; code 13 px monospace.\nSpacing fixture uses 4 px increments: 8 px inline gap, 16 px component padding, 24 px section gap, 32 px page inset. Radius: 8 px controls, 12 px cards. All color and type values are synthetic and unreviewed.\nUnknown: brand palette, font licensing, dark theme, localization, and design-system compatibility.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-04",
+      "label": "FractalArtifactPart: UI-E2E-20261002-A1 | part=04/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "FractalArtifactPart: UI-E2E-20261002-A1 | part=04/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE:## 04. States and interactions\nFixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nComposer states: empty, focused, text entered, sending, disabled, and recoverable error. Enter sends; Shift+Enter inserts a line break; send button is disabled while empty or sending.\nAssistant states: streaming, complete, interrupted, and error. Show a small live status while streaming; expose retry on recoverable error; copy action appears on completed answers and reports copied feedback for 2 seconds.\nNavigation states: selected conversation, hover, keyboard focus, and collapsed rail. Context drawer opens by button and closes by button or Escape.\nUnknown: actual keyboard map, retry semantics, cancellation behavior, and persistence of drafts.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-05",
+      "label": "FractalArtifactPart: UI-E2E-20261002-A1 | part=05/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "FractalArtifactPart: UI-E2E-20261002-A1 | part=05/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE:## 05. Responsive layout and accessibility\nFixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nAt widths below 1100 px hide the context drawer by default; below 760 px collapse navigation to a 56 px icon rail; below 520 px use one column, 16 px side padding, and full-width composer. No horizontal scrolling at 360 px.\nUse semantic landmarks, visible focus, accessible names for icon buttons, keyboard-operable navigation, live announcement for response completion, and contrast target WCAG 2.2 AA for text and focus indicators. Respect reduced-motion preference; do not rely on color alone.\nUnknown: final conformance target, screen-reader matrix, touch target minimums, and supported browsers.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-06",
+      "label": "FractalArtifactPart: UI-E2E-20261002-A1 | part=06/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "FractalArtifactPart: UI-E2E-20261002-A1 | part=06/06 | join=exact concatenation in order | knowledge=DECLARADO_FOR_TEST_ONLY | approval=NONE:## 06. E2E fixture scenario and explicit unknowns\nFixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nScenario: at 1440×900, open the synthetic conversation “Release notes”, type “Summarize the latest changes”, send, observe streaming, then copy the completed answer. At 390×844, verify one-column layout and reachable composer.\nFixture checks: transcript remains readable; composer remains reachable; focus stays visible; streaming and copied feedback are announced; no horizontal overflow.\nExplicit unknowns: product identity, actual workflows, approved copy, real content, data sensitivity, brand system, backend capabilities, localization, platform/browser support, and acceptance ownership. No fixture choice is user approval or a shipping decision.\n"
+    },
+    {
+      "cbm_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#ui-visual-ideation-e2e-synthetic-conversation-workspace",
+      "label": "Section",
+      "epistemic_status": "PROPOSED",
+      "is_dangling": false,
+      "code_snippet": "Section:Fixture status: SYNTHETIC TEST FIXTURE; knowledge=DECLARADO FOR THIS TEST ONLY; user/product approval=NONE.\nScope: visual concept for a desktop-first assistant conversation workspace. This is ideation data for the E2E memory round trip, not a product requirement.\n"
+    }
+  ],
+  "edges": [
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#artifact",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-01",
+      "edge_type": "CONTAINS_PART"
+    },
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#artifact",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-02",
+      "edge_type": "CONTAINS_PART"
+    },
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#artifact",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-03",
+      "edge_type": "CONTAINS_PART"
+    },
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#artifact",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-04",
+      "edge_type": "CONTAINS_PART"
+    },
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#artifact",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-05",
+      "edge_type": "CONTAINS_PART"
+    },
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#artifact",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-06",
+      "edge_type": "CONTAINS_PART"
+    },
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-01",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-02",
+      "edge_type": "NEXT_PART"
+    },
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-02",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-03",
+      "edge_type": "NEXT_PART"
+    },
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-03",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-04",
+      "edge_type": "NEXT_PART"
+    },
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-04",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-05",
+      "edge_type": "NEXT_PART"
+    },
+    {
+      "source_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-05",
+      "target_uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/ui-e2e-20261002-a1/visual-ideation.md#part-06",
+      "edge_type": "NEXT_PART"
+    }
+  ],
+  "source": "MCP-exported active horizon snapshot; no physical HarnessKit file read"
+}

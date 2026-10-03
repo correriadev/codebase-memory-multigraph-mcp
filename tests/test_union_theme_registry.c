@@ -6,8 +6,12 @@
 #include "test_framework.h"
 #include "../src/union/union_theme_registry.h"
 #include "../src/union/union_refusal.h"
+#include "../src/foundation/compat.h"
+#include "../src/foundation/compat_fs.h"
 
+#include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 static void populate_valid_theme(CbmThemeEntry *entry) {
     memset(entry, 0, sizeof(*entry));
@@ -152,10 +156,116 @@ TEST(test_namespace_querying) {
     PASS();
 }
 
+TEST(test_theme_search_matches_all_terms_and_pages) {
+    CbmThemeRegistry reg;
+    cbm_theme_registry_init(&reg);
+
+    CbmThemeEntry design, testing;
+    populate_valid_theme(&design);
+    strncpy(design.theme_id, "@public/ui-design-practices", sizeof(design.theme_id) - 1);
+    strncpy(design.name, "Interface Design Practices", sizeof(design.name) - 1);
+    strncpy(design.namespace, "design", sizeof(design.namespace) - 1);
+    strncpy(design.description, "Spacing tokens typography palette motion and component behavior",
+            sizeof(design.description) - 1);
+    strncpy(design.aliases, "visual hierarchy layout", sizeof(design.aliases) - 1);
+    strncpy(design.tags, "design-system interface", sizeof(design.tags) - 1);
+
+    populate_valid_theme(&testing);
+    strncpy(testing.theme_id, "@public/react-testing", sizeof(testing.theme_id) - 1);
+    strncpy(testing.name, "React Testing Practices", sizeof(testing.name) - 1);
+    strncpy(testing.namespace, "testing", sizeof(testing.namespace) - 1);
+    strncpy(testing.description, "Test-driven development for React components",
+            sizeof(testing.description) - 1);
+    strncpy(testing.tags, "frontend tdd", sizeof(testing.tags) - 1);
+
+    ASSERT_EQ(cbm_theme_registry_register(&reg, &design, NULL, 0), CBM_REFUSAL_OK);
+    ASSERT_EQ(cbm_theme_registry_register(&reg, &testing, NULL, 0), CBM_REFUSAL_OK);
+
+    CbmThemeSearchHit hits[4];
+    size_t total = 0, count = 0;
+    ASSERT_EQ(cbm_theme_registry_search(&reg, "spacing typography", NULL, "ACTIVE", 0, 4,
+                                        hits, 4, &total, &count), CBM_REFUSAL_OK);
+    ASSERT_EQ(total, 1);
+    ASSERT_EQ(count, 1);
+    ASSERT_STR_EQ(hits[0].entry.theme_id, "@public/ui-design-practices");
+
+    ASSERT_EQ(cbm_theme_registry_search(&reg, "", NULL, NULL, 1, 1, hits, 4, &total, &count),
+              CBM_REFUSAL_OK);
+    ASSERT_EQ(total, 2);
+    ASSERT_EQ(count, 1);
+
+    PASS();
+}
+
+TEST(test_theme_versions_are_immutable_and_pinnable) {
+    CbmThemeRegistry reg;
+    cbm_theme_registry_init(&reg);
+    CbmThemeEntry entry;
+    populate_valid_theme(&entry);
+    strncpy(entry.description, "Spacing scale v1", sizeof(entry.description) - 1);
+    ASSERT_EQ(cbm_theme_registry_register(&reg, &entry, NULL, 0), CBM_REFUSAL_OK);
+
+    CbmThemeEntry changed = entry;
+    strncpy(changed.description, "Changed content under the same version", sizeof(changed.description) - 1);
+    ASSERT_EQ(cbm_theme_registry_register(&reg, &changed, NULL, 0),
+              CBM_REFUSAL_THEME_VERSION_IMMUTABLE);
+
+    changed = entry;
+    strncpy(changed.version, "1.3.0", sizeof(changed.version) - 1);
+    strncpy(changed.description, "Spacing scale v2", sizeof(changed.description) - 1);
+    ASSERT_EQ(cbm_theme_registry_register(&reg, &changed, NULL, 0), CBM_REFUSAL_OK);
+
+    CbmThemeEntry pinned, latest;
+    ASSERT_EQ(cbm_theme_registry_lookup_version(&reg, entry.theme_id, "1.2.0", &pinned),
+              CBM_REFUSAL_OK);
+    ASSERT_STR_EQ(pinned.description, "Spacing scale v1");
+    ASSERT_EQ(cbm_theme_registry_lookup(&reg, entry.theme_id, &latest), CBM_REFUSAL_OK);
+    ASSERT_STR_EQ(latest.version, "1.3.0");
+    ASSERT_STR_EQ(latest.description, "Spacing scale v2");
+
+    PASS();
+}
+
+TEST(test_theme_catalog_survives_reopen) {
+    char path[CBM_THEME_STORE_PATH_MAX];
+    char tmp_path[CBM_THEME_STORE_PATH_MAX + 8];
+    int written = snprintf(path, sizeof(path), "%s/cbm-theme-registry-test-%llu.json", cbm_tmpdir(),
+                           (unsigned long long)time(NULL));
+    ASSERT_TRUE(written > 0 && (size_t)written < sizeof(path));
+    written = snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+    ASSERT_TRUE(written > 0 && (size_t)written < sizeof(tmp_path));
+    (void)cbm_unlink(path);
+    (void)cbm_unlink(tmp_path);
+
+    CbmThemeRegistry writer;
+    ASSERT_TRUE(cbm_theme_registry_open(&writer, path));
+    CbmThemeEntry entry;
+    populate_valid_theme(&entry);
+    strncpy(entry.description, "Persisted UI spacing and hierarchy rules", sizeof(entry.description) - 1);
+    strncpy(entry.aliases, "layout rhythm", sizeof(entry.aliases) - 1);
+    ASSERT_EQ(cbm_theme_registry_register(&writer, &entry, NULL, 0), CBM_REFUSAL_OK);
+
+    CbmThemeRegistry reader;
+    cbm_theme_registry_init(&reader);
+    ASSERT_TRUE(cbm_theme_registry_open(&reader, path));
+    CbmThemeEntry recovered;
+    ASSERT_EQ(cbm_theme_registry_lookup_version(&reader, entry.theme_id, entry.version, &recovered),
+              CBM_REFUSAL_OK);
+    ASSERT_STR_EQ(recovered.description, entry.description);
+    ASSERT_STR_EQ(recovered.aliases, entry.aliases);
+
+    ASSERT_EQ(cbm_unlink(path), 0);
+    (void)cbm_unlink(tmp_path);
+    PASS();
+}
+
 SUITE(union_theme_registry) {
     RUN_TEST(test_theme_schema_validation);
     RUN_TEST(test_theme_absence_is_queryable_state);
     RUN_TEST(test_unregistered_theme_lookup_unknown);
     RUN_TEST(test_valid_theme_registration_and_lookup);
     RUN_TEST(test_namespace_querying);
+    RUN_TEST(test_theme_search_matches_all_terms_and_pages);
+    RUN_TEST(test_theme_versions_are_immutable_and_pinnable);
+    RUN_TEST(test_theme_catalog_survives_reopen);
 }

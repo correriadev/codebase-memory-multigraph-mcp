@@ -1,0 +1,191 @@
+[
+  {
+    "client": "reader",
+    "initialize": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "protocolVersion": "2024-11-05",
+        "serverInfo": {
+          "name": "codebase-memory-mcp",
+          "version": "dev"
+        },
+        "capabilities": {
+          "tools": {
+            "listChanged": false
+          },
+          "prompts": {
+            "listChanged": false
+          }
+        },
+        "instructions": "Graph first: search_graph for symbols, trace_path for relationships, get_code_snippet for source, query_graph for multi-hop, and get_architecture for overview. Use search_code/grep for literals or coverage gaps. Indexes auto-refresh. Check cited-path coverage; paginate."
+      }
+    }
+  },
+  {
+    "tool": "list_horizons",
+    "arguments": {
+      "project": "C-Users-corre-Documents-harness-kit",
+      "status": "ALL",
+      "limit": 100,
+      "offset": 0
+    },
+    "response": {
+      "horizons": [
+        {
+          "horizon_id": "h_retention_restart_20261002_160437_16824",
+          "status": "ACTIVE",
+          "association_source": "explicit_project",
+          "client_pid": 18080,
+          "owner_alive": false,
+          "created_at": 1790967891,
+          "last_heartbeat": 1790967891,
+          "based_on_seq": "0"
+        }
+      ],
+      "project": "C-Users-corre-Documents-harness-kit",
+      "total": 1,
+      "returned": 1,
+      "offset": 0,
+      "limit": 100,
+      "has_more": false,
+      "unreadable_entries": 0,
+      "partial": false
+    }
+  },
+  {
+    "tool": "search_graph",
+    "arguments": {
+      "project": "C-Users-corre-Documents-harness-kit",
+      "active_horizons": [
+        "h_retention_restart_20261002_160437_16824"
+      ],
+      "limit": 100,
+      "format": "json"
+    },
+    "response": {
+      "overlays": [
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-01",
+          "payload": "FractalArtifactPart:{\"id\":\"AP-01\",\"artifact_id\":\"ART-RETENTION-2026100216043716824\",\"temenos_id\":\"h_retention_restart_20261002_160437_16824\",\"part_id\":\"ART-RETENTION-2026100216043716824-P01\",\"part_index\":1,\"total_parts\":2,\"exact_content\":\"retention_probe|owner_exit|daemon_restart\",\"byte_count\":41,\"sha256\":\"5cf584fc7934436d0c2ac78e7019b13e21a7324bf9e5d42231bbb84ce6d81d0b\"}",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-02",
+          "payload": "FractalArtifactPart:{\"id\":\"AP-02\",\"artifact_id\":\"ART-RETENTION-2026100216043716824\",\"temenos_id\":\"h_retention_restart_20261002_160437_16824\",\"part_id\":\"ART-RETENTION-2026100216043716824-P02\",\"part_index\":2,\"total_parts\":2,\"exact_content\":\"|h_retention_restart_20261002_160437_16824\",\"byte_count\":42,\"sha256\":\"95b4f92ba1dd3120af7e64a568fd04d6ede6ca2f065f4f948a3a6a2d32fc904a\"}",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AR-01",
+          "payload": "FractalArtifact:{\"id\":\"AR-01\",\"artifact_id\":\"ART-RETENTION-2026100216043716824\",\"temenos_id\":\"h_retention_restart_20261002_160437_16824\",\"part_count\":2,\"part_ids\":[\"ART-RETENTION-2026100216043716824-P01\",\"ART-RETENTION-2026100216043716824-P02\"],\"join_policy\":\"direct\",\"byte_count\":83,\"sha256\":\"28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42\"}",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#artifact",
+          "payload": "Section:Artifact ID: ART-RETENTION-2026100216043716824\nExpected SHA-256: 28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42\nExact text: retention_probe|owner_exit|daemon_restart|h_retention_restart_20261002_160437_16824\n\n",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#graph",
+          "payload": "Section:```tactical-spec\n{\n  \"nodes\": [\n    {\n      \"symbol\": \"AR-01\",\n      \"type\": \"FractalArtifact\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AR-01\",\n      \"description\": \"{\\\"id\\\":\\\"AR-01\\\",\\\"artifact_id\\\":\\\"ART-RETENTION-2026100216043716824\\\",\\\"temenos_id\\\":\\\"h_retention_restart_20261002_160437_16824\\\",\\\"part_count\\\":2,\\\"part_ids\\\":[\\\"ART-RETENTION-2026100216043716824-P01\\\",\\\"ART-RETENTION-2026100216043716824-P02\\\"],\\\"join_policy\\\":\\\"direct\\\",\\\"byte_count\\\":83,\\\"sha256\\\":\\\"28a4ea7ac6bee3d9e6647cd5677c044547ee0992216986d0332a0612780a5b42\\\"}\"\n    },\n    {\n      \"symbol\": \"AP-01\",\n      \"type\": \"FractalArtifactPart\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-01\",\n      \"description\": \"{\\\"id\\\":\\\"AP-01\\\",\\\"artifact_id\\\":\\\"ART-RETENTION-2026100216043716824\\\",\\\"temenos_id\\\":\\\"h_retention_restart_20261002_160437_16824\\\",\\\"part_id\\\":\\\"ART-RETENTION-2026100216043716824-P01\\\",\\\"part_index\\\":1,\\\"total_parts\\\":2,\\\"exact_content\\\":\\\"retention_probe|owner_exit|daemon_restart\\\",\\\"byte_count\\\":41,\\\"sha256\\\":\\\"5cf584fc7934436d0c2ac78e7019b13e21a7324bf9e5d42231bbb84ce6d81d0b\\\"}\"\n    },\n    {\n      \"symbol\": \"AP-02\",\n      \"type\": \"FractalArtifactPart\",\n      \"cbm_uri\": \"cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-02\",\n      \"description\": \"{\\\"id\\\":\\\"AP-02\\\",\\\"artifact_id\\\":\\\"ART-RETENTION-2026100216043716824\\\",\\\"temenos_id\\\":\\\"h_retention_restart_20261002_160437_16824\\\",\\\"part_id\\\":\\\"ART-RETENTION-2026100216043716824-P02\\\",\\\"part_index\\\":2,\\\"total_parts\\\":2,\\\"exact_content\\\":\\\"|h_retention_restart_20261002_160437_16824\\\",\\\"byte_count\\\":42,\\\"sha256\\\":\\\"95b4f92ba1dd3120af7e64a568fd04d6ede6ca2f065f4f948a3a6a2d32fc904a\\\"}\"\n    }\n  ],\n  \"edges\": [\n    {\n      \"source\": \"AR-01\",\n      \"target\": \"AP-01\",\n      \"type\": \"CONTAINS_PART\"\n    },\n    {\n      \"source\": \"AP-01\",\n      \"target\": \"AP-02\",\n      \"type\": \"NEXT_PART\"\n    },\n    {\n      \"source\": \"AR-01\",\n      \"target\": \"AP-02\",\n      \"type\": \"CONTAINS_PART\"\n    }\n  ]\n}\n```\n",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#retention-probe-h-retention-restart-20261002-160437-16824",
+          "payload": "Section:\n",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#scope",
+          "payload": "Section:Isolated HarnessKit graph snapshot; owner exit and daemon restart.\n\n",
+          "source": "HORIZON"
+        }
+      ]
+    }
+  },
+  {
+    "tool": "query_graph",
+    "arguments": {
+      "project": "C-Users-corre-Documents-harness-kit",
+      "active_horizons": [
+        "h_retention_restart_20261002_160437_16824"
+      ],
+      "query": "MATCH (f:File) RETURN f.path LIMIT 1",
+      "format": "json",
+      "max_rows": 10
+    },
+    "response": {
+      "horizon_nodes": [
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-01",
+          "label": "FractalArtifactPart",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-02",
+          "label": "FractalArtifactPart",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AR-01",
+          "label": "FractalArtifact",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#artifact",
+          "label": "Section",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#graph",
+          "label": "Section",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#retention-probe-h-retention-restart-20261002-160437-16824",
+          "label": "Section",
+          "source": "HORIZON"
+        },
+        {
+          "uri": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/revisoes/r001.md#scope",
+          "label": "Section",
+          "source": "HORIZON"
+        }
+      ],
+      "horizon_edges": [
+        {
+          "source": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AR-01",
+          "target": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-01",
+          "type": "CONTAINS_PART",
+          "origin_horizon": "h_retention_restart_20261002_160437_16824"
+        },
+        {
+          "source": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-01",
+          "target": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-02",
+          "type": "NEXT_PART",
+          "origin_horizon": "h_retention_restart_20261002_160437_16824"
+        },
+        {
+          "source": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AR-01",
+          "target": "cbm://C-Users-corre-Documents-harness-kit/docs/temenos/h_retention_restart_20261002_160437_16824/retention-probe.md#AP-02",
+          "type": "CONTAINS_PART",
+          "origin_horizon": "h_retention_restart_20261002_160437_16824"
+        }
+      ]
+    }
+  },
+  {
+    "tool": "validate_scope_horizon",
+    "arguments": {
+      "horizon_id": "h_retention_restart_20261002_160437_16824",
+      "strict_connectivity": true
+    },
+    "response": {
+      "success": true,
+      "horizon_id": "h_retention_restart_20261002_160437_16824",
+      "isolated_nodes_count": 0,
+      "unresolved_dependencies_count": 0,
+      "status": "VALID"
+    }
+  }
+]

@@ -1,0 +1,12 @@
+{
+    "schema_version": 2,
+    "commit": "edead5d5a3d27719d78c6f2a653ea5ca24d0a983",
+    "indexed_at": "2026-10-03T03:05:46Z",
+    "project": "HarnessKit-UI-Design-Practices",
+    "nodes": 16,
+    "edges": 47,
+    "original_size": 2293760,
+    "compressed_size": 14462,
+    "compression_level": 3,
+    "reconcile_basis": "git-clean-head"
+}

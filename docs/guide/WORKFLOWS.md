@@ -220,18 +220,19 @@ The agent must open an authenticated session with an exact path whitelist (1–4
 **Verdict**: Session opened (`h_sess_curr_01`).
 
 #### Step 3: Validate Provenance of Craft
-The agent must declare how it will build the conversion algorithm:
+The agent searches the thematic catalog using the craft activity and technologies already verified in the project. It reads the candidate method and its linked conditions, exceptions, and evidence before choosing what applies. Catalog search produces candidates; it does not establish authority.
+
+After selecting an applicable node, the agent validates the exact version and node URI before recording that reference in the horizon:
 ```json
 // Tool Call: validate_provenance
 {
-  "theme_id": "theme_clean_arch",
-  "node_uri": "cbm://theme_clean_arch/rules#money_value_object",
+  "theme_id": "@org/c-money-values",
+  "node_uri": "cbm://c-money-values/docs/money.md#c-money-values.docs.money.Immutable-Money",
   "pinned_version": "1.4.0",
-  "declared_invention": false,
-  "rationale": "Money must be represented as an immutable struct with integer cents to prevent floating point drift."
+  "declared_invention": false
 }
 ```
-**Verdict**: Provenance accepted (`CITED_CANON`).
+**Verdict**: Accepted only when that exact node is returned from the pinned backing graph. A missing theme or node remains an explicit gap; the activity classifier does not fill it.
 
 #### Step 4: TDD Nigredo (Sacrifício Material)
 1. Agent writes the test in `tests/test_currency.c`.
@@ -284,6 +285,11 @@ A platform lead registers a company-wide standard for POSIX C11 error handling, 
   "namespace": "engineering/c/errors",
   "curator": "systems_architecture_board",
   "version": "1.0.0",
+  "target_uri": "cbm-project://posix-c11-theme",
+  "name": "POSIX C11 error handling",
+  "description": "Error propagation and errno handling patterns",
+  "aliases": "C11 errors, errno",
+  "tags": "C, POSIX, error handling",
   "status": "ACTIVE"
 }
 ```

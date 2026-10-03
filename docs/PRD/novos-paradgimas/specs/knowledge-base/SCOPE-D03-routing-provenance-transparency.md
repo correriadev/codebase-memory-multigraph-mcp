@@ -14,10 +14,12 @@ When an agent performs engineering or craft tasks, it frequently draws upon its 
 - **Activity Classification (`ActivityClass`)**:
   - `CONSULTATIVE`: queries concerning project facts, flow tracing, claim history, and existing architecture. Grounding is strictly bounded to the project's own planes (Realization + Idealization).
   - `SPECIALTY`: artifact production or modification (code generation, backlog authoring, architecture structuring, UI design, test stanzas). Grounding requires project planes for WHAT/WHY and theme graphs for HOW.
+  - `classify_activity` is heuristic routing metadata. It must not suppress thematic discovery when an action's method or craft judgment can materially change its result.
 - **Two-Fork Provenance Mandate**:
   - Every specialty judgment must carry exactly one valid provenance payload:
-    1. `canon_citation`: `{ theme_id, node_uri, pinned_version }` resolving to an active node in a bound or consulted theme; OR
+    1. `canon_citation`: `{ theme_id, node_uri, pinned_version }` resolving to a materialized node in the exact pinned theme version; OR
     2. `declared_invention`: `{ declared: true, rationale: string }` explicitly logging that no theme governs the decision.
+  - A canon citation resolves an exact immutable catalog version and verifies the exact node URI through that version's backing graph before reporting `anchor_verified=true`. Citation validity does not create or imply authority; a `binding_claim` is a separate declaration, and catalog lifecycle state is returned by `theme_lookup`.
 - **Refusal Code Extension (extends A04)**:
   - `PROVENANCE_UNDECLARED`: emitted whenever a specialty judgment carries neither a valid citation nor a declared invention flag.
 - **Pre-Flight Transparency Event**:
@@ -31,7 +33,7 @@ When an agent performs engineering or craft tasks, it frequently draws upon its 
 ## Acceptance criteria
 
 1. **Given** a request classified as `CONSULTATIVE` ("explain flow X in module Y"), **When** executed, **Then** grounding queries only project planes, and zero theme citation is required.
-2. **Given** a request classified as `SPECIALTY` ("scaffold new domain aggregate"), **When** executed, **Then** grounding queries project claims for WHAT/WHY followed by bound themes for HOW.
+2. **Given** a request classified as `SPECIALTY` ("scaffold new domain aggregate"), **When** executed, **Then** grounding queries project claims for WHAT/WHY followed by applicable thematic graphs for HOW; any binding authority is checked separately.
 3. **Given** a specialty judgment produced without a valid `canon_citation` and without `declared_invention=true`, **When** validated at the gate, **Then** refusal `PROVENANCE_UNDECLARED` is emitted and logged.
 4. **Given** a specialty judgment carrying `declared_invention=true` with a non-empty rationale, **When** validated, **Then** the judgment is admitted and tagged with epistemic status `DECLARED_INVENTION`.
 5. **Given** a specialty judgment citing a theme node that does not exist in the referenced theme graph, **When** validated, **Then** refusal `ANCHOR_NOT_FOUND` is emitted.

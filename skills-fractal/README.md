@@ -1,6 +1,6 @@
-# Skills fractais — experimento 0.2
+# Skills fractais — experimento 0.5.2
 
-Fonte das três skills independentes para teste manual em Codex e Antigravity. O horizonte CBM é obrigatório; o documento humano é a representação legível correspondente. Hooks preservados. As provas reais exigiram uma correção no transporte das relações e a adição do catálogo MCP `list_horizons`, com vínculo persistido ao projeto.
+Fonte das três skills independentes para teste manual em Codex e Antigravity. O horizonte CBM é obrigatório; o documento humano é a representação legível correspondente. Hooks ignorados neste experimento; seus arquivos permanecem preservados. As provas reais exigiram uma correção no transporte das relações e a adição do catálogo MCP `list_horizons`, com vínculo persistido ao projeto.
 
 - `temenos`: entrada explícita, contexto e primeira compressão.
 - `dialogo-sombra`: pressupostos e consequências dentro do contexto delimitado.
@@ -39,18 +39,34 @@ Execute os mesmos casos nos dois hosts, em sessões separadas. Use um projeto re
 | Brownfield incompleto | Projeto existente sem grafo ou núcleo não técnico | Impedimento legível; não inventa contexto nem reclassifica como novo |
 | Falha de MCP | Grafo inacessível ou ferramenta não exposta | Distingue falha de acesso de inexistência; persiste limitação |
 | Sombra menor | `Estou considerando X; quais consequências?` | Examina tensão pertinente, evidencia condições; não força objeções |
+| Progressão material | Corrija um fato/limite, receba uma hipótese pertinente do agente e depois envie uma confirmação sem conteúdo novo | Revisão guarda correção e hipótese com autoria/estado/arestas; confirmação sem delta não cria revisão; recuperação MCP confirma o conteúdo |
 | Tradição divergente | Norma fixada e evidência que a contesta | Registra vínculo e divergência; não apaga evidência |
-| Mudança de contexto | Humano introduz outro projeto durante diálogo | Desambigua vínculo; cria filho apenas quando necessário |
+| Mudança de contexto | Humano introduz outro projeto durante diálogo | Desambigua o novo vínculo e mantém os recortes relacionados sem exigir hierarquia |
 | Pausa com questões | `Pare por aqui, ainda não decidi.` | PAUSADO com destinos abertos; não fabrica consenso/promoção |
 | Encerramento | `Encerre esta conversa, mantenha a pergunta aberta.` | ENCERRADO local com MANTIDO_ABERTO; lifecycle MCP honesto |
 | Retomada | Nova sessão, fornecer apenas projeto e horizon_id | Recupera contexto e dúvidas pelo MCP sem ler Markdown; verifica mudanças sem rebase silencioso |
 | Persistência recusada | Ambiente bloqueia escrita ou encerramento MCP | Declara PENDENTE/RECUSADO e estado real, sem afirmar sucesso |
+| UI entre sessões | Sessão A refina a UI conversacional de cards sem codificar; sessão B recebe apenas projeto e assunto | B descobre o horizonte por MCP, recupera fluxo e especificação visual sem arquivo físico, separa DECLARADO de HIPOTESE e declara ausências sem completar por inferência |
+| UI: conteúdo integral | Especificação contém várias telas, tokens de cor, medidas, estados e interações | Cliente MCP novo reconstrói as partes em ordem e confere o hash esperado; nenhuma leitura física no leitor |
+| Código ligado à especificação | Em etapa futura, relação entre URI de código indexada e nó de especificação | Não cria horizonte filho por obrigação; verifica os endpoints e a aresta com as ferramentas MCP. Fora do escopo do primeiro teste, que não codifica |
 
 Avalie separadamente: descoberta da skill, execução local da metodologia, persistência humana, recuperação contextual do CBM e persistência organizacional no CBM. Um sucesso local não comprova integração MCP.
 
-## Prova no grafo real
+Progressão: ao final de cada turno, o agente compara o delta com a última revisão confirmada. Contexto, evidência, decisão, consequência, estado, vínculo ou etapa que mudariam uma retomada viram uma revisão acumulada antes da resposta; repetição e paráfrase sem mudança não. Hipóteses novas que o agente apresentou como pertinentes entram como `HIPOTESE`/`EM_EXAME`, com autoria do agente. A skill não pede aprovação ritual para gravar, mas informa o delta e só declara sucesso após recuperar conteúdo e relações via MCP.
+
+Retomada: `temenos` consulta o catálogo antes de criar horizonte. Um preview genérico não basta; consulte os conteúdos dos candidatos por MCP. Não confunda cards que são arquivos de backlog com cartões conversacionais da UI. Se não houver um recorte visual específico e o humano pedir ideação nova, crie um horizonte de ideação isolado, com tela/fluxo/estilo explicitados e toda a especificação longa em partes ordenadas, sob o limite do overlay; a sessão seguinte recebe só o projeto e o assunto. Preserve os horizontes históricos usados nos testes anteriores. `list_horizons` não define hierarquia entre horizontes; relações entre nós e recortes devem ser explícitas quando necessárias, sem criar horizonte filho por obrigação.
+
+## Provas no grafo real
 
 Descoberta automática corrigida com `list_horizons` e aprovada no MCP instalado. `python ./skills-fractal/probe-horizon-discovery.py` usa uma conexão nova, recebendo só projeto, sem ler documentos/cache ou fornecer IDs. [Correção e teste](../docs/temenos-tests/discovery-corrected.md). A [falha inicial](../docs/temenos-tests/discovery-20261001-195239/resultado.md) permanece preservada como evidência histórica.
+
+E2E de ideação visual HarnessKit concluído em 2026-10-02. A sessão A gravou uma especificação fixture sintética no horizonte e em Markdown; a sessão B recebeu apenas projeto/assunto, descobriu o horizonte único entre oito candidatos e recuperou as seis partes sem ler arquivo físico. As sete seções e onze arestas foram consultáveis; validação estrita passou. Arquivo e reconstrução MCP coincidiram byte a byte (4.779 bytes, SHA-256 `04e97568007d183ac5d303041408b12cc8b0baefe65f574b54386a34b14ccc9d`). O nó raiz ficou sem digest esperado porque a API não documenta upsert seguro; o teste provou igualdade pela comparação do escritor, mas revelou esse campo incompleto. Os valores visuais são sintéticos e não representam aprovação do produto. A prova usou dois subagentes isolados de Codex no MCP instalado e não substitui validação manual de descoberta das skills no host Antigravity. [Relatório e evidências](../docs/temenos-tests/ui-e2e-20261002-a1/run-report.md).
+
+Recuperação da conversa real de UI concluída em 2026-10-02 com Codex. R1 foi preservado como falha de fidelidade UTF-8. R2 refez as citações da fonte, mas usou rótulos de falante `? User` sem suporte na transcrição. R3 é um recorte conciso baseado na fonte, não uma transcrição integral; corrigiu apenas os metadados editoriais de turno/falante e preservou o conteúdo citado; comparação Python conferiu as três falas com a fonte. Uma sessão independente, recebendo só projeto e assunto, escolheu R3 pelo conteúdo e proveniência, recuperou as sete partes via MCP e validou 3.797 bytes, 24 nós, 22 arestas e conectividade estrita sem ler o arquivo físico. A recuperação guardou fluxo e decisões declaradas, preservando como desconhecidos cores, tipografia, dimensões, responsividade e acessibilidade. O smoke de cliente novo ocorreu com o agente escritor encerrado, mas o processo dono do horizonte (PID 4932) continuava vivo; portanto não prova retenção após saída do dono nem reinício do daemon. Um catálogo posterior listou 7 horizontes em vez dos 10 anteriores e quatro probes não puderam mais ser recuperados; a causa não foi estabelecida. [Relatórios R1/R2/R3 e auditoria de retenção](../docs/temenos-tests/real-ui-recovery-20261002/run-report-r3.md).
+
+O smoke existente de reaper passou 2/2 em sandbox, mas usa uma simulação Python baseada em `last_heartbeat` e TTL zero; o reaper C usa `created_at` e TTL fixo de 3.600 segundos. Não prova a implementação C, expiração real nem limpeza agendada em produção. A implementação atual tem o reaper sem chamador de produção encontrado em `src`, então esses limites permanecem explícitos.
+
+O protocolo 0.5.2 exige conferir também o rótulo do falante e não usar `?` como substituto editorial; hash confirma integridade do artefato preparado, não a transcrição correta da fonte. As três skills passaram `quick_validate.py` e foram atualizadas em Codex, Antigravity IDE e CLI; backup anterior verificado em `C:/Users/corre/.skill-backups/fractal-update-20261002-153707`. Nenhuma sessão de teste foi executada no Antigravity.
 
 Prova aprovada em 2026-10-01: projeto `C-Users-corre-Documents-harness-kit`, horizonte `h_fractal_real_20261001_194147`. [Resultado legível](../docs/temenos-tests/resultado-real.md) e [relatório das verificações](../docs/temenos-tests/real-20261001-194147/report.json). As nove instalações foram atualizadas e verificadas; versões anteriores preservadas em `C:/Users/corre/.skill-backups/fractal-update-20261001-194018`.
 
@@ -61,6 +77,10 @@ O cliente B recebe apenas projeto e horizonte e consulta pelo MCP; o programa co
 Se o ambiente exigir runtime privado, passar `--runtime <diretório real autorizado>`; isso não muda o cache/grafo. Falhas de segurança do daemon são impedimentos de ambiente, não resultados aprovados. O script `prepare-real-cache.ps1` documenta a correção específica autorizada neste computador (backup de ACL da pasta `.cache` e runtime privado); não é um instalador genérico nem deve ser executado automaticamente pelas skills.
 
 Recuperação após TTL/reinício do daemon e descoberta autônoma de horizontes permanecem gates separados. Não alegar memória durável a partir de leitura imediata bem-sucedida.
+
+## Persist?ncia ap?s sa?da do propriet?rio e rein?cio
+
+Um gate independente, executado em 2026-10-02 num cache/runtime isolado baseado numa c?pia SQLite do grafo HarnessKit, passou: ap?s a sa?da do daemon propriet?rio, um daemon novo e um cliente MCP recuperaram um horizonte sint?tico e reconstru?ram um artefato de 82 bytes pelo grafo, com SHA-256 id?ntico. Os 3 n?s, 3 arestas e a valida??o estrita passaram. O teste n?o reabriu o horizonte R3 nem usou o cache compartilhado; n?o cobre TTL de 3.600 segundos, rein?cio do dispositivo, atualiza??o do aplicativo ou reten??o duradoura. [Relat?rio e evid?ncias](../docs/temenos-tests/retention-restart-20261002/result.md).
 
 ## Isolamento das demais skills
 
@@ -79,3 +99,8 @@ Uma segunda conferência encontrou `.system` recriado automaticamente pelo Codex
 Para evitar que skills conhecidas reapareçam no catálogo do Codex, foram acrescentadas 68 entradas `[[skills.config]]` com `enabled = false` em `~/.codex/config.toml`, conforme a [documentação oficial](https://learn.chatgpt.com/docs/build-skills). O arquivo anterior está em `fractal-20261001-174539/codex-config-before-isolation.toml`; `codex-disable-report.json` registra caminhos e hashes. As três fractais não foram desabilitadas. Reinicie o Codex para aplicar.
 
 Para desfazer a desativação, remova apenas o bloco delimitado por `fractal-skill-isolation` da configuração atual. A cópia integral anterior é uma alternativa somente se nenhuma outra configuração mudou desde o backup. Para restaurar pastas, confira conflitos: as duas cópias de `.system` têm o mesmo destino original, e o aplicativo pode tê-lo recriado novamente. Não restaure ambos os backups sobre esse destino sem reconciliar o conteúdo.
+
+
+## Atualizacao 0.5.3: conclusao e documento integral
+
+Sem etapa IMPLEMENTACAO. Conclusao exige confirmacao humana vinculada a revisao/escopo, recuperavel em outra sessao. Cada revisao material gera documento humano e envelope separado pelo helper scripts/build_horizon_document.py da skill. Recuperacao integral exige partes, hashes, bytes e relacoes conferidos pelo MCP. Prova real: [resultado](../docs/temenos-tests/full-document-20261002/result.md). Apenas Codex atualizado nesta rodada.

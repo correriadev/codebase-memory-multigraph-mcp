@@ -919,6 +919,23 @@ extern void suite_union_workflow_e2e(void);
 extern void cbm_kind_in_set_free_cache(void);
 
 int main(int argc, char **argv) {
+    /* Optional in-process MCP transport for black-box tests that need to
+     * exercise tools/list and tools/call without starting the product daemon.
+     * This is available only in the test runner and is opt-in by environment. */
+    const char *standalone_mcp = getenv("CBM_TEST_STANDALONE_MCP");
+    if (standalone_mcp && strcmp(standalone_mcp, "1") == 0) {
+        cbm_mem_init(0.25);
+        cbm_mcp_server_t *server = cbm_mcp_server_new(NULL);
+        if (!server) {
+            fprintf(stderr, "test MCP server creation failed\n");
+            return 2;
+        }
+        cbm_mcp_server_set_background_tasks(server, false);
+        int result = cbm_mcp_server_run(server, stdin, stdout);
+        cbm_mcp_server_free(server);
+        return result == 0 ? 0 : 1;
+    }
+
     /* Skip the multi-hundred-MB executable-image hash that computes the exact
      * build fingerprint: it is tens of seconds per spawned worker/daemon under
      * ASan on constrained CI runners and the sole cause of the daemon-family

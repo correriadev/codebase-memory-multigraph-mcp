@@ -613,6 +613,25 @@ TEST(test_w05_territory_and_founding) {
     yyjson_doc_free(doc);
     free(reg_res);
 
+    /* 1b. Catalog search copies the query into its response before releasing
+     * the request document. ASan catches regressions in this pointer lifetime. */
+    const char *theme_search_args =
+        "{\"query\":\"clean architecture\",\"namespace\":\"architecture\"}";
+    char *search_res = handle_theme_search(srv, theme_search_args);
+    ASSERT(search_res != NULL);
+    doc = yyjson_read(search_res, strlen(search_res), 0);
+    ASSERT(doc != NULL);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
+    yyjson_val *v_search_query = yyjson_obj_get(payload, "query");
+    ASSERT(v_search_query && yyjson_is_str(v_search_query));
+    ASSERT_STR_EQ(yyjson_get_str(v_search_query), "clean architecture");
+    yyjson_val *v_search_results = yyjson_obj_get(payload, "results");
+    ASSERT(v_search_results && yyjson_is_arr(v_search_results));
+    ASSERT(yyjson_arr_size(v_search_results) == 1);
+    yyjson_doc_free(doc);
+    free(search_res);
+
     /* 2. Lookup theme */
     char *look_res = handle_theme_lookup(srv, "{\"theme_id\":\"@org/clean-arch\"}");
     ASSERT(look_res != NULL);

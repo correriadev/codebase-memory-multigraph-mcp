@@ -833,7 +833,7 @@ static const tool_def_t TOOLS[] = {
      "\"idempotency_key\":{\"type\":\"string\",\"description\":\"Idempotency key for COMPENSABLE actions\"}},"
      "\"required\":[\"horizon_id\",\"action_name\"]}"},
 
-    {"classify_activity", "Classify incoming intent into CONSULTATIVE (local project) or SPECIALTY (normative craft / tradition required)",
+    {"classify_activity", "Heuristically label intent CONSULTATIVE or SPECIALTY; this is not a gate for thematic discovery or agent execution",
      "{\"type\":\"object\",\"properties\":{\"intent\":{\"type\":\"string\",\"description\":"
      "\"The user intent, prompt, or task description\"}},\"required\":[\"intent\"]}"},
 
@@ -847,14 +847,42 @@ static const tool_def_t TOOLS[] = {
 
     {"theme_lookup", "Lookup a Thematic Knowledge Base in the registry (surfaces ABSENT as a first-class state)",
      "{\"type\":\"object\",\"properties\":{\"theme_id\":{\"type\":\"string\",\"description\":"
-     "\"Thematic Knowledge Base ID\"}},\"required\":[\"theme_id\"]}"},
+     "\"Thematic Knowledge Base ID\"},\"version\":{\"type\":\"string\",\"description\":\"Optional exact immutable version\"}},\"required\":[\"theme_id\"]}"},
+
+    {"theme_search", "Search the thematic knowledge catalog by topic, aliases, tags, and applicability metadata",
+     "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Topic or craft method to discover\"},"
+     "\"namespace\":{\"type\":\"string\"},\"status\":{\"type\":\"string\",\"enum\":[\"ACTIVE\",\"DEPRECATED\",\"ABSENT\"]},"
+     "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100,\"default\":20},"
+     "\"offset\":{\"type\":\"integer\",\"minimum\":0,\"default\":0}},\"required\":[\"query\"]}"},
+
+    {"theme_list", "List thematic knowledge catalog entries with optional namespace and status filters",
+     "{\"type\":\"object\",\"properties\":{\"namespace\":{\"type\":\"string\"},"
+     "\"status\":{\"type\":\"string\",\"enum\":[\"ACTIVE\",\"DEPRECATED\",\"ABSENT\"]},"
+     "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100,\"default\":20},"
+     "\"offset\":{\"type\":\"integer\",\"minimum\":0,\"default\":0}}}"},
+
+    {"theme_graph_search", "Search the selected thematic graph for method, principle, practice, condition, exception, and evidence nodes",
+     "{\"type\":\"object\",\"properties\":{\"theme_id\":{\"type\":\"string\"},\"version\":{\"type\":\"string\",\"description\":\"Exact immutable version; defaults to latest catalog entry\"},\"query\":{\"type\":\"string\"},"
+     "\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":500,\"default\":50},"
+     "\"offset\":{\"type\":\"integer\",\"minimum\":0,\"default\":0}},"
+     "\"required\":[\"theme_id\",\"query\"]}"},
+
+    {"theme_graph_query", "Traverse the selected thematic graph with a read-only Cypher query to inspect relations and method nuances",
+     "{\"type\":\"object\",\"properties\":{\"theme_id\":{\"type\":\"string\"},\"version\":{\"type\":\"string\",\"description\":\"Exact immutable version; defaults to latest catalog entry\"},\"query\":{\"type\":\"string\",\"description\":\"Read-only graph query\"},"
+     "\"max_rows\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":99998,\"default\":200},"
+     "\"offset\":{\"type\":\"integer\",\"minimum\":0,\"default\":0}},"
+     "\"required\":[\"theme_id\",\"query\"]}"},
 
     {"theme_register", "Register or catalog a Thematic Knowledge Base",
      "{\"type\":\"object\",\"properties\":{\"theme_id\":{\"type\":\"string\",\"description\":"
      "\"Theme ID (e.g. @org/clean-arch)\"},\"namespace\":{\"type\":\"string\",\"description\":"
      "\"Namespace\"},\"curator\":{\"type\":\"string\",\"description\":\"Curator identifier\"},"
      "\"version\":{\"type\":\"string\",\"description\":\"Theme semantic version\"},"
-     "\"status\":{\"type\":\"string\",\"enum\":[\"ACTIVE\",\"ABSENT\"],\"default\":\"ACTIVE\"}},"
+     "\"name\":{\"type\":\"string\",\"description\":\"Human-readable theme name\"},"
+     "\"target_uri\":{\"type\":\"string\",\"description\":\"Stable URI of a whole read-only registered CBM project graph (cbm-project://<project>)\"},"
+     "\"description\":{\"type\":\"string\"},\"aliases\":{\"type\":\"string\"},\"tags\":{\"type\":\"string\"},"
+     "\"founding_provenance\":{\"type\":\"string\"},"
+     "\"status\":{\"type\":\"string\",\"enum\":[\"ACTIVE\",\"DEPRECATED\",\"ABSENT\"],\"default\":\"ACTIVE\"}},"
      "\"required\":[\"theme_id\",\"namespace\",\"curator\",\"version\"]}"},
 
     {"binding_claim", "Declare or query a project binding to a craft theme (DEVE normative or PODE consulted)",
@@ -958,6 +986,10 @@ static const tool_annotation_def_t TOOL_ANNOTATIONS[] = {
     {"classify_activity", true, false, true, false},
     {"validate_provenance", true, false, true, false},
     {"theme_lookup", true, false, true, false},
+    {"theme_search", true, false, true, false},
+    {"theme_list", true, false, true, false},
+    {"theme_graph_search", true, false, true, false},
+    {"theme_graph_query", true, false, true, false},
     {"theme_register", false, false, false, false},
     {"binding_claim", false, false, false, false},
     {"founding_propose", false, false, false, false},
@@ -1995,6 +2027,14 @@ cbm_mcp_server_t *cbm_mcp_server_new(const char *store_path) {
     cbm_contract_registry_init(&srv->contract_registry);
     cbm_gateway_init(&srv->gateway);
     cbm_theme_registry_init(&srv->theme_registry);
+    char theme_catalog_path[CBM_THEME_STORE_PATH_MAX];
+    const char *theme_cache_dir = cbm_resolve_cache_dir();
+    if (!theme_cache_dir ||
+        snprintf(theme_catalog_path, sizeof(theme_catalog_path), "%s/theme_registry.json", theme_cache_dir) < 0 ||
+        !cbm_theme_registry_open(&srv->theme_registry, theme_catalog_path)) {
+        cbm_log(CBM_LOG_ERROR, "union.theme", "catalog", "open_failed",
+                "path", theme_cache_dir ? theme_cache_dir : "unavailable", NULL);
+    }
     cbm_binding_ledger_init(&srv->binding_ledger);
     cbm_contest_registry_init(&srv->contest_registry);
 
@@ -17663,6 +17703,18 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
     }
     if (strcmp(tool_name, "theme_lookup") == 0) {
         return handle_theme_lookup(srv, args_json);
+    }
+    if (strcmp(tool_name, "theme_search") == 0) {
+        return handle_theme_search(srv, args_json);
+    }
+    if (strcmp(tool_name, "theme_list") == 0) {
+        return handle_theme_list(srv, args_json);
+    }
+    if (strcmp(tool_name, "theme_graph_search") == 0) {
+        return handle_theme_graph_search(srv, args_json);
+    }
+    if (strcmp(tool_name, "theme_graph_query") == 0) {
+        return handle_theme_graph_query(srv, args_json);
     }
     if (strcmp(tool_name, "theme_register") == 0) {
         return handle_theme_register(srv, args_json);
