@@ -9,6 +9,7 @@
 #include "../src/union/union_binding.h"
 #include "../src/union/union_refusal.h"
 
+#include <stdio.h>
 #include <string.h>
 
 /* AC1: Advancing theme version propagates drift notice to bound projects */
@@ -56,6 +57,55 @@ TEST(test_theme_version_bump_emits_drift_notice) {
     ASSERT_EQ(out_binding.status, CBM_BINDING_DRIFT_PENDING);
     ASSERT_STR_EQ(out_binding.pinned_version, "1.0.0"); /* strictly not auto-bumped! */
 
+    PASS();
+}
+
+TEST(test_failed_theme_publish_does_not_mark_bindings_as_drifted) {
+    CbmThemeRegistry reg;
+    cbm_theme_registry_init(&reg);
+    CbmThemeEntry theme;
+    memset(&theme, 0, sizeof(theme));
+    strncpy(theme.theme_id, "@inst/full-registry-theme", sizeof(theme.theme_id) - 1);
+    strncpy(theme.namespace, "institutional", sizeof(theme.namespace) - 1);
+    strncpy(theme.curator, "lead_arch", sizeof(theme.curator) - 1);
+    strncpy(theme.version, "1.0.0", sizeof(theme.version) - 1);
+    theme.status = CBM_THEME_ACTIVE;
+    ASSERT_EQ(cbm_theme_registry_register(&reg, &theme, NULL, 0), CBM_REFUSAL_OK);
+
+    CbmBindingLedger ledger;
+    cbm_binding_ledger_init(&ledger);
+    CbmBindingClaim binding;
+    memset(&binding, 0, sizeof(binding));
+    strncpy(binding.claim_id, "bind-capacity", sizeof(binding.claim_id) - 1);
+    strncpy(binding.theme_id, theme.theme_id, sizeof(binding.theme_id) - 1);
+    strncpy(binding.pinned_version, "1.0.0", sizeof(binding.pinned_version) - 1);
+    strncpy(binding.validated_by, "human_operator", sizeof(binding.validated_by) - 1);
+    binding.status = CBM_BINDING_ACTIVE;
+    ASSERT_EQ(cbm_binding_validate_and_admit(&ledger, &binding, NULL, 0), CBM_REFUSAL_OK);
+
+    for (size_t i = 1; i < CBM_THEME_REGISTRY_CAP; i++) {
+        CbmThemeEntry filler;
+        memset(&filler, 0, sizeof(filler));
+        snprintf(filler.theme_id, sizeof(filler.theme_id), "@inst/filler-%zu", i);
+        strncpy(filler.namespace, "institutional", sizeof(filler.namespace) - 1);
+        strncpy(filler.curator, "lead_arch", sizeof(filler.curator) - 1);
+        strncpy(filler.version, "1.0.0", sizeof(filler.version) - 1);
+        filler.status = CBM_THEME_ACTIVE;
+        ASSERT_EQ(cbm_theme_registry_register(&reg, &filler, NULL, 0), CBM_REFUSAL_OK);
+    }
+
+    CbmDriftNotice notices[2];
+    size_t notice_count = 99;
+    ASSERT_EQ(cbm_theme_publish_version(&reg, theme.theme_id, "2.0.0", &ledger,
+                                        notices, 2, &notice_count), CBM_REFUSAL_SCOPE_EXCEEDED);
+    ASSERT_EQ(notice_count, 0);
+    CbmBindingClaim actual;
+    ASSERT_EQ(cbm_binding_lookup(&ledger, theme.theme_id, &actual), CBM_REFUSAL_OK);
+    ASSERT_EQ(actual.status, CBM_BINDING_ACTIVE);
+    ASSERT_STR_EQ(actual.pinned_version, "1.0.0");
+    CbmThemeEntry latest;
+    ASSERT_EQ(cbm_theme_registry_lookup(&reg, theme.theme_id, &latest), CBM_REFUSAL_OK);
+    ASSERT_STR_EQ(latest.version, "1.0.0");
     PASS();
 }
 
@@ -134,6 +184,7 @@ TEST(test_query_unreconciled_deviations) {
 
 SUITE(union_theme_drift) {
     RUN_TEST(test_theme_version_bump_emits_drift_notice);
+    RUN_TEST(test_failed_theme_publish_does_not_mark_bindings_as_drifted);
     RUN_TEST(test_query_orphan_bindings_ecg);
     RUN_TEST(test_query_unreconciled_deviations);
 }

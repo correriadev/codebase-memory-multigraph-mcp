@@ -2036,6 +2036,13 @@ cbm_mcp_server_t *cbm_mcp_server_new(const char *store_path) {
                 "path", theme_cache_dir ? theme_cache_dir : "unavailable", NULL);
     }
     cbm_binding_ledger_init(&srv->binding_ledger);
+    char binding_ledger_path[CBM_BINDING_STORE_PATH_MAX];
+    if (!theme_cache_dir ||
+        snprintf(binding_ledger_path, sizeof(binding_ledger_path), "%s/theme_bindings.json", theme_cache_dir) < 0 ||
+        !cbm_binding_ledger_open(&srv->binding_ledger, binding_ledger_path)) {
+        cbm_log(CBM_LOG_ERROR, "union.binding", "ledger", "open_failed",
+                "path", theme_cache_dir ? theme_cache_dir : "unavailable", NULL);
+    }
     cbm_contest_registry_init(&srv->contest_registry);
 
     char env_op[64] = {0};

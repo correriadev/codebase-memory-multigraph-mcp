@@ -23,6 +23,7 @@
 #define CBM_THEME_ALIASES_MAX 256
 #define CBM_THEME_TAGS_MAX 256
 #define CBM_THEME_STORE_PATH_MAX 1024
+#define CBM_THEME_GENERATION_MAX 64
 #define CBM_THEME_REGISTRY_CAP 128
 
 typedef enum {
@@ -36,6 +37,7 @@ typedef struct {
     char name[CBM_THEME_NAME_MAX];
     char namespace[CBM_THEME_NS_MAX];
     char target_uri[CBM_THEME_URI_MAX];
+    char target_generation[CBM_THEME_GENERATION_MAX];
     char version[CBM_THEME_VER_MAX];
     char curator[CBM_THEME_CURATOR_MAX];
     CbmThemeStatus status;

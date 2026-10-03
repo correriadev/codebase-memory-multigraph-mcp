@@ -43,6 +43,7 @@ static const CbmRefusalDef k_refusal_defs[CBM_REFUSAL_CODE_COUNT] = {
     {CBM_REFUSAL_THEME_UNKNOWN, "THEME_UNKNOWN", "theme identifier or namespace does not exist in registry; verify or register theme"},
     {CBM_REFUSAL_THEME_PERSISTENCE_FAILED, "THEME_PERSISTENCE_FAILED", "catalog write failed; registry change was rolled back, retry only after storage is available"},
     {CBM_REFUSAL_THEME_VERSION_IMMUTABLE, "THEME_VERSION_IMMUTABLE", "publish a new version for changed thematic content; an existing version is immutable"},
+    {CBM_REFUSAL_BINDING_PERSISTENCE_FAILED, "BINDING_PERSISTENCE_FAILED", "binding write failed; ledger change was rolled back, restore storage before retry"},
 };
 
 static const CbmRefusalDef *find_def(CbmRefusalCode code) {

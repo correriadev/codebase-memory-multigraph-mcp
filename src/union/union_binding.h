@@ -21,6 +21,7 @@
 #define CBM_BINDING_REASON_MAX 256
 #define CBM_BINDING_CAP 64
 #define CBM_DEVIATION_CAP 64
+#define CBM_BINDING_STORE_PATH_MAX 1024
 
 typedef enum {
     CBM_BINDING_NORMATIVE = 0, /* DEVE */
@@ -66,9 +67,12 @@ typedef struct {
     size_t binding_count;
     CbmDeviationClaim deviations[CBM_DEVIATION_CAP];
     size_t deviation_count;
+    char storage_path[CBM_BINDING_STORE_PATH_MAX];
+    bool storage_ready;
 } CbmBindingLedger;
 
 void cbm_binding_ledger_init(CbmBindingLedger *ledger);
+bool cbm_binding_ledger_open(CbmBindingLedger *ledger, const char *path);
 
 CbmRefusalCode cbm_binding_validate_and_admit(CbmBindingLedger *ledger,
                                               const CbmBindingClaim *binding,

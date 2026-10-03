@@ -139,8 +139,8 @@ Shell tools remain subject to classification. The adapter permits plain `rg --fi
 | `theme_list` | optional namespace/status/limit/offset | List catalog entries. | `limit=20` |
 | `theme_graph_search` | `theme_id`, optional version, `query`, limit/offset | Search nodes in a registered theme graph; returns normalized structured results and citation candidates. | `limit=50` |
 | `theme_graph_query` | `theme_id`, optional version, read-only `query`, max_rows/offset | Traverse relations in that theme graph using the existing query engine. | `max_rows=200` |
-| `theme_register` | `theme_id`, `namespace`, `curator`, `version`, optional `target_uri`, description, aliases, tags, status | Persist a catalog version and its backing graph locator. Existing published versions are immutable. | `status="ACTIVE"` |
-| `binding_claim` | `claim_id`, `theme_id`, `pinned_version`, `mode`, `binding_scope`, `validated_by` | Declare binding (`NORMATIVE` or `CONSULTED`). | `mode="NORMATIVE"` |
+| `theme_register` | `theme_id`, `namespace`, `curator`, `version`, optional `target_uri`, description, aliases, tags, status | Persist a catalog version and its backing graph locator and generation. Reads refuse when the backing project generation changes. Existing published versions are immutable. | `status="ACTIVE"` |
+| `binding_claim` | `claim_id`, `theme_id`, `pinned_version`, `mode`, `binding_scope`, `operator_id`, `operator_token` | Declare binding (`NORMATIVE` requires host credential verification; `CONSULTED` remains optional). Caller-supplied `validated_by` is ignored; the authenticated host identity is recorded when present. | `mode="NORMATIVE"` |
 | `union_session_open` | Identity, contract, sequence, client; E01: host, context, grounding, intent, reference/rationale, `intent_scope` | Open bounded session; bind E01 authority when supplied. | — |
 | `union_session_get` | `horizon_id` | Query session actions, refusals, budget. | — |
 | `union_session_close` | `horizon_id`, `reason` | Close session, verify sweep resolution, log trace. | `reason="NORMAL"` |

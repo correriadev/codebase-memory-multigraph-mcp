@@ -12,9 +12,9 @@ An incarnation's relation to an external tradition must never be an implicit ass
 
 **In:**
 - **Binding Claim Anatomy (`type=BINDING`)**:
-  - Properties: `theme_id` (refs D01), `pinned_version` (exact semver), `mode` ∈ {`NORMATIVE` (DEVE), `CONSULTED` (PODE)}, `binding_scope` (workspace, module, or global), `validated_by` (mandatory operator identity for `NORMATIVE`).
+  - Properties: `theme_id` (refs D01), `pinned_version` (exact semver), `mode` ∈ {`NORMATIVE` (DEVE), `CONSULTED` (PODE)}, `binding_scope` (workspace, module, or global), `validated_by` (host-authenticated operator identity for `NORMATIVE`). The MCP request uses `operator_id` and `operator_token`; caller-supplied `validated_by` is ignored. `CONSULTED` validation remains optional.
 - **Jurisdiction & Intent Validation**:
-  - The agent is structurally barred from self-validating a binding claim. Submissions where `validated_by=agent` trigger refusal `BINDING_SELF_VALIDATED`.
+  - The agent is structurally barred from self-validating a binding claim. A `NORMATIVE` binding without host-verified operator credentials triggers refusal `BINDING_SELF_VALIDATED`; a claimed identity alone is not evidence of authority.
 - **Deviation Claim Anatomy (`type=DEVIATION`)**:
   - Properties: `theme_id`, `theme_rule_node_ref` (canonical rule violated), `reason` (mandatory rationale), `affected_scope` (symbol/file path), `validated_by` (operator), `status` ∈ {`ACTIVE`, `RECONCILED`}.
 - **Strictness by Cost (The Visible Scar)**:

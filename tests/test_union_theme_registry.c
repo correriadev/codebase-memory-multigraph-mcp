@@ -203,10 +203,16 @@ TEST(test_theme_versions_are_immutable_and_pinnable) {
     CbmThemeEntry entry;
     populate_valid_theme(&entry);
     strncpy(entry.description, "Spacing scale v1", sizeof(entry.description) - 1);
+    strncpy(entry.target_generation, "u0123456789abcdefg1", sizeof(entry.target_generation) - 1);
     ASSERT_EQ(cbm_theme_registry_register(&reg, &entry, NULL, 0), CBM_REFUSAL_OK);
 
     CbmThemeEntry changed = entry;
     strncpy(changed.description, "Changed content under the same version", sizeof(changed.description) - 1);
+    ASSERT_EQ(cbm_theme_registry_register(&reg, &changed, NULL, 0),
+              CBM_REFUSAL_THEME_VERSION_IMMUTABLE);
+
+    changed = entry;
+    strncpy(changed.target_generation, "u0123456789abcdefg2", sizeof(changed.target_generation) - 1);
     ASSERT_EQ(cbm_theme_registry_register(&reg, &changed, NULL, 0),
               CBM_REFUSAL_THEME_VERSION_IMMUTABLE);
 
@@ -253,7 +259,46 @@ TEST(test_theme_catalog_survives_reopen) {
               CBM_REFUSAL_OK);
     ASSERT_STR_EQ(recovered.description, entry.description);
     ASSERT_STR_EQ(recovered.aliases, entry.aliases);
+    ASSERT_STR_EQ(recovered.target_generation, entry.target_generation);
 
+    ASSERT_EQ(cbm_unlink(path), 0);
+    (void)cbm_unlink(tmp_path);
+    PASS();
+}
+
+TEST(test_two_stale_catalog_writers_preserve_both_updates) {
+    char path[CBM_THEME_STORE_PATH_MAX];
+    char tmp_path[CBM_THEME_STORE_PATH_MAX + 8];
+    int written = snprintf(path, sizeof(path), "%s/cbm-theme-registry-writers-%llu.json", cbm_tmpdir(),
+                           (unsigned long long)time(NULL));
+    ASSERT_TRUE(written > 0 && (size_t)written < sizeof(path));
+    written = snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+    ASSERT_TRUE(written > 0 && (size_t)written < sizeof(tmp_path));
+    (void)cbm_unlink(path);
+    (void)cbm_unlink(tmp_path);
+
+    CbmThemeRegistry writer_a, writer_b;
+    ASSERT_TRUE(cbm_theme_registry_open(&writer_a, path));
+    ASSERT_TRUE(cbm_theme_registry_open(&writer_b, path));
+    CbmThemeEntry a, b;
+    populate_valid_theme(&a);
+    populate_valid_theme(&b);
+    strncpy(a.theme_id, "@org/writer-a", sizeof(a.theme_id) - 1);
+    strncpy(b.theme_id, "@org/writer-b", sizeof(b.theme_id) - 1);
+    char lock_path[CBM_THEME_STORE_PATH_MAX + 8];
+    snprintf(lock_path,sizeof(lock_path),"%s.lock",path);
+    ASSERT_EQ(cbm_mkdir(lock_path),0);
+    ASSERT_EQ(cbm_theme_registry_register(&writer_a,&a,NULL,0),CBM_REFUSAL_THEME_PERSISTENCE_FAILED);
+    ASSERT_EQ(cbm_rmdir(lock_path),0);
+    ASSERT_EQ(cbm_theme_registry_register(&writer_a, &a, NULL, 0), CBM_REFUSAL_OK);
+    ASSERT_EQ(cbm_theme_registry_register(&writer_b, &b, NULL, 0), CBM_REFUSAL_OK);
+
+    CbmThemeRegistry reader;
+    cbm_theme_registry_init(&reader);
+    ASSERT_TRUE(cbm_theme_registry_open(&reader, path));
+    CbmThemeEntry recovered;
+    ASSERT_EQ(cbm_theme_registry_lookup(&reader, a.theme_id, &recovered), CBM_REFUSAL_OK);
+    ASSERT_EQ(cbm_theme_registry_lookup(&reader, b.theme_id, &recovered), CBM_REFUSAL_OK);
     ASSERT_EQ(cbm_unlink(path), 0);
     (void)cbm_unlink(tmp_path);
     PASS();
@@ -268,4 +313,5 @@ SUITE(union_theme_registry) {
     RUN_TEST(test_theme_search_matches_all_terms_and_pages);
     RUN_TEST(test_theme_versions_are_immutable_and_pinnable);
     RUN_TEST(test_theme_catalog_survives_reopen);
+    RUN_TEST(test_two_stale_catalog_writers_preserve_both_updates);
 }

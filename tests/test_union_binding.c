@@ -6,8 +6,12 @@
 #include "test_framework.h"
 #include "../src/union/union_binding.h"
 #include "../src/union/union_refusal.h"
+#include "../src/foundation/compat.h"
+#include "../src/foundation/compat_fs.h"
 
 #include <string.h>
+#include <stdio.h>
+#include <time.h>
 
 static void populate_valid_binding(CbmBindingClaim *binding) {
     memset(binding, 0, sizeof(*binding));
@@ -129,10 +133,39 @@ TEST(test_deviation_missing_reason_refused) {
     PASS();
 }
 
+TEST(test_binding_and_deviation_ledger_survives_reopen) {
+    char path[CBM_BINDING_STORE_PATH_MAX];
+    char tmp[CBM_BINDING_STORE_PATH_MAX + 8];
+    int n = snprintf(path,sizeof(path),"%s/cbm-binding-test-%llu.json",cbm_tmpdir(),
+                     (unsigned long long)time(NULL));
+    ASSERT_TRUE(n > 0 && (size_t)n < sizeof(path));
+    snprintf(tmp,sizeof(tmp),"%s.tmp",path);
+    (void)cbm_unlink(path); (void)cbm_unlink(tmp);
+    CbmBindingLedger writer;
+    ASSERT_TRUE(cbm_binding_ledger_open(&writer,path));
+    CbmBindingClaim binding; populate_valid_binding(&binding);
+    ASSERT_EQ(cbm_binding_validate_and_admit(&writer,&binding,NULL,0),CBM_REFUSAL_OK);
+    CbmDeviationClaim deviation; populate_valid_deviation(&deviation);
+    ASSERT_EQ(cbm_deviation_admit(&writer,&deviation,NULL,0),CBM_REFUSAL_OK);
+    CbmBindingLedger reader;
+    ASSERT_TRUE(cbm_binding_ledger_open(&reader,path));
+    CbmBindingClaim recovered;
+    ASSERT_EQ(cbm_binding_lookup(&reader,binding.theme_id,&recovered),CBM_REFUSAL_OK);
+    ASSERT_STR_EQ(recovered.pinned_version,binding.pinned_version);
+    ASSERT_STR_EQ(recovered.validated_by,binding.validated_by);
+    CbmDeviationClaim deviations[2]; size_t count=0;
+    ASSERT_EQ(cbm_deviation_query_active(&reader,binding.theme_id,deviations,2,&count),CBM_REFUSAL_OK);
+    ASSERT_EQ(count,1);
+    ASSERT_STR_EQ(deviations[0].reason,deviation.reason);
+    ASSERT_EQ(cbm_unlink(path),0); (void)cbm_unlink(tmp);
+    PASS();
+}
+
 SUITE(union_binding) {
     RUN_TEST(test_binding_agent_self_validation_refused);
     RUN_TEST(test_binding_operator_normative_admitted);
     RUN_TEST(test_binding_consulted_mode_optional_operator);
     RUN_TEST(test_deviation_claim_ledger_scar);
     RUN_TEST(test_deviation_missing_reason_refused);
+    RUN_TEST(test_binding_and_deviation_ledger_survives_reopen);
 }

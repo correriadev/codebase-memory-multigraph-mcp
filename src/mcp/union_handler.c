@@ -6,6 +6,7 @@
 #include "../foundation/platform.h"
 #include "../foundation/compat.h"
 #include "../foundation/compat_fs.h"
+#include "../store/store.h"
 #include <yyjson/yyjson.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -384,6 +385,20 @@ static bool theme_backing_project(const char *uri, char *out, size_t out_size) {
     memcpy(out, value, length);
     out[length] = '\0';
     return true;
+}
+
+static bool theme_backing_generation(const char *project, char *out, size_t out_size) {
+    const char *cache = cbm_resolve_cache_dir();
+    if (!cache || !project || !project[0]) return false;
+    char path[CBM_SZ_1K];
+    int n = snprintf(path, sizeof(path), "%s/%s.db", cache, project);
+    if (n < 0 || (size_t)n >= sizeof(path)) return false;
+    cbm_store_t *store = cbm_store_open_path_existing(path);
+    if (!store) return false;
+    bool ok = cbm_store_generation(store, out, out_size) == CBM_STORE_OK &&
+              strcmp(out, "legacy") != 0;
+    cbm_store_close(store);
+    return ok;
 }
 
 static void theme_add_entry_json(yyjson_mut_doc *doc, yyjson_mut_val *obj,
@@ -1167,6 +1182,17 @@ char *handle_theme_register(cbm_mcp_server_t *srv, const char *args_json) {
         return json_error_result("INVALID_PARAMS", "status must be a string");
       }
 
+    if (entry.status == CBM_THEME_ACTIVE && entry.target_uri[0]) {
+        char backing_project[CBM_THEME_URI_MAX] = {0};
+        if (!theme_backing_project(entry.target_uri, backing_project, sizeof(backing_project)) ||
+            !theme_backing_generation(backing_project, entry.target_generation,
+                                      sizeof(entry.target_generation))) {
+            yyjson_doc_free(doc);
+            return json_error_result("THEME_GRAPH_UNAVAILABLE",
+                                     "active theme version requires an existing backing project and generation");
+        }
+    }
+
     char err_buf[256] = {0};
     CbmRefusalCode rc = cbm_theme_registry_register(get_themes(srv), &entry, err_buf, sizeof(err_buf));
     yyjson_doc_free(doc);
@@ -1379,6 +1405,14 @@ static char *handle_theme_graph_read(cbm_mcp_server_t *srv, const char *args_jso
         return json_error_result("THEME_GRAPH_UNAVAILABLE",
                                  "target_uri must identify a whole registered CBM project using cbm-project://<project> or cbm://<project>");
     }
+    char current_generation[CBM_THEME_GENERATION_MAX] = {0};
+    if (!entry.target_generation[0] ||
+        !theme_backing_generation(project, current_generation, sizeof(current_generation)) ||
+        strcmp(entry.target_generation, current_generation) != 0) {
+        yyjson_doc_free(input);
+        return json_error_result("THEME_VERSION_DRIFT",
+                                 "backing graph generation differs from the generation pinned by this theme version");
+    }
 
     yyjson_mut_doc *args_doc = yyjson_mut_doc_new(NULL);
     if (!args_doc) {
@@ -1484,19 +1518,37 @@ char *handle_binding_claim(cbm_mcp_server_t *srv, const char *args_json) {
     yyjson_val *v_cid = yyjson_obj_get(root, "claim_id");
     yyjson_val *v_tid = yyjson_obj_get(root, "theme_id");
     yyjson_val *v_ver = yyjson_obj_get(root, "pinned_version");
-    yyjson_val *v_val = yyjson_obj_get(root, "validated_by");
+    yyjson_val *v_operator = yyjson_obj_get(root, "operator_id");
+    yyjson_val *v_token = yyjson_obj_get(root, "operator_token");
     yyjson_val *v_mod = yyjson_obj_get(root, "mode");
     yyjson_val *v_scp = yyjson_obj_get(root, "binding_scope");
 
     if (v_cid && yyjson_is_str(v_cid)) strncpy(claim.claim_id, yyjson_get_str(v_cid), sizeof(claim.claim_id) - 1);
     if (v_tid && yyjson_is_str(v_tid)) strncpy(claim.theme_id, yyjson_get_str(v_tid), sizeof(claim.theme_id) - 1);
     if (v_ver && yyjson_is_str(v_ver)) strncpy(claim.pinned_version, yyjson_get_str(v_ver), sizeof(claim.pinned_version) - 1);
-    if (v_val && yyjson_is_str(v_val)) strncpy(claim.validated_by, yyjson_get_str(v_val), sizeof(claim.validated_by) - 1);
     if (v_scp && yyjson_is_str(v_scp)) strncpy(claim.binding_scope, yyjson_get_str(v_scp), sizeof(claim.binding_scope) - 1);
 
     claim.mode = CBM_BINDING_NORMATIVE;
     if (v_mod && yyjson_is_str(v_mod) && strcmp(yyjson_get_str(v_mod), "CONSULTED") == 0) {
         claim.mode = CBM_BINDING_CONSULTED;
+    }
+
+    const char *operator_id = v_operator && yyjson_is_str(v_operator) ? yyjson_get_str(v_operator) : NULL;
+    const char *operator_token = v_token && yyjson_is_str(v_token) ? yyjson_get_str(v_token) : NULL;
+    bool operator_verified = cbm_mcp_server_verify_operator_authority(srv, operator_id, operator_token);
+    if (claim.mode == CBM_BINDING_NORMATIVE && !operator_verified) {
+        yyjson_doc_free(doc);
+        return json_error_result("BINDING_SELF_VALIDATED",
+                                 "normative theme bindings require authenticated operator authority");
+    }
+    /* Record only authority established by the host. Caller-supplied
+     * `validated_by` remains informational and is deliberately ignored. */
+    if (operator_verified) {
+        const char *authenticated_id = cbm_mcp_server_get_operator_identity(srv);
+        if (!authenticated_id) authenticated_id = operator_id;
+        if (authenticated_id) {
+            strncpy(claim.validated_by, authenticated_id, sizeof(claim.validated_by) - 1);
+        }
     }
 
     char err_buf[256] = {0};

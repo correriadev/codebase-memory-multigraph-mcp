@@ -4,6 +4,7 @@
 #include "union_theme_registry.h"
 #include "../foundation/log.h"
 #include "../foundation/compat_fs.h"
+#include "../foundation/compat.h"
 #include "../foundation/platform.h"
 #include <yyjson/yyjson.h>
 
@@ -50,6 +51,7 @@ static bool theme_registry_save(const CbmThemeRegistry *reg) {
             theme_write_string(doc, obj, "name", entry->name) &&
             theme_write_string(doc, obj, "namespace", entry->namespace) &&
             theme_write_string(doc, obj, "target_uri", entry->target_uri) &&
+            theme_write_string(doc, obj, "target_generation", entry->target_generation) &&
             theme_write_string(doc, obj, "version", entry->version) &&
             theme_write_string(doc, obj, "curator", entry->curator) &&
             theme_write_string(doc, obj, "status", theme_status_name(entry->status)) &&
@@ -109,6 +111,7 @@ bool cbm_theme_registry_open(CbmThemeRegistry *reg, const char *path) {
         theme_copy_json_string(entry->name, sizeof(entry->name), value, "name");
         theme_copy_json_string(entry->namespace, sizeof(entry->namespace), value, "namespace");
         theme_copy_json_string(entry->target_uri, sizeof(entry->target_uri), value, "target_uri");
+        theme_copy_json_string(entry->target_generation, sizeof(entry->target_generation), value, "target_generation");
         theme_copy_json_string(entry->version, sizeof(entry->version), value, "version");
         theme_copy_json_string(entry->curator, sizeof(entry->curator), value, "curator");
         theme_copy_json_string(entry->founding_provenance, sizeof(entry->founding_provenance), value, "founding_provenance");
@@ -220,10 +223,10 @@ CbmRefusalCode cbm_theme_registry_search(const CbmThemeRegistry *reg,
     return CBM_REFUSAL_OK;
 }
 
-CbmRefusalCode cbm_theme_registry_register(CbmThemeRegistry *reg,
-                                          const CbmThemeEntry *entry,
-                                          char *err_reason,
-                                          size_t err_len) {
+static CbmRefusalCode theme_registry_register_snapshot(CbmThemeRegistry *reg,
+                                                      const CbmThemeEntry *entry,
+                                                      char *err_reason,
+                                                      size_t err_len) {
     if (!reg || !entry) {
         if (err_reason && err_len > 0) {
             snprintf(err_reason, err_len, "null registry or entry");
@@ -274,6 +277,7 @@ CbmRefusalCode cbm_theme_registry_register(CbmThemeRegistry *reg,
             if (strcmp(old->name, entry->name) != 0 ||
                 strcmp(old->namespace, entry->namespace) != 0 ||
                 strcmp(old->target_uri, entry->target_uri) != 0 ||
+                strcmp(old->target_generation, entry->target_generation) != 0 ||
                 strcmp(old->curator, entry->curator) != 0 ||
                 strcmp(old->founding_provenance, entry->founding_provenance) != 0 ||
                 strcmp(old->description, entry->description) != 0 ||
@@ -313,6 +317,37 @@ CbmRefusalCode cbm_theme_registry_register(CbmThemeRegistry *reg,
     }
 
     return CBM_REFUSAL_OK;
+}
+
+CbmRefusalCode cbm_theme_registry_register(CbmThemeRegistry *reg,
+                                          const CbmThemeEntry *entry,
+                                          char *err_reason,
+                                          size_t err_len) {
+    if (!reg || !entry) return theme_registry_register_snapshot(reg, entry, err_reason, err_len);
+    if (!reg->storage_path[0]) {
+        return theme_registry_register_snapshot(reg, entry, err_reason, err_len);
+    }
+
+    char lock_path[CBM_THEME_STORE_PATH_MAX + 8];
+    int lock_len = snprintf(lock_path, sizeof(lock_path), "%s.lock", reg->storage_path);
+    if (lock_len < 0 || (size_t)lock_len >= sizeof(lock_path) || cbm_mkdir(lock_path) != 0) {
+        if (err_reason && err_len) snprintf(err_reason, err_len, "theme catalog is being updated by another writer");
+        return CBM_REFUSAL_THEME_PERSISTENCE_FAILED;
+    }
+
+    /* Refresh the on-disk snapshot before mutation so a long-lived server
+     * instance cannot silently replace entries written by another instance. */
+    CbmThemeRegistry latest;
+    cbm_theme_registry_init(&latest);
+    if (!cbm_theme_registry_open(&latest, reg->storage_path)) {
+        (void)cbm_rmdir(lock_path);
+        if (err_reason && err_len) snprintf(err_reason, err_len, "theme catalog could not be refreshed");
+        return CBM_REFUSAL_THEME_PERSISTENCE_FAILED;
+    }
+    CbmRefusalCode code = theme_registry_register_snapshot(&latest, entry, err_reason, err_len);
+    if (code == CBM_REFUSAL_OK) *reg = latest;
+    (void)cbm_rmdir(lock_path);
+    return code;
 }
 
 CbmRefusalCode cbm_theme_registry_lookup(const CbmThemeRegistry *reg,

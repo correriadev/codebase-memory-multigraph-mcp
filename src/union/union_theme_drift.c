@@ -28,7 +28,11 @@ CbmRefusalCode cbm_theme_publish_version(CbmThemeRegistry *reg,
     /* Update theme version in registry */
     strncpy(current.version, new_version, sizeof(current.version) - 1);
     current.version[sizeof(current.version) - 1] = '\0';
-    cbm_theme_registry_register(reg, &current, NULL, 0);
+    code = cbm_theme_registry_register(reg, &current, NULL, 0);
+    if (code != CBM_REFUSAL_OK) {
+        if (out_count) *out_count = 0;
+        return code;
+    }
 
     size_t count = 0;
     if (ledger) {

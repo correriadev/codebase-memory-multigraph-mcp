@@ -662,7 +662,7 @@ TEST(test_w05_territory_and_founding) {
     yyjson_doc_free(doc);
     free(bind_bad_res);
 
-    /* 4. Binding operator validated admitted */
+    /* A caller-supplied identity is not proof of operator authority. */
     const char *bind_good = "{\"claim_id\":\"b1\",\"theme_id\":\"@org/clean-arch\",\"pinned_version\":\"1.0.0\",\"mode\":\"NORMATIVE\",\"validated_by\":\"operator\"}";
     char *bind_good_res = handle_binding_claim(srv, bind_good);
     ASSERT(bind_good_res != NULL);
@@ -670,8 +670,32 @@ TEST(test_w05_territory_and_founding) {
     ASSERT(doc != NULL);
     payload = get_payload(doc);
     ASSERT(payload != NULL);
+    ASSERT(get_is_error(doc) == true);
+    yyjson_doc_free(doc);
+    free(bind_good_res);
+
+    cbm_mcp_server_set_operator_authority(srv, "human_operator", "operator-token");
+    const char *bind_wrong_token = "{\"claim_id\":\"b1\",\"theme_id\":\"@org/clean-arch\",\"pinned_version\":\"1.0.0\",\"mode\":\"NORMATIVE\",\"validated_by\":\"operator\",\"operator_id\":\"human_operator\",\"operator_token\":\"wrong-token\"}";
+    bind_good_res = handle_binding_claim(srv, bind_wrong_token);
+    ASSERT(bind_good_res != NULL);
+    doc = yyjson_read(bind_good_res, strlen(bind_good_res), 0);
+    ASSERT(doc != NULL);
+    ASSERT(get_is_error(doc) == true);
+    yyjson_doc_free(doc);
+    free(bind_good_res);
+    const char *bind_authenticated = "{\"claim_id\":\"b1\",\"theme_id\":\"@org/clean-arch\",\"pinned_version\":\"1.0.0\",\"mode\":\"NORMATIVE\",\"validated_by\":\"spoofed\",\"operator_id\":\"human_operator\",\"operator_token\":\"operator-token\"}";
+    bind_good_res = handle_binding_claim(srv, bind_authenticated);
+    ASSERT(bind_good_res != NULL);
+    doc = yyjson_read(bind_good_res, strlen(bind_good_res), 0);
+    ASSERT(doc != NULL);
+    payload = get_payload(doc);
+    ASSERT(payload != NULL);
     yyjson_val *v_adm = yyjson_obj_get(payload, "admitted");
     ASSERT(v_adm && yyjson_get_bool(v_adm) == true);
+    CbmBindingClaim authenticated_claim;
+    ASSERT_EQ(cbm_binding_lookup(cbm_mcp_server_binding_ledger(srv), "@org/clean-arch",
+                                 &authenticated_claim), CBM_REFUSAL_OK);
+    ASSERT_STR_EQ(authenticated_claim.validated_by, "human_operator");
     yyjson_doc_free(doc);
     free(bind_good_res);
 
