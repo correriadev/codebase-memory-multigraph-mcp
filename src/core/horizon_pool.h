@@ -15,7 +15,7 @@
   #include <sqlite3.h>
 #endif
 
-#define CBM_MAX_HORIZON_FDS 16
+#define CBM_MAX_HORIZON_FDS 64 /* expanded from baseline 16 to avoid thrashing */
 #define CBM_HORIZON_ID_MAX 64
 #define CBM_PATH_MAX 1024
 
@@ -59,6 +59,16 @@ int cbm_horizon_pool_get(HorizonConnectionPool *pool, const char *horizon_id, sq
 
 /* Persist an explicit project binding; refuses reassignment to another project. */
 int cbm_horizon_bind_project(sqlite3 *db, const char *project);
+
+typedef struct ActiveHorizonLiveness {
+    char horizon_id[64];
+    uint32_t owner_pid;
+    uint64_t last_beat_epoch;
+    bool is_alive;
+} ActiveHorizonLiveness;
+
+/* Returns count of active alive horizons for the given project. */
+size_t cbm_horizon_pool_get_active_alive(HorizonConnectionPool *pool, const char *project_id, ActiveHorizonLiveness *out_active, size_t max_out);
 
 /* Transition horizon status */
 int cbm_horizon_set_status(HorizonConnectionPool *pool, const char *horizon_id, HorizonStatus status);

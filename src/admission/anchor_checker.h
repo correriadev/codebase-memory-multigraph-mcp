@@ -5,13 +5,17 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#define CBM_ANCHOR_FILE_PATH_CAPACITY 512U
+#define CBM_ANCHOR_SYMBOL_NAME_CAPACITY 256U
+#define CBM_ANCHOR_EXPECTED_TEXT_CAPACITY 1024U
+
 typedef struct {
-    char file_path[512];
-    char symbol_name[256];
+    char file_path[CBM_ANCHOR_FILE_PATH_CAPACITY];
+    char symbol_name[CBM_ANCHOR_SYMBOL_NAME_CAPACITY];
     uint32_t byte_start;
     uint32_t byte_len;
     uint64_t ast_signature_hash;
-    char expected_text[1024];
+    char expected_text[CBM_ANCHOR_EXPECTED_TEXT_CAPACITY];
 } TwoTierAnchor;
 
 /* Tier 1 Fast Path: match exact byte offset in file */

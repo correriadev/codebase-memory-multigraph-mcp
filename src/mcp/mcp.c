@@ -794,8 +794,11 @@ static const tool_def_t TOOLS[] = {
     {"validate_scope_horizon", "Validate scope adjacency and detect isolated dangling nodes in a horizon overlay",
      "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
      "\"Identifier of the horizon to validate\"},\"strict_connectivity\":{\"type\":\"boolean\","
-     "\"description\":\"Whether dangling nodes without edges fail validation (default true)\"}},"
+     "\"description\":\"Whether dangling nodes without edges fail validation (default true)\"},\"check_conflicts\":{\"type\":\"boolean\",\"description\":\"Check concurrent conflicts (default false)\"}},"
      "\"required\":[\"horizon_id\"]}"},
+
+    {"check_horizon_conflicts", "Check preventive concurrent conflicts between an ephemeral horizon and sibling horizons",
+     "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":\"Identifier of the horizon\"}},\"required\":[\"horizon_id\"]}"},
 
     {"union_session_open", "Open a bounded Union session; optional host/context/grounding fields bind it to the E01 repository mutation gate",
      "{\"type\":\"object\",\"properties\":{\"identity\":{\"type\":\"string\",\"description\":"
@@ -17687,6 +17690,9 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
     }
     if (strcmp(tool_name, "validate_scope_horizon") == 0) {
         return handle_validate_scope_horizon(srv, args_json, &srv->horizon_pool);
+    }
+    if (strcmp(tool_name, "check_horizon_conflicts") == 0) {
+        return handle_check_horizon_conflicts(srv, args_json, &srv->horizon_pool);
     }
 
     /* Track W: Union Workflow tools */

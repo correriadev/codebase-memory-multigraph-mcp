@@ -23,6 +23,7 @@ Multi-tier test protocol combining pure C unit tests under Address and Undefined
 | Union Workflow | `make -f Makefile.cbm test-union-workflow` | Builds and executes the complete Union workflow E2E test suite |
 | Focused Suite | `./build/test-runner <suite>` | Runs targeted C test suite (e.g. `union_gateway`, `union_session`) |
 | Federation Python | `python -m unittest tests/test_multi_graph_federation.py` | Runs Python multi-graph federation unit and regression tests |
+| Cross-Horizon Admission | `python -m unittest tests/test_cross_horizon_admission.py` | Runs cross-horizon concurrency arbitration and conflict anticipation tests |
 | Full E2E Suite | `python3 tests/e2e/run_e2e.py` | Runs complete 12-scenario black-box MCP stdio JSON-RPC E2E suite |
 | Refactoring Admission | `python3 -m unittest tests.e2e.test_refactoring_admission` | Validates Two-Tier anchor checks, paths, and Base Graph consolidation |
 

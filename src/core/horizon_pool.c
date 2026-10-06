@@ -4,16 +4,46 @@
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
+#include "../foundation/compat_fs.h"
+#include "../foundation/log.h"
 
 #ifdef _WIN32
   #include <direct.h>
   #include <io.h>
+  #include <windows.h>
   #define cbm_mkdir(path) _mkdir(path)
   #define cbm_unlink(path) _unlink(path)
+
+  static bool check_process_alive(uint32_t pid) {
+      if (pid == 0) return false;
+      HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
+      if (hProcess == NULL) {
+          if (GetLastError() == ERROR_ACCESS_DENIED) return true;
+          return false;
+      }
+      DWORD exitCode = 0;
+      if (GetExitCodeProcess(hProcess, &exitCode)) {
+          if (exitCode == STILL_ACTIVE) {
+              CloseHandle(hProcess);
+              return true;
+          }
+      }
+      CloseHandle(hProcess);
+      return false;
+  }
 #else
   #include <unistd.h>
+  #include <signal.h>
+  #include <errno.h>
   #define cbm_mkdir(path) mkdir(path, 0755)
   #define cbm_unlink(path) unlink(path)
+
+  static bool check_process_alive(uint32_t pid) {
+      if (pid == 0) return false;
+      if (kill((pid_t)pid, 0) == 0) return true;
+      if (errno == EPERM) return true;
+      return false;
+  }
 #endif
 
 static const char *HORIZON_DDL =
@@ -188,7 +218,7 @@ int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const c
     const char *insert_meta =
         "INSERT INTO horizon_metadata (horizon_id, client_pid, status, created_at, last_heartbeat, based_on_seq) "
         "VALUES (?, ?, 'ACTIVE', ?, ?, ?) "
-        "ON CONFLICT(horizon_id) DO UPDATE SET status = 'ACTIVE', last_heartbeat = excluded.last_heartbeat, based_on_seq = excluded.based_on_seq;";
+        "ON CONFLICT(horizon_id) DO UPDATE SET status = 'ACTIVE', last_heartbeat = excluded.last_heartbeat, based_on_seq = excluded.based_on_seq, client_pid = excluded.client_pid;";
     rc = sqlite3_prepare_v2(db, insert_meta, -1, &stmt, NULL);
     if (rc == SQLITE_OK) {
         sqlite3_bind_text(stmt, 1, horizon_id, -1, SQLITE_STATIC);
@@ -341,4 +371,78 @@ int cbm_discard_horizon(HorizonConnectionPool *pool, const char *horizon_id) {
     cbm_unlink(shm_path);
 
     return 0;
+}
+
+size_t cbm_horizon_pool_get_active_alive(HorizonConnectionPool *pool, const char *project_id, ActiveHorizonLiveness *out_active, size_t max_out) {
+    if (!pool || !project_id || !out_active || max_out == 0) return 0;
+
+    char dir_path[CBM_PATH_MAX];
+    if (pool->base_dir[0]) {
+        snprintf(dir_path, sizeof(dir_path), "%s/horizons", pool->base_dir);
+    } else {
+        snprintf(dir_path, sizeof(dir_path), "horizons");
+    }
+
+    cbm_dir_t *d = cbm_opendir(dir_path);
+    if (!d) return 0;
+
+    size_t count = 0;
+    cbm_dirent_t *ent;
+    while ((ent = cbm_readdir(d)) != NULL && count < max_out) {
+        size_t len = strlen(ent->name);
+        if (len < 4 || strcmp(ent->name + len - 3, ".db") != 0) continue;
+
+        char horizon_id[CBM_HORIZON_ID_MAX];
+        snprintf(horizon_id, sizeof(horizon_id), "%.*s", (int)(len - 3), ent->name);
+
+        sqlite3 *db = NULL;
+        if (cbm_horizon_pool_get(pool, horizon_id, &db) != 0 || !db) continue;
+
+        sqlite3_stmt *stmt = NULL;
+        bool matches_project = false;
+        if (sqlite3_prepare_v2(db, "SELECT project FROM horizon_context WHERE singleton=1", -1, &stmt, NULL) == SQLITE_OK) {
+            if (sqlite3_step(stmt) == SQLITE_ROW) {
+                const char *proj = (const char *)sqlite3_column_text(stmt, 0);
+                if (proj && strcmp(proj, project_id) == 0) {
+                    matches_project = true;
+                }
+            }
+            sqlite3_finalize(stmt);
+        }
+
+        if (!matches_project) continue;
+
+        uint32_t pid = 0;
+        uint64_t last_beat = 0;
+        char status[32] = {0};
+        if (sqlite3_prepare_v2(db, "SELECT client_pid, last_heartbeat, status FROM horizon_metadata", -1, &stmt, NULL) == SQLITE_OK) {
+            if (sqlite3_step(stmt) == SQLITE_ROW) {
+                pid = (uint32_t)sqlite3_column_int64(stmt, 0);
+                last_beat = (uint64_t)sqlite3_column_int64(stmt, 1);
+                const char *st = (const char *)sqlite3_column_text(stmt, 2);
+                if (st) snprintf(status, sizeof(status), "%s", st);
+            }
+            sqlite3_finalize(stmt);
+        }
+
+        if (strcmp(status, "ACTIVE") != 0) continue;
+
+        bool is_alive = check_process_alive(pid);
+        if (!is_alive) {
+            char pid_str[32];
+            snprintf(pid_str, sizeof(pid_str), "%u", pid);
+            cbm_log_warn("horizon.zombie_purged", "horizon_id", horizon_id, "owner_pid", pid_str, "reason", "PROCESS_DEAD", NULL);
+            cbm_discard_horizon(pool, horizon_id);
+            continue;
+        }
+
+        ActiveHorizonLiveness *liveness = &out_active[count++];
+        snprintf(liveness->horizon_id, sizeof(liveness->horizon_id), "%s", horizon_id);
+        liveness->owner_pid = pid;
+        liveness->last_beat_epoch = last_beat;
+        liveness->is_alive = true;
+    }
+
+    cbm_closedir(d);
+    return count;
 }

@@ -9,7 +9,7 @@ edges:
     target: "adr:architecture"
   - relation: tested_by
     target: "adr:tests"
-updated: 2026-09-28
+updated: 2026-10-03
 ---
 # Multi-Graph Federation & Cognitive Horizons
 Coordinates ephemeral cognitive horizon overlays, speculative graph modeling, AST anchor verification, and admission gate promotion over the persistent base graph.
@@ -25,8 +25,7 @@ Coordinates ephemeral cognitive horizon overlays, speculative graph modeling, AS
   ],
   "registration_files": [
     "src/mcp/horizon_sync_handler.c",
-    "src/mcp/horizon_sync_handler.h",
-    "src/mcp/promote_handler.c"
+    "src/mcp/horizon_sync_handler.h"
   ],
   "reference_files": [
     "src/core/horizon_pool.c",
@@ -45,6 +44,7 @@ Coordinates ephemeral cognitive horizon overlays, speculative graph modeling, AS
     "src/daemon/horizon_reaper.c",
     "src/daemon/horizon_reaper.h",
     "src/db/horizon_schema.sql",
+    "src/mcp/promote_handler.c",
     "src/query/kway_merge.c",
     "src/query/kway_merge.h"
   ],
@@ -55,7 +55,8 @@ Coordinates ephemeral cognitive horizon overlays, speculative graph modeling, AS
     "tests/test_kway_merge.c",
     "tests/test_mcp_federation.c",
     "tests/test_multi_graph_federation.py",
-    "tests/test_recall_engine.c"
+    "tests/test_recall_engine.c",
+    "tests/test_union_workflow_e2e.c"
   ]
 }
 ```
@@ -82,6 +83,8 @@ In the `novos-paradgimas` workflow (ADR_V1 §2, §3, AUDIT-WORKFLOW §1, §6):
 - **Speculative Deliberation**: Agents must never mutate the Base Graph directly while exploring hypotheses. Horizons isolate uncommitted symbolic nodes and virtual edges in dedicated SQLite databases.
 - **Federated Discovery**: Passing `active_horizons` to `search_graph`, `query_graph`, and `trace_path` transparently overlays speculative definitions onto base code.
 - **Two-Tier AST Anchors**: Anchors pin source code locations using byte offsets with AST hash fallbacks. Promotion succeeds only if the underlying source code remains unchanged.
+- **Promotion input lengths**: The MCP handler rejects negative, non-integer, out-of-range, oversized, or text-length-mismatched anchor lengths before hashing. It accepts at most 511 path bytes, 255 symbol bytes, and 1,023 expected-text bytes; a zero `byte_len` with supplied text uses that text's byte length. Anchor-count and total-request limits remain unspecified.
+- **Promotion preconditions**: The admission gate refuses an empty anchor set and an unavailable base database before changing the horizon status. The handler returns `INVALID_PARAMS` or `BASE_UNAVAILABLE` for those cases.
 - **Scope Connectivity**: Strict connectivity checks reject orphan or disconnected speculative nodes before admission.
 
 ## HOW TO EXECUTE COGNITIVE HORIZONS
@@ -127,6 +130,7 @@ promote_horizon(horizon_id="h_payment_split", anchors=[]) // Bypasses drift veri
 REQUIRED: Bind all speculative proposals to a named `horizon_id` before modifying shared architectural components.
 REQUIRED: Run `validate_scope_horizon` with `strict_connectivity=true` prior to promotion to avoid introducing dangling graph edges.
 REQUIRED: Supply concrete Two-Tier AST anchors with `ast_signature_hash` when calling `promote_horizon`.
+REQUIRED: Supply at least one anchor and an available persistent base database before promotion.
 PROHIBITED: Bypassing Two-Tier anchor verification during horizon promotion.
 PROHIBITED: Leaving speculative horizons active indefinitely without promotion or session closure.
 

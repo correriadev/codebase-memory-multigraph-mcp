@@ -4,6 +4,7 @@ Validates Task 04: Real MCP server communication over stdio, verifying Two-Tier 
 tolerance for benign comment shifts vs rejection on breaking AST drift, and Base Graph consolidation.
 """
 
+import os
 import unittest
 import sqlite3
 import json
@@ -42,10 +43,13 @@ class TestRefactoringAdmissionE2E(unittest.TestCase):
                 }
 
                 # 1. Unchanged File: Tier 1 Fast Match -> PROMOTED
+                h1_id = f"feat_runner_t1_{sandbox.run_id}"
+                h1_db = sandbox.register_horizon(h1_id)
+                seed_horizon_db(db_path=str(h1_db), horizon_id=h1_id, client_pid=os.getpid())
                 resp1 = session.call_tool(
                     name="promote_horizon",
                     arguments={
-                        "horizon_id": f"feat_runner_t1_{sandbox.run_id}",
+                        "horizon_id": h1_id,
                         "repo_path": str(sandbox.project_dir),
                         "anchors": [anchor_payload]
                     },
@@ -58,10 +62,13 @@ class TestRefactoringAdmissionE2E(unittest.TestCase):
                 # 2. Benign Shift: 15 comment lines added to top of file
                 specimen.apply_benign_comment_shift(comment_lines=15)
                 # Keep original byte_start to force Tier 1 miss and Tier 2 AST fallback
+                h2_id = f"feat_runner_t2_{sandbox.run_id}"
+                h2_db = sandbox.register_horizon(h2_id)
+                seed_horizon_db(db_path=str(h2_db), horizon_id=h2_id, client_pid=os.getpid())
                 resp2 = session.call_tool(
                     name="promote_horizon",
                     arguments={
-                        "horizon_id": f"feat_runner_t2_{sandbox.run_id}",
+                        "horizon_id": h2_id,
                         "repo_path": str(sandbox.project_dir),
                         "anchors": [anchor_payload]
                     },
@@ -73,10 +80,13 @@ class TestRefactoringAdmissionE2E(unittest.TestCase):
 
                 # 3. Breaking Mutation: Function / interface altered
                 specimen.apply_breaking_mutation()
+                h3_id = f"feat_runner_t3_{sandbox.run_id}"
+                h3_db = sandbox.register_horizon(h3_id)
+                seed_horizon_db(db_path=str(h3_db), horizon_id=h3_id, client_pid=os.getpid())
                 resp3 = session.call_tool(
                     name="promote_horizon",
                     arguments={
-                        "horizon_id": f"feat_runner_t3_{sandbox.run_id}",
+                        "horizon_id": h3_id,
                         "repo_path": str(sandbox.project_dir),
                         "anchors": [anchor_payload]
                     },
@@ -99,10 +109,13 @@ class TestRefactoringAdmissionE2E(unittest.TestCase):
                 self.assertTrue(init_resp.is_success())
 
                 # Variant A: Relative path + repo_path
+                h_a_id = f"h_path_a_{sandbox.run_id}"
+                h_a_db = sandbox.register_horizon(h_a_id)
+                seed_horizon_db(db_path=str(h_a_db), horizon_id=h_a_id, client_pid=os.getpid())
                 resp_a = session.call_tool(
                     name="promote_horizon",
                     arguments={
-                        "horizon_id": f"h_path_a_{sandbox.run_id}",
+                        "horizon_id": h_a_id,
                         "repo_path": str(sandbox.project_dir),
                         "anchors": [{
                             "file_path": specimen.rel_path,
@@ -115,10 +128,13 @@ class TestRefactoringAdmissionE2E(unittest.TestCase):
                 self.assertIn("PROMOTED", str(resp_a.result))
 
                 # Variant B: Absolute path directly in file_path
+                h_b_id = f"h_path_b_{sandbox.run_id}"
+                h_b_db = sandbox.register_horizon(h_b_id)
+                seed_horizon_db(db_path=str(h_b_db), horizon_id=h_b_id, client_pid=os.getpid())
                 resp_b = session.call_tool(
                     name="promote_horizon",
                     arguments={
-                        "horizon_id": f"h_path_b_{sandbox.run_id}",
+                        "horizon_id": h_b_id,
                         "anchors": [{
                             "file_path": str(specimen.file_path),
                             "symbol_name": "IAgentRunner",

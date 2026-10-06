@@ -11,6 +11,35 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool promotion_json_u32(const yyjson_val *value, uint32_t *out_value) {
+    if (!value || !out_value || !yyjson_is_int(value)) return false;
+    if (yyjson_is_sint(value) && yyjson_get_sint(value) < 0) return false;
+
+    uint64_t parsed = yyjson_get_uint(value);
+    if (parsed > UINT32_MAX) return false;
+    *out_value = (uint32_t)parsed;
+    return true;
+}
+
+static bool promotion_json_u64(const yyjson_val *value, uint64_t *out_value) {
+    if (!value || !out_value || !yyjson_is_int(value)) return false;
+    if (yyjson_is_sint(value) && yyjson_get_sint(value) < 0) return false;
+    *out_value = yyjson_get_uint(value);
+    return true;
+}
+
+static bool promotion_json_string(const yyjson_val *value, char *out_value, size_t out_capacity) {
+    if (!value || !out_value || out_capacity == 0 || !yyjson_is_str(value)) return false;
+
+    size_t len = yyjson_get_len(value);
+    const char *parsed = yyjson_get_str(value);
+    if (!parsed || len == 0 || len >= out_capacity || memchr(parsed, '\0', len) != NULL) return false;
+
+    memcpy(out_value, parsed, len);
+    out_value[len] = '\0';
+    return true;
+}
+
 char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool, AdmissionGate *gate) {
     if (!args_json) {
         return cbm_mcp_text_result("{\"isError\":true,\"message\":\"missing arguments\"}", true);
@@ -51,34 +80,28 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
         }
     }
 
-    /* Fallback local pool and gate if NULL provided so integrity checks cannot be bypassed */
-    HorizonConnectionPool local_pool;
-    bool own_pool = false;
-    if (!pool) {
-        cbm_horizon_pool_init(&local_pool, cbm_resolve_cache_dir());
-        pool = &local_pool;
-        own_pool = true;
-    }
-
-    AdmissionGate local_gate;
-    if (!gate) {
-        cbm_admission_gate_init(&local_gate, "default", 1);
-        gate = &local_gate;
-    }
-
     /* Parse anchors from JSON */
     TwoTierAnchor *anchors = NULL;
     size_t anchor_count = 0;
+    bool invalid_anchors = false;
+    bool allocation_failed = false;
 
     yyjson_doc *doc = yyjson_read(args_json, strlen(args_json), 0);
-    if (doc) {
+    if (!doc) {
+        invalid_anchors = true;
+    } else {
         yyjson_val *root = yyjson_doc_get_root(doc);
-        yyjson_val *arr = yyjson_obj_get(root, "anchors");
-        if (arr && yyjson_is_arr(arr)) {
+        yyjson_val *arr = root && yyjson_is_obj(root) ? yyjson_obj_get(root, "anchors") : NULL;
+        if (arr && !yyjson_is_arr(arr)) {
+            invalid_anchors = true;
+        }
+        if (!invalid_anchors && arr) {
             size_t n = yyjson_arr_size(arr);
             if (n > 0) {
                 anchors = (TwoTierAnchor *)calloc(n, sizeof(TwoTierAnchor));
-                if (anchors) {
+                if (!anchors) {
+                    allocation_failed = true;
+                } else {
                     size_t idx, max;
                     yyjson_val *item;
                     yyjson_arr_foreach(arr, idx, max, item) {
@@ -96,36 +119,92 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
                             yyjson_val *v_text = yyjson_obj_get(item, "expected_text");
                             if (!v_text) v_text = yyjson_obj_get(item, "expectedText");
 
-                            if (v_file && yyjson_is_str(v_file)) {
-                                snprintf(anchors[anchor_count].file_path, sizeof(anchors[anchor_count].file_path), "%s", yyjson_get_str(v_file));
+                            if (!promotion_json_string(v_file, anchors[anchor_count].file_path,
+                                                       sizeof(anchors[anchor_count].file_path)) ||
+                                !promotion_json_string(v_sym, anchors[anchor_count].symbol_name,
+                                                       sizeof(anchors[anchor_count].symbol_name))) {
+                                invalid_anchors = true;
                             }
-                            if (v_sym && yyjson_is_str(v_sym)) {
-                                snprintf(anchors[anchor_count].symbol_name, sizeof(anchors[anchor_count].symbol_name), "%s", yyjson_get_str(v_sym));
+                            uint32_t byte_start = 0;
+                            uint32_t byte_len = 0;
+                            uint64_t signature_hash = 0;
+                            if (v_start && !promotion_json_u32(v_start, &byte_start)) {
+                                invalid_anchors = true;
                             }
-                            if (v_start && yyjson_is_int(v_start)) {
-                                anchors[anchor_count].byte_start = (uint32_t)yyjson_get_uint(v_start);
+                            if (v_len && !promotion_json_u32(v_len, &byte_len)) {
+                                invalid_anchors = true;
                             }
-                            if (v_len && yyjson_is_int(v_len)) {
-                                anchors[anchor_count].byte_len = (uint32_t)yyjson_get_uint(v_len);
+                            if (v_hash && !promotion_json_u64(v_hash, &signature_hash)) {
+                                invalid_anchors = true;
                             }
-                            if (v_text && yyjson_is_str(v_text)) {
-                                snprintf(anchors[anchor_count].expected_text, sizeof(anchors[anchor_count].expected_text), "%s", yyjson_get_str(v_text));
-                                if (anchors[anchor_count].byte_len == 0) {
-                                    anchors[anchor_count].byte_len = (uint32_t)strlen(anchors[anchor_count].expected_text);
-                                }
+                            if (v_text && !yyjson_is_str(v_text)) {
+                                invalid_anchors = true;
                             }
-                            if (v_hash && yyjson_is_int(v_hash)) {
-                                anchors[anchor_count].ast_signature_hash = yyjson_get_uint(v_hash);
-                            } else if (anchors[anchor_count].expected_text[0]) {
-                                anchors[anchor_count].ast_signature_hash = cbm_fnv1a_64(anchors[anchor_count].expected_text, anchors[anchor_count].byte_len);
+                            size_t expected_len = v_text ? yyjson_get_len(v_text) : 0;
+                            const char *expected_text = v_text ? yyjson_get_str(v_text) : NULL;
+                            if (v_text &&
+                                (expected_len >= sizeof(anchors[anchor_count].expected_text) ||
+                                 memchr(expected_text, '\0', expected_len) != NULL)) {
+                                invalid_anchors = true;
+                            }
+                            if (byte_len == 0 && v_text) {
+                                byte_len = (uint32_t)expected_len;
+                            }
+                            if (byte_len > sizeof(anchors[anchor_count].expected_text) ||
+                                (v_text && byte_len != expected_len)) {
+                                invalid_anchors = true;
+                            }
+                            if (invalid_anchors) break;
+
+                            anchors[anchor_count].byte_start = byte_start;
+                            anchors[anchor_count].byte_len = byte_len;
+                            anchors[anchor_count].ast_signature_hash = signature_hash;
+                            if (v_text) {
+                                memcpy(anchors[anchor_count].expected_text, expected_text, expected_len);
+                                anchors[anchor_count].expected_text[expected_len] = '\0';
+                            }
+                            if (!v_hash && expected_len > 0) {
+                                anchors[anchor_count].ast_signature_hash =
+                                    cbm_fnv1a_64(anchors[anchor_count].expected_text, expected_len);
                             }
                             anchor_count++;
+                        } else {
+                            invalid_anchors = true;
+                            break;
                         }
                     }
                 }
             }
         }
         yyjson_doc_free(doc);
+    }
+
+    if (invalid_anchors || allocation_failed) {
+        if (anchors) free(anchors);
+        free(horizon_id);
+        if (allocation_failed) {
+            return cbm_mcp_text_result(
+                "{\"isError\":true,\"code\":\"INTERNAL_ERROR\",\"message\":\"could not allocate promotion anchors\"}",
+                true);
+        }
+        return cbm_mcp_text_result(
+            "{\"isError\":true,\"code\":\"INVALID_PARAMS\",\"message\":\"invalid promotion anchor\"}",
+            true);
+    }
+
+    /* Fallback local pool and gate if NULL provided so integrity checks cannot be bypassed. */
+    HorizonConnectionPool local_pool;
+    bool own_pool = false;
+    if (!pool) {
+        cbm_horizon_pool_init(&local_pool, cbm_resolve_cache_dir());
+        pool = &local_pool;
+        own_pool = true;
+    }
+
+    AdmissionGate local_gate;
+    if (!gate) {
+        cbm_admission_gate_init(&local_gate, "default", 1);
+        gate = &local_gate;
     }
 
     char err_buf[512] = {0};
@@ -203,7 +282,10 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
     if (rc != CBM_ADMISSION_OK) {
         const char *err_code = "PROMOTION_FAILED";
         if (rc == CBM_ADMISSION_ERR_ANCHOR_DRIFT) err_code = "ANCHOR_DRIFT";
+        else if (rc == CBM_ADMISSION_ERR_CONCURRENT_CONFLICT) err_code = "CONCURRENT_CONFLICT";
         else if (rc == CBM_ADMISSION_ERR_HORIZON_NOT_FOUND) err_code = "HORIZON_NOT_FOUND";
+        else if (rc == CBM_ADMISSION_ERR_INVALID_PARAMS) err_code = "INVALID_PARAMS";
+        else if (rc == CBM_ADMISSION_ERR_BASE_UNAVAILABLE) err_code = "BASE_UNAVAILABLE";
 
         char err_resp[1024];
         snprintf(err_resp, sizeof(err_resp),

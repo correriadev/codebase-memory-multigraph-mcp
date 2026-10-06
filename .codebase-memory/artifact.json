@@ -1,12 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "edead5d5a3d27719d78c6f2a653ea5ca24d0a983",
-    "indexed_at": "2026-10-03T03:02:02Z",
-    "project": "C-Users-corre-Documents-codebase-memory-mcp",
-    "nodes": 33357,
-    "edges": 151371,
-    "original_size": 173473792,
-    "compressed_size": 24997973,
-    "compression_level": 3,
-    "reconcile_basis": "git-clean-head"
+    "commit": "973c418d365c916edd417ee9302ad03ec17b51aa",
+    "indexed_at": "2026-10-04T12:46:14Z",
+    "project": "C-Users-User-Documents-codebase-memory-multigraph-mcp",
+    "nodes": 33895,
+    "edges": 152874,
+    "original_size": 187301888,
+    "compressed_size": 25227773,
+    "compression_level": 3
 }

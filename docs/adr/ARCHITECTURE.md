@@ -49,9 +49,9 @@ Layered C11 architecture providing persistent codebase knowledge indexing, multi
 - **Transport / Protocol**: MCP JSON-RPC stdio server dispatching 35 tool endpoints across discovery (10), inspection (7), horizons (4), and union workflows (14).
 - **Epistemic Authority & Gateways**: `CbmGateway` effect classification, `CbmContractRegistry`, and `CbmSessionRegistry`.
 - **Thematic Knowledge & Doc Plane**: `CbmThemeRegistry`, `CbmBindingLedger`, and `CbmContestRegistry`.
-- **Federation & Admission**: `AdmissionGate`, `TwoTierAnchor` verification against AST, and `EpistemicRecallService`.
+- **Federation & Admission**: `AdmissionGate` with cross-horizon concurrency arbitration and `BEGIN IMMEDIATE` atomic serialization, `TwoTierAnchor` verification against AST, and `EpistemicRecallService`.
 - **Query & Merging**: Streaming `KWayMergeIterator` over ordered cursors combining Base Graph and active horizons.
-- **Core & Domain**: `CbmUri` addressing, `SymbolicNode` management, and LRU bounded `HorizonConnectionPool`.
+- **Core & Domain**: `CbmUri` addressing, `SymbolicNode` management, and LRU bounded `HorizonConnectionPool` with process liveness probing.
 - **Persistence & Daemons**: Base SQLite graph, per-horizon SQLite WAL databases, and `HorizonReaperService`.
 
 ## MODULES
@@ -59,7 +59,7 @@ Layered C11 architecture providing persistent codebase knowledge indexing, multi
 |---|---|---|
 | Core Addressing & Pools | Canonical CBM-URI parsing, FNV-1a hashing, and LRU SQLite connection management | `src/core/` |
 | Query & Federation | Streaming K-Way merge iterator with min-heap and Cypher federation | `src/query/` |
-| Admission & Recall | Two-tier AST anchor checking, promotion gates, and acyclic reverse recall | `src/admission/` |
+| Admission & Recall | Two-tier AST anchor checking, cross-horizon concurrency arbitration, promotion gates, and acyclic reverse recall | `src/admission/` |
 | Union Workflows & Sessions | Session horizons, skill contracts, effect gateways, and refusal taxonomy | `src/union/` |
 | Thematic Knowledge Bases | Craft theme registries, normative/consulted binding claims, and founding proposals | `src/union/` |
 | Document Plane Substrate | Structural section extraction (L0), referential resolution (L1), and prose drift | `src/union/` |
@@ -102,6 +102,17 @@ if (cbm_contest_has_blocking(&srv->contest_registry, target_ref)) {
 
 # FORBIDDEN: Promoting horizons with active blocking contestations
 cbm_admission_gate_admit(gate, horizon_id, anchors, count); // Ignores contested evidence
+
+# REQUIRED: Optimistic generation check within BEGIN IMMEDIATE lock to prevent TOCTOU drift
+sqlite3_exec(gate->base_db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
+if (current_gen > gate->base_generation) {
+    sqlite3_exec(gate->base_db, "ROLLBACK;", NULL, NULL, NULL);
+    return CBM_ADMISSION_ERR_CONCURRENT_CONFLICT;
+}
+
+# FORBIDDEN: Consolidating base graph without verifying generation drift inside immediate lock
+sqlite3_exec(gate->base_db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
+consolidate_nodes(gate->base_db, hdb); // Bypasses generation_log check, vulnerable to concurrent promotion races
 </code_patterns>
 
 ## INTEGRATIONS

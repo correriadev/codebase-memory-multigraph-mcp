@@ -72,6 +72,12 @@ char *handle_sync_horizon_spec(cbm_mcp_server_t *srv, const char *args_json, Hor
         return cbm_mcp_text_result("{\"isError\":true,\"code\":\"INVALID_PARAMS\",\"message\":\"file_path required\"}", true);
     }
 
+    if (strstr(file_path_str, "..") || file_path_str[0] == '/' || file_path_str[0] == '\\' || strstr(file_path_str, ":\\") || strstr(file_path_str, ":/")) {
+        yyjson_doc_free(doc);
+        if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+        return cbm_mcp_text_result("{\"isError\":true,\"code\":\"INVALID_PARAMS\",\"message\":\"Invalid parameter: path traversal or absolute path not allowed\"}", true);
+    }
+
     /* 3. Extract content (optional) */
     const char *content_str = NULL;
     yyjson_val *v_cnt = yyjson_obj_get(root, "content");
@@ -107,8 +113,8 @@ char *handle_sync_horizon_spec(cbm_mcp_server_t *srv, const char *args_json, Hor
     char *disk_content = NULL;
     const char *final_content = content_str;
     if (!final_content) {
-        FILE *f = fopen(file_path_str, "rb");
-        if (!f && srv) {
+        FILE *f = NULL;
+        if (srv) {
             const char *repo_root = cbm_mcp_server_session_root(srv);
             if (repo_root && repo_root[0]) {
                 char full_path[1024];
@@ -127,6 +133,13 @@ char *handle_sync_horizon_spec(cbm_mcp_server_t *srv, const char *args_json, Hor
         long sz = ftell(f);
         fseek(f, 0, SEEK_SET);
         if (sz < 0) sz = 0;
+
+        if (sz > 10 * 1024 * 1024) {
+            fclose(f);
+            yyjson_doc_free(doc);
+            if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+            return cbm_mcp_text_result("{\"isError\":true,\"code\":\"FILE_TOO_LARGE\",\"message\":\"file exceeds 10MB limit\"}", true);
+        }
 
         disk_content = (char *)malloc(sz + 1);
         if (!disk_content) {
@@ -254,6 +267,26 @@ char *handle_validate_scope_horizon(cbm_mcp_server_t *srv, const char *args_json
         return cbm_mcp_text_result("{\"isError\":true,\"code\":\"HORIZON_NOT_FOUND\",\"message\":\"horizon not found\"}", true);
     }
 
+    bool check_conflicts = false;
+    yyjson_val *v_check = yyjson_obj_get(root, "check_conflicts");
+    if (!v_check) v_check = yyjson_obj_get(root, "checkConflicts");
+    if (v_check && yyjson_is_bool(v_check)) {
+        check_conflicts = yyjson_get_bool(v_check);
+    }
+
+    if (check_conflicts) {
+        AdmissionGate gate;
+        cbm_admission_gate_init(&gate, srv ? cbm_mcp_server_session_project(srv) : "default", 1);
+        HorizonConflictReport creport;
+        if (cbm_admission_gate_check_concurrent_conflicts(&gate, pool, h_id_str, NULL, 0, &creport) == CBM_ADMISSION_ERR_CONCURRENT_CONFLICT) {
+            char resp[1024];
+            snprintf(resp, sizeof(resp), "{\"isError\":true,\"code\":-32000,\"reason\":\"CONCURRENT_CONFLICT\",\"conflicting_horizon\":\"%s\",\"file_path\":\"%s\",\"is_semantic_only\":%s}", creport.conflicting_horizon, creport.conflicting_file, creport.is_semantic_only ? "true" : "false");
+            yyjson_doc_free(doc);
+            if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+            return cbm_mcp_text_result(resp, true);
+        }
+    }
+
     /* 4. Get base DB */
     cbm_store_t *store = srv ? cbm_mcp_server_store(srv) : NULL;
     sqlite3 *base_db = store ? (sqlite3 *)cbm_store_get_db(store) : NULL;
@@ -339,4 +372,50 @@ char *handle_validate_scope_horizon(cbm_mcp_server_t *srv, const char *args_json
     char *result = cbm_mcp_text_result(json_out, false);
     free(json_out);
     return result;
+}
+
+char *handle_check_horizon_conflicts(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool) {
+    if (!args_json) {
+        return cbm_mcp_text_result("{\"isError\":true,\"code\":-32602,\"message\":\"missing arguments\"}", true);
+    }
+    char *horizon_id = cbm_mcp_get_string_arg(args_json, "horizon_id");
+    if (!horizon_id) return cbm_mcp_text_result("{\"isError\":true,\"code\":-32602,\"message\":\"horizon_id required\"}", true);
+    
+    // validate against path traversal
+    if (strstr(horizon_id, "/") || strstr(horizon_id, "\\") || strstr(horizon_id, "..")) {
+        free(horizon_id);
+        return cbm_mcp_text_result("{\"isError\":true,\"code\":-32602,\"message\":\"Invalid parameter: horizon_id\"}", true);
+    }
+    
+    HorizonConnectionPool local_pool;
+    bool own_pool = false;
+    if (!pool) {
+        cbm_horizon_pool_init(&local_pool, cbm_resolve_cache_dir());
+        pool = &local_pool;
+        own_pool = true;
+    }
+    
+    AdmissionGate gate;
+    cbm_admission_gate_init(&gate, srv ? cbm_mcp_server_session_project(srv) : "default", 1);
+    
+    HorizonConflictReport report;
+    int rc = cbm_admission_gate_check_concurrent_conflicts(&gate, pool, horizon_id, NULL, 0, &report);
+    
+    char resp[1024];
+    if (rc == CBM_ADMISSION_ERR_CONCURRENT_CONFLICT) {
+        snprintf(resp, sizeof(resp), "{\"isError\":true,\"code\":-32000,\"reason\":\"CONCURRENT_CONFLICT\",\"conflicting_horizon\":\"%s\",\"file_path\":\"%s\",\"is_semantic_only\":%s}", report.conflicting_horizon, report.conflicting_file, report.is_semantic_only ? "true" : "false");
+        free(horizon_id);
+        if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+        return cbm_mcp_text_result(resp, true);
+    } else if (rc == CBM_ADMISSION_OK) {
+        snprintf(resp, sizeof(resp), "{\"conflicts\":[],\"status\":\"CLEAN\"}");
+        free(horizon_id);
+        if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+        return cbm_mcp_text_result(resp, false);
+    } else {
+        snprintf(resp, sizeof(resp), "{\"isError\":true,\"code\":-32603,\"message\":\"conflict check failed\"}");
+        free(horizon_id);
+        if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+        return cbm_mcp_text_result(resp, true);
+    }
 }

@@ -7,6 +7,7 @@
 #include "../src/mcp/mcp.h"
 #include "../src/mcp/mcp_internal.h"
 #include "../src/admission/admission_gate.h"
+#include "../src/core/horizon_pool.h"
 #include "../src/union/mutation_gate.h"
 #include "../src/union/mutation_journal.h"
 #include "../src/foundation/compat.h"
@@ -35,6 +36,110 @@ static bool get_is_error(yyjson_doc *doc) {
         if (v_err_sc && yyjson_get_bool(v_err_sc)) return true;
     }
     return false;
+}
+
+static bool horizon_status_is(HorizonConnectionPool *pool, const char *horizon_id,
+                              const char *expected_status) {
+    sqlite3 *db = NULL;
+    if (!pool || !horizon_id || !expected_status ||
+        cbm_horizon_pool_get(pool, horizon_id, &db) != 0 || !db) {
+        return false;
+    }
+
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(db,
+                           "SELECT status FROM horizon_metadata WHERE horizon_id = ?",
+                           -1, &stmt, NULL) != SQLITE_OK) {
+        return false;
+    }
+    sqlite3_bind_text(stmt, 1, horizon_id, -1, SQLITE_STATIC);
+    bool matches = sqlite3_step(stmt) == SQLITE_ROW &&
+                   strcmp((const char *)sqlite3_column_text(stmt, 0), expected_status) == 0;
+    sqlite3_finalize(stmt);
+    return matches;
+}
+
+static bool promotion_request_returns_invalid_params(const char *args_json) {
+    char *response = handle_promote_horizon(NULL, args_json, NULL, NULL);
+    if (!response) return false;
+
+    yyjson_doc *doc = yyjson_read(response, strlen(response), 0);
+    bool invalid_params = false;
+    if (doc) {
+        yyjson_val *payload = get_payload(doc);
+        yyjson_val *code = payload ? yyjson_obj_get(payload, "code") : NULL;
+        invalid_params = get_is_error(doc) && code && yyjson_is_str(code) &&
+                         strcmp(yyjson_get_str(code), "INVALID_PARAMS") == 0;
+        yyjson_doc_free(doc);
+    }
+    free(response);
+    return invalid_params;
+}
+
+TEST(test_promotion_requires_anchors_and_persistent_base) {
+    char temp_dir[256];
+    snprintf(temp_dir, sizeof(temp_dir), "/tmp/cbm_promotion_preconditions_XXXXXX");
+    if (!cbm_mkdtemp(temp_dir)) FAIL("temporary directory creation failed");
+
+    HorizonConnectionPool pool;
+    if (cbm_horizon_pool_init(&pool, temp_dir) != 0) {
+        th_rmtree(temp_dir);
+        FAIL("horizon pool initialization failed");
+    }
+
+    AdmissionGate gate;
+    cbm_admission_gate_init(&gate, "test_project", 1);
+    char empty_anchor_id[CBM_HORIZON_ID_MAX] = {0};
+    char no_base_id[CBM_HORIZON_ID_MAX] = {0};
+    bool setup_ok = cbm_create_horizon(&pool, 1, "audit_empty_anchors", "0",
+                                       empty_anchor_id, sizeof(empty_anchor_id)) == 0 &&
+                    cbm_create_horizon(&pool, 1, "audit_no_base", "0",
+                                       no_base_id, sizeof(no_base_id)) == 0 &&
+                    th_write_file(TH_PATH(temp_dir, "target.c"),
+                                  "int target(void) { return 1; }\n") == 0;
+    if (!setup_ok) {
+        cbm_horizon_pool_close_all(&pool);
+        th_rmtree(temp_dir);
+        FAIL("promotion fixture setup failed");
+    }
+
+    char empty_args[256];
+    snprintf(empty_args, sizeof(empty_args),
+             "{\"horizon_id\":\"%s\",\"anchors\":[]}", empty_anchor_id);
+    char *empty_response = handle_promote_horizon(NULL, empty_args, &pool, &gate);
+    bool empty_rejected = false;
+    if (empty_response) {
+        yyjson_doc *doc = yyjson_read(empty_response, strlen(empty_response), 0);
+        if (doc) {
+            yyjson_val *payload = get_payload(doc);
+            yyjson_val *code = payload ? yyjson_obj_get(payload, "code") : NULL;
+            empty_rejected = get_is_error(doc) && code && yyjson_is_str(code) &&
+                             strcmp(yyjson_get_str(code), "INVALID_PARAMS") == 0;
+            yyjson_doc_free(doc);
+        }
+        free(empty_response);
+    }
+    bool empty_horizon_stays_active = horizon_status_is(&pool, empty_anchor_id, "ACTIVE");
+
+    TwoTierAnchor anchor = {0};
+    snprintf(anchor.file_path, sizeof(anchor.file_path), "target.c");
+    snprintf(anchor.symbol_name, sizeof(anchor.symbol_name), "target");
+    snprintf(anchor.expected_text, sizeof(anchor.expected_text),
+             "int target(void) { return 1; }");
+    anchor.byte_len = (uint32_t)strlen(anchor.expected_text);
+    char gate_error[256] = {0};
+    int base_missing_result = cbm_promote_horizon(&gate, &pool, temp_dir, no_base_id,
+                                                   &anchor, 1, gate_error, sizeof(gate_error));
+    bool no_base_horizon_stays_active = horizon_status_is(&pool, no_base_id, "ACTIVE");
+
+    cbm_horizon_pool_close_all(&pool);
+    th_rmtree(temp_dir);
+
+    ASSERT_TRUE(empty_rejected);
+    ASSERT_TRUE(empty_horizon_stays_active);
+    ASSERT_EQ(base_missing_result, CBM_ADMISSION_ERR_BASE_UNAVAILABLE);
+    ASSERT_TRUE(no_base_horizon_stays_active);
+    PASS();
 }
 
 TEST(test_union_session_open_requires_and_registers_exact_intent_scope) {
@@ -921,6 +1026,67 @@ TEST(test_w03_promote_blocked_without_session_and_invalidating) {
     PASS();
 }
 
+TEST(test_promote_rejects_invalid_anchor_fields_before_lookup) {
+    const char *invalid_anchors[] = {
+        "{\"file_path\":\"source.c\",\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":1000000,\"expected_text\":\"x\"}",
+        "{\"file_path\":\"source.c\",\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":2,\"expected_text\":\"x\"}",
+        "{\"file_path\":\"source.c\",\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":-1}",
+        "{\"file_path\":\"source.c\",\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":4294967297,\"expected_text\":\"x\"}",
+        "{\"file_path\":\"source.c\",\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":\"1\",\"expected_text\":\"x\"}",
+        "{\"file_path\":\"source.c\",\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":1.5,\"expected_text\":\"x\"}",
+        "{\"file_path\":7,\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":1,\"expected_text\":\"x\"}",
+        "{\"file_path\":\"source.c\",\"symbol_name\":true,\"byte_start\":0,\"byte_len\":1,\"expected_text\":\"x\"}",
+        "{\"file_path\":\"\",\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":1,\"expected_text\":\"x\"}",
+        "{\"file_path\":\"source.c\",\"symbol_name\":\"\",\"byte_start\":0,\"byte_len\":1,\"expected_text\":\"x\"}",
+        "{\"file_path\":\"source\\u0000.c\",\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":1,\"expected_text\":\"x\"}",
+        "{\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":1,\"expected_text\":\"x\"}",
+        "{\"file_path\":\"source.c\",\"byte_start\":0,\"byte_len\":1,\"expected_text\":\"x\"}"
+    };
+
+    for (size_t i = 0; i < sizeof(invalid_anchors) / sizeof(invalid_anchors[0]); i++) {
+        char args[1024];
+        int written = snprintf(args, sizeof(args),
+                               "{\"horizon_id\":\"audit_invalid_anchor_%zu\",\"anchors\":[%s]}",
+                               i, invalid_anchors[i]);
+        ASSERT(written > 0 && (size_t)written < sizeof(args));
+
+        char *response = handle_promote_horizon(NULL, args, NULL, NULL);
+        ASSERT_NOT_NULL(response);
+
+        yyjson_doc *doc = yyjson_read(response, strlen(response), 0);
+        ASSERT_NOT_NULL(doc);
+        ASSERT_TRUE(get_is_error(doc));
+        yyjson_val *payload = get_payload(doc);
+        ASSERT_NOT_NULL(payload);
+        yyjson_val *code = yyjson_obj_get(payload, "code");
+        ASSERT_NOT_NULL(code);
+        ASSERT_STR_EQ(yyjson_get_str(code), "INVALID_PARAMS");
+
+        yyjson_doc_free(doc);
+        free(response);
+    }
+
+    char oversized_path[513];
+    memset(oversized_path, 'p', sizeof(oversized_path) - 1);
+    oversized_path[sizeof(oversized_path) - 1] = '\0';
+    char oversized_symbol[257];
+    memset(oversized_symbol, 's', sizeof(oversized_symbol) - 1);
+    oversized_symbol[sizeof(oversized_symbol) - 1] = '\0';
+    char args[2048];
+    int written = snprintf(args, sizeof(args),
+                           "{\"horizon_id\":\"audit_long_path\",\"anchors\":[{\"file_path\":\"%s\",\"symbol_name\":\"target\",\"byte_start\":0,\"byte_len\":1,\"expected_text\":\"x\"}]}",
+                           oversized_path);
+    ASSERT(written > 0 && (size_t)written < sizeof(args));
+    ASSERT_TRUE(promotion_request_returns_invalid_params(args));
+
+    written = snprintf(args, sizeof(args),
+                       "{\"horizon_id\":\"audit_long_symbol\",\"anchors\":[{\"file_path\":\"source.c\",\"symbol_name\":\"%s\",\"byte_start\":0,\"byte_len\":1,\"expected_text\":\"x\"}]}",
+                       oversized_symbol);
+    ASSERT(written > 0 && (size_t)written < sizeof(args));
+    ASSERT_TRUE(promotion_request_returns_invalid_params(args));
+    PASS();
+}
+
 TEST(test_w05_founding_decline_and_metadata_preservation) {
     cbm_mcp_server_t *srv = cbm_mcp_server_new(NULL);
     ASSERT(srv != NULL);
@@ -1768,6 +1934,8 @@ SUITE(union_workflow_e2e) {
     RUN_TEST(test_w03_promote_blocked_by_active_contest);
     RUN_TEST(test_w03_promote_blocked_by_gateway_refusal);
     RUN_TEST(test_w03_promote_blocked_without_session_and_invalidating);
+    RUN_TEST(test_promotion_requires_anchors_and_persistent_base);
+    RUN_TEST(test_promote_rejects_invalid_anchor_fields_before_lookup);
     RUN_TEST(test_w04_routing_and_provenance_validation);
     RUN_TEST(test_w05_territory_and_founding);
     RUN_TEST(test_w05_founding_decline_and_metadata_preservation);
