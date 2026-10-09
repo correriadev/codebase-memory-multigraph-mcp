@@ -9,11 +9,11 @@
     "userProvided": false
   },
   "cycleCounter": {
-    "completedCycles": 1,
+    "completedCycles": 2,
     "lastAutoTuningAt": null
   },
-  "currentPhase": "HALTED",
-  "activeFeatureId": null,
+  "currentPhase": "PHASE_B",
+  "activeFeatureId": "F003",
   "steeringRules": {
     "user": [],
     "bootstrap": [],

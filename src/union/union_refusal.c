@@ -45,6 +45,9 @@ static const CbmRefusalDef k_refusal_defs[CBM_REFUSAL_CODE_COUNT] = {
     {CBM_REFUSAL_THEME_VERSION_IMMUTABLE, "THEME_VERSION_IMMUTABLE", "publish a new version for changed thematic content; an existing version is immutable"},
     {CBM_REFUSAL_BINDING_PERSISTENCE_FAILED, "BINDING_PERSISTENCE_FAILED", "binding write failed; ledger change was rolled back, restore storage before retry"},
     {CBM_REFUSAL_CONCURRENT_CONFLICT, "CONCURRENT_CONFLICT", "resolve concurrent file or semantic collision before promoting"},
+    {CBM_REFUSAL_CONSOLIDATION_FAILED, "CONSOLIDATION_FAILED", "consolidation aborted and rolled back; retry promotion after verifying graph invariants"},
+    {CBM_REFUSAL_COMMIT_FAILED, "COMMIT_FAILED", "base database commit failed; retry promotion after resolving database lock or I/O failure"},
+    {CBM_REFUSAL_SESSION_REQUIRED, "SESSION_REQUIRED", "register or activate a Union session before requesting horizon promotion"},
 };
 
 static const CbmRefusalDef *find_def(CbmRefusalCode code) {
@@ -57,6 +60,25 @@ static const CbmRefusalDef *find_def(CbmRefusalCode code) {
 const char *cbm_refusal_code_string(CbmRefusalCode code) {
     const CbmRefusalDef *def = find_def(code);
     return def ? def->name : "UNKNOWN";
+}
+
+const char *union_refusal_code_to_string(int code) {
+    if (code == CBM_REFUSAL_CONSOLIDATION_FAILED || code == -7) {
+        return "CONSOLIDATION_FAILED";
+    }
+    if (code == CBM_REFUSAL_COMMIT_FAILED || code == -8) {
+        return "COMMIT_FAILED";
+    }
+    if (code == CBM_REFUSAL_SESSION_REQUIRED || code == -9) {
+        return "SESSION_REQUIRED";
+    }
+    if (code == 29 || code == CBM_REFUSAL_CONCURRENT_CONFLICT || code == -6) {
+        return "CONCURRENT_CONFLICT";
+    }
+    if (code > 0 && code < CBM_REFUSAL_CODE_COUNT) {
+        return cbm_refusal_code_string((CbmRefusalCode)code);
+    }
+    return "UNKNOWN";
 }
 
 CbmRefusalCode cbm_refusal_code_from_string(const char *name) {

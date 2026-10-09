@@ -17,6 +17,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# Ensure legacy promotion override for F001 test suite compatibility
+os.environ.setdefault("CBM_ALLOW_LEGACY_PROMOTION", "1")
+
 def is_pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
@@ -554,17 +557,23 @@ class TestCrossHorizonAdmissionScenarios(unittest.TestCase):
         self.assertIn('strstr(file_path_str, "..")', handler_c)
 
     def test_vuln03_capacity_greater_16(self):
-        """VULN-03: capacity > 16 horizons"""
+        """VULN-03: capacity > 16 horizons (dynamic allocation without fixed 16/128 buffer)"""
         gate_c = (REPO_ROOT / "src" / "admission" / "admission_gate.c").read_text(encoding="utf-8")
-        self.assertIn("liveness[128]", gate_c)
+        pool_c = (REPO_ROOT / "src" / "core" / "horizon_pool.c").read_text(encoding="utf-8")
         self.assertNotIn("liveness[16]", gate_c)
+        self.assertNotIn("liveness[128]", gate_c)
+        self.assertIn("ActiveHorizonLiveness *liveness = NULL;", gate_c)
+        self.assertIn("cbm_horizon_pool_get_active_alive", gate_c)
+        self.assertIn("realloc", pool_c)
 
     def test_tl01_promotion_inside_transaction(self):
-        """TL-01: promotion state transition inside transaction"""
+        """TL-01: two-phase reconciled promotion order (base_db COMMIT before horizon state)"""
         gate_c = (REPO_ROOT / "src" / "admission" / "admission_gate.c").read_text(encoding="utf-8")
-        idx_promote = gate_c.find("cbm_promote_horizon_state")
-        idx_commit = gate_c.find("COMMIT;", idx_promote)
-        self.assertGreater(idx_commit, idx_promote)
+        idx_commit = gate_c.find('sqlite3_exec(gate->base_db, "COMMIT;", NULL, NULL, NULL)')
+        idx_promote = gate_c.find("cbm_promote_horizon_state", idx_commit)
+        self.assertTrue(idx_commit > 0, "Phase 1 COMMIT; must exist in cbm_promote_horizon")
+        self.assertTrue(idx_promote > 0, "Phase 2 cbm_promote_horizon_state must execute after COMMIT")
+        self.assertLess(idx_commit, idx_promote)
 
     def test_edge01_pid_update_on_conflict(self):
         """EDGE-01: PID update on conflict"""

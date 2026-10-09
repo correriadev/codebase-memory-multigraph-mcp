@@ -116,6 +116,7 @@ char *handle_list_horizons(cbm_mcp_server_t *srv, const char *args_json, Horizon
 char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool, AdmissionGate *gate);
 char *handle_sync_horizon_spec(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 char *handle_validate_scope_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
+char *handle_check_horizon_conflicts(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 
 char *handle_search_graph(cbm_mcp_server_t *srv, const char *args);
 char *handle_query_graph(cbm_mcp_server_t *srv, const char *args);

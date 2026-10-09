@@ -202,10 +202,12 @@ int cbm_traverse_symbolic_bfs(sqlite3 *db, const char *start_uri, bool reverse, 
         q_head++;
 
         uint64_t hash = cbm_fnv1a_64(current, strlen(current));
-        if (cbm_visited_contains(visited, hash)) {
+        if (cbm_visited_contains_uri(visited, hash, current)) {
             continue;
         }
-        cbm_visited_add(visited, hash);
+        if (!cbm_visited_add_uri(visited, hash, current)) {
+            break;
+        }
 
         if (*out_count < max_out) {
             snprintf(out_visited_uris[*out_count], CBM_URI_MAX_LEN, "%s", current);
@@ -226,7 +228,7 @@ int cbm_traverse_symbolic_bfs(sqlite3 *db, const char *start_uri, bool reverse, 
                 const char *next_uri = (const char *)sqlite3_column_text(stmt, 0);
                 if (!next_uri) continue;
                 uint64_t nhash = cbm_fnv1a_64(next_uri, strlen(next_uri));
-                if (!cbm_visited_contains(visited, nhash)) {
+                if (!cbm_visited_contains_uri(visited, nhash, next_uri)) {
                     if (q_tail >= q_cap) {
                         size_t new_cap = q_cap * 2;
                         char (*new_q)[CBM_URI_MAX_LEN] = (char (*)[CBM_URI_MAX_LEN])realloc(queue, new_cap * CBM_URI_MAX_LEN);

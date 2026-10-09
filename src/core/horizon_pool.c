@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include "../foundation/compat_fs.h"
 #include "../foundation/log.h"
@@ -57,6 +58,10 @@ static const char *HORIZON_DDL =
     "    created_at INTEGER NOT NULL,\n"
     "    last_heartbeat INTEGER NOT NULL,\n"
     "    based_on_seq TEXT NOT NULL DEFAULT '0'\n"
+    ");\n"
+    "CREATE TABLE IF NOT EXISTS horizon_context (\n"
+    "    singleton INTEGER PRIMARY KEY CHECK(singleton=1),\n"
+    "    project TEXT NOT NULL\n"
     ");\n"
     "CREATE TABLE IF NOT EXISTS symbolic_nodes (\n"
     "    cbm_uri TEXT PRIMARY KEY,\n"
@@ -128,6 +133,10 @@ static int make_horizon_path(const HorizonConnectionPool *pool, const char *hori
         snprintf(out_path, out_sz, "horizons/%s.db", horizon_id);
     }
     return 0;
+}
+
+int cbm_horizon_pool_get_path(const HorizonConnectionPool *pool, const char *horizon_id, char *out_path, size_t out_sz) {
+    return make_horizon_path(pool, horizon_id, out_path, out_sz);
 }
 
 static void ensure_directories(const char *path) {
@@ -319,17 +328,17 @@ int cbm_horizon_set_status(HorizonConnectionPool *pool, const char *horizon_id, 
     else if (status == HORIZON_DISCARDED) status_str = "DISCARDED";
 
     sqlite3_stmt *stmt = NULL;
-    const char *upsert_sql =
-        "INSERT INTO horizon_metadata (horizon_id, client_pid, status, created_at, last_heartbeat) "
-        "VALUES (?, 0, ?, strftime('%s','now'), strftime('%s','now')) "
-        "ON CONFLICT(horizon_id) DO UPDATE SET status = excluded.status, last_heartbeat = excluded.last_heartbeat;";
-    rc = sqlite3_prepare_v2(db, upsert_sql, -1, &stmt, NULL);
+    const char *upd_sql =
+        "UPDATE horizon_metadata SET status = ?, last_heartbeat = strftime('%s','now') "
+        "WHERE horizon_id = ?;";
+    rc = sqlite3_prepare_v2(db, upd_sql, -1, &stmt, NULL);
     if (rc == SQLITE_OK) {
-        sqlite3_bind_text(stmt, 1, horizon_id, -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 2, status_str, -1, SQLITE_STATIC);
-        sqlite3_step(stmt);
+        sqlite3_bind_text(stmt, 1, status_str, -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 2, horizon_id, -1, SQLITE_STATIC);
+        int step_rc = sqlite3_step(stmt);
+        int changes = sqlite3_changes(db);
         sqlite3_finalize(stmt);
-        return 0;
+        return (step_rc == SQLITE_DONE && changes == 1) ? 0 : -1;
     }
     return -1;
 }
@@ -373,8 +382,28 @@ int cbm_discard_horizon(HorizonConnectionPool *pool, const char *horizon_id) {
     return 0;
 }
 
-size_t cbm_horizon_pool_get_active_alive(HorizonConnectionPool *pool, const char *project_id, ActiveHorizonLiveness *out_active, size_t max_out) {
-    if (!pool || !project_id || !out_active || max_out == 0) return 0;
+static cbm_stat_hook_fn s_stat_hook = NULL;
+
+void cbm_horizon_pool_set_stat_hook(cbm_stat_hook_fn hook) {
+    s_stat_hook = hook;
+}
+
+int cbm_horizon_pool_get_active_alive(
+    HorizonConnectionPool *pool,
+    const char *project_id,
+    ActiveHorizonLiveness **out_active,
+    size_t *out_count,
+    char *out_err,
+    size_t err_sz)
+{
+    if (out_err && err_sz > 0) out_err[0] = '\0';
+    if (out_count) *out_count = 0;
+    if (out_active) *out_active = NULL;
+
+    if (!pool || !project_id || !out_active || !out_count) {
+        if (out_err && err_sz > 0) snprintf(out_err, err_sz, "invalid params to horizon enumeration");
+        return -1;
+    }
 
     char dir_path[CBM_PATH_MAX];
     if (pool->base_dir[0]) {
@@ -383,12 +412,46 @@ size_t cbm_horizon_pool_get_active_alive(HorizonConnectionPool *pool, const char
         snprintf(dir_path, sizeof(dir_path), "horizons");
     }
 
-    cbm_dir_t *d = cbm_opendir(dir_path);
-    if (!d) return 0;
+    struct stat st;
+    int stat_rc = s_stat_hook ? s_stat_hook(dir_path, &st) : stat(dir_path, &st);
+    if (stat_rc != 0) {
+        if (errno == ENOENT) {
+            /* Directory does not exist yet; valid empty set of active horizons */
+            *out_active = NULL;
+            *out_count = 0;
+            return 0;
+        }
+        if (out_err && err_sz > 0) {
+            snprintf(out_err, err_sz, "failed to access horizons path %s: %s (errno=%d)",
+                     dir_path, strerror(errno), errno);
+        }
+        return -1;
+    }
 
+    if (!S_ISDIR(st.st_mode)) {
+        if (out_err && err_sz > 0) {
+            snprintf(out_err, err_sz, "horizons path %s is not a directory", dir_path);
+        }
+        return -1;
+    }
+
+    cbm_dir_t *d = cbm_opendir(dir_path);
+    if (!d) {
+        if (out_err && err_sz > 0) snprintf(out_err, err_sz, "failed to open directory %s", dir_path);
+        return -1;
+    }
+
+    size_t capacity = 16;
     size_t count = 0;
+    ActiveHorizonLiveness *items = (ActiveHorizonLiveness *)calloc(capacity, sizeof(ActiveHorizonLiveness));
+    if (!items) {
+        cbm_closedir(d);
+        if (out_err && err_sz > 0) snprintf(out_err, err_sz, "out of memory allocating liveness buffer");
+        return -1;
+    }
+
     cbm_dirent_t *ent;
-    while ((ent = cbm_readdir(d)) != NULL && count < max_out) {
+    while ((ent = cbm_readdir(d)) != NULL) {
         size_t len = strlen(ent->name);
         if (len < 4 || strcmp(ent->name + len - 3, ".db") != 0) continue;
 
@@ -396,34 +459,85 @@ size_t cbm_horizon_pool_get_active_alive(HorizonConnectionPool *pool, const char
         snprintf(horizon_id, sizeof(horizon_id), "%.*s", (int)(len - 3), ent->name);
 
         sqlite3 *db = NULL;
-        if (cbm_horizon_pool_get(pool, horizon_id, &db) != 0 || !db) continue;
-
-        sqlite3_stmt *stmt = NULL;
-        bool matches_project = false;
-        if (sqlite3_prepare_v2(db, "SELECT project FROM horizon_context WHERE singleton=1", -1, &stmt, NULL) == SQLITE_OK) {
-            if (sqlite3_step(stmt) == SQLITE_ROW) {
-                const char *proj = (const char *)sqlite3_column_text(stmt, 0);
-                if (proj && strcmp(proj, project_id) == 0) {
-                    matches_project = true;
-                }
-            }
-            sqlite3_finalize(stmt);
+        if (cbm_horizon_pool_get(pool, horizon_id, &db) != 0 || !db) {
+            cbm_closedir(d);
+            free(items);
+            if (out_err && err_sz > 0) snprintf(out_err, err_sz, "failed to open horizon db %s", horizon_id);
+            return -1;
         }
+
+        /* 1. Check project match in horizon_context */
+        sqlite3_stmt *stmt = NULL;
+        int prep_rc = sqlite3_prepare_v2(db, "SELECT project FROM horizon_context WHERE singleton=1", -1, &stmt, NULL);
+        if (prep_rc != SQLITE_OK) {
+            char safe_err[256] = {0};
+            snprintf(safe_err, sizeof(safe_err), "%s", sqlite3_errmsg(db));
+            cbm_closedir(d);
+            free(items);
+            if (out_err && err_sz > 0) {
+                snprintf(out_err, err_sz, "failed to query horizon_context in %s: %s", horizon_id, safe_err);
+            }
+            return -1;
+        }
+
+        bool matches_project = false;
+        int step_rc = sqlite3_step(stmt);
+        if (step_rc == SQLITE_ROW) {
+            const char *proj = (const char *)sqlite3_column_text(stmt, 0);
+            if (proj && strcmp(proj, project_id) == 0) {
+                matches_project = true;
+            }
+        } else if (step_rc != SQLITE_DONE) {
+            char safe_err[256] = {0};
+            snprintf(safe_err, sizeof(safe_err), "%s", sqlite3_errmsg(db));
+            sqlite3_finalize(stmt);
+            cbm_closedir(d);
+            free(items);
+            if (out_err && err_sz > 0) {
+                snprintf(out_err, err_sz, "failed to read horizon_context in %s: %s", horizon_id, safe_err);
+            }
+            return -1;
+        }
+        sqlite3_finalize(stmt);
+        stmt = NULL;
 
         if (!matches_project) continue;
 
+        /* 2. Check metadata status and liveness */
         uint32_t pid = 0;
         uint64_t last_beat = 0;
         char status[32] = {0};
-        if (sqlite3_prepare_v2(db, "SELECT client_pid, last_heartbeat, status FROM horizon_metadata", -1, &stmt, NULL) == SQLITE_OK) {
-            if (sqlite3_step(stmt) == SQLITE_ROW) {
-                pid = (uint32_t)sqlite3_column_int64(stmt, 0);
-                last_beat = (uint64_t)sqlite3_column_int64(stmt, 1);
-                const char *st = (const char *)sqlite3_column_text(stmt, 2);
-                if (st) snprintf(status, sizeof(status), "%s", st);
+        prep_rc = sqlite3_prepare_v2(db, "SELECT client_pid, last_heartbeat, status FROM horizon_metadata", -1, &stmt, NULL);
+        if (prep_rc != SQLITE_OK) {
+            char safe_err[256] = {0};
+            snprintf(safe_err, sizeof(safe_err), "%s", sqlite3_errmsg(db));
+            cbm_closedir(d);
+            free(items);
+            if (out_err && err_sz > 0) {
+                snprintf(out_err, err_sz, "failed to query horizon_metadata in %s: %s", horizon_id, safe_err);
             }
-            sqlite3_finalize(stmt);
+            return -1;
         }
+
+        step_rc = sqlite3_step(stmt);
+        if (step_rc == SQLITE_ROW) {
+            pid = (uint32_t)sqlite3_column_int64(stmt, 0);
+            last_beat = (uint64_t)sqlite3_column_int64(stmt, 1);
+            const char *st = (const char *)sqlite3_column_text(stmt, 2);
+            if (st) snprintf(status, sizeof(status), "%s", st);
+        } else if (step_rc != SQLITE_DONE) {
+            char safe_err[256] = {0};
+            snprintf(safe_err, sizeof(safe_err), "%s", sqlite3_errmsg(db));
+            sqlite3_finalize(stmt);
+            cbm_closedir(d);
+            free(items);
+            if (out_err && err_sz > 0) {
+                snprintf(out_err, err_sz, "failed to read horizon_metadata in %s: %s", horizon_id, safe_err);
+            }
+            return -1;
+        }
+        sqlite3_finalize(stmt);
+        stmt = NULL;
 
         if (strcmp(status, "ACTIVE") != 0) continue;
 
@@ -436,7 +550,20 @@ size_t cbm_horizon_pool_get_active_alive(HorizonConnectionPool *pool, const char
             continue;
         }
 
-        ActiveHorizonLiveness *liveness = &out_active[count++];
+        if (count >= capacity) {
+            size_t new_cap = capacity * 2;
+            ActiveHorizonLiveness *new_items = (ActiveHorizonLiveness *)realloc(items, new_cap * sizeof(ActiveHorizonLiveness));
+            if (!new_items) {
+                cbm_closedir(d);
+                free(items);
+                if (out_err && err_sz > 0) snprintf(out_err, err_sz, "out of memory reallocating liveness buffer");
+                return -1;
+            }
+            items = new_items;
+            capacity = new_cap;
+        }
+
+        ActiveHorizonLiveness *liveness = &items[count++];
         snprintf(liveness->horizon_id, sizeof(liveness->horizon_id), "%s", horizon_id);
         liveness->owner_pid = pid;
         liveness->last_beat_epoch = last_beat;
@@ -444,5 +571,7 @@ size_t cbm_horizon_pool_get_active_alive(HorizonConnectionPool *pool, const char
     }
 
     cbm_closedir(d);
-    return count;
+    *out_active = items;
+    *out_count = count;
+    return 0;
 }

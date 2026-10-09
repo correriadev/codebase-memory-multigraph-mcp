@@ -68,7 +68,17 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
 
     const CbmSessionHorizon *sh = sessions ? cbm_session_get(sessions, horizon_id) : NULL;
     if (!sh) {
-        cbm_log(CBM_LOG_INFO, "union.promotion_bypass_session", "horizon_id", horizon_id, "reason", "legacy_or_federation_call", NULL);
+        const char *legacy = getenv("CBM_ALLOW_LEGACY_PROMOTION");
+        if (legacy && strcmp(legacy, "1") == 0) {
+            cbm_log(CBM_LOG_WARN, "union.promotion_legacy_override", "horizon_id", horizon_id, "warning", "legacy_promotion_allowed_via_env", NULL);
+        } else {
+            cbm_refusal_emit(CBM_REFUSAL_SESSION_REQUIRED, horizon_id, "promotion blocked: active Union session required");
+            char err_resp[512];
+            snprintf(err_resp, sizeof(err_resp),
+                     "{\"isError\":true,\"code\":\"SESSION_REQUIRED\",\"message\":\"Promotion requires an active Union session. Set CBM_ALLOW_LEGACY_PROMOTION=1 for legacy override.\"}");
+            free(horizon_id);
+            return cbm_mcp_text_result(err_resp, true);
+        }
     } else {
         if (sh->refusals > 0) {
             cbm_refusal_emit(CBM_REFUSAL_SCOPE_EXCEEDED, horizon_id, "promotion blocked by uncompensated gateway refusal");
@@ -210,7 +220,16 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
     char err_buf[512] = {0};
     char *arg_repo = cbm_mcp_get_string_arg(args_json, "repo_path");
     if (!arg_repo) arg_repo = cbm_mcp_get_string_arg(args_json, "repoPath");
-    if (!arg_repo) arg_repo = cbm_mcp_get_string_arg(args_json, "project");
+    if (!arg_repo) {
+        char *fallback_proj = cbm_mcp_get_string_arg(args_json, "project");
+        if (fallback_proj) {
+            if (cbm_is_dir(fallback_proj)) {
+                arg_repo = fallback_proj;
+            } else {
+                free(fallback_proj);
+            }
+        }
+    }
 
     char canonical_root[1024] = {0};
     const char *repo_root = NULL;
@@ -234,6 +253,9 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
         free(arg_repo);
     } else {
         repo_root = cbm_mcp_server_session_root(srv);
+        if (!repo_root || !repo_root[0]) {
+            repo_root = ".";
+        }
     }
 
     sqlite3 *owned_base_db = NULL;
@@ -247,6 +269,18 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
     const char *proj_name = arg_project;
     if (!proj_name && srv) {
         proj_name = cbm_mcp_server_session_project(srv);
+    }
+
+    if (proj_name && proj_name[0]) {
+        if (strstr(proj_name, "..") || strchr(proj_name, '/') || strchr(proj_name, '\\')) {
+            if (arg_project) free(arg_project);
+            if (anchors) free(anchors);
+            if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+            free(horizon_id);
+            return cbm_mcp_text_result(
+                "{\"isError\":true,\"code\":\"INVALID_PARAMS\",\"message\":\"Path traversal detected in project\"}",
+                true);
+        }
     }
 
     if (gate && proj_name && proj_name[0]) {
@@ -286,6 +320,10 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
         else if (rc == CBM_ADMISSION_ERR_HORIZON_NOT_FOUND) err_code = "HORIZON_NOT_FOUND";
         else if (rc == CBM_ADMISSION_ERR_INVALID_PARAMS) err_code = "INVALID_PARAMS";
         else if (rc == CBM_ADMISSION_ERR_BASE_UNAVAILABLE) err_code = "BASE_UNAVAILABLE";
+        else if (rc == CBM_ADMISSION_ERR_CONSOLIDATION_FAILED) err_code = "CONSOLIDATION_FAILED";
+        else if (rc == CBM_ADMISSION_ERR_COMMIT_FAILED) err_code = "COMMIT_FAILED";
+        else if (rc == CBM_ADMISSION_ERR_SESSION_REQUIRED) err_code = "SESSION_REQUIRED";
+        else if (rc == CBM_ADMISSION_ERR_STATE_TRANSITION_FAILED) err_code = "RECONCILIATION_REQUIRED";
 
         char err_resp[1024];
         snprintf(err_resp, sizeof(err_resp),

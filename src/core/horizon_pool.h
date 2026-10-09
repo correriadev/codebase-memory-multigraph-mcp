@@ -57,6 +57,9 @@ int cbm_create_horizon(HorizonConnectionPool *pool, uint32_t client_pid, const c
 /* Transparently fetches or reopens an SQLite handle with LRU eviction */
 int cbm_horizon_pool_get(HorizonConnectionPool *pool, const char *horizon_id, sqlite3 **out_db);
 
+/* Resolves the on-disk file path for a horizon id */
+int cbm_horizon_pool_get_path(const HorizonConnectionPool *pool, const char *horizon_id, char *out_path, size_t out_sz);
+
 /* Persist an explicit project binding; refuses reassignment to another project. */
 int cbm_horizon_bind_project(sqlite3 *db, const char *project);
 
@@ -67,16 +70,25 @@ typedef struct ActiveHorizonLiveness {
     bool is_alive;
 } ActiveHorizonLiveness;
 
-/* Returns count of active alive horizons for the given project. */
-size_t cbm_horizon_pool_get_active_alive(HorizonConnectionPool *pool, const char *project_id, ActiveHorizonLiveness *out_active, size_t max_out);
+/* Enumerates active alive horizons for the given project without arbitrary truncation.
+ * On success returns 0, *out_active is dynamically allocated (caller frees), and *out_count is populated.
+ * On enumeration failure returns -1 and writes diagnostic to out_err. */
+int cbm_horizon_pool_get_active_alive(
+    HorizonConnectionPool *pool,
+    const char *project_id,
+    ActiveHorizonLiveness **out_active,
+    size_t *out_count,
+    char *out_err,
+    size_t err_sz);
 
-/* Transition horizon status */
+/* Promotion / Discard status transitions */
 int cbm_horizon_set_status(HorizonConnectionPool *pool, const char *horizon_id, HorizonStatus status);
-
-/* Discard an ephemeral horizon and clean up files */
 int cbm_discard_horizon(HorizonConnectionPool *pool, const char *horizon_id);
-
-/* Promote horizon state */
 int cbm_promote_horizon_state(HorizonConnectionPool *pool, const char *horizon_id);
+
+/* Testing / Fault Injection hook for stat() failures */
+struct stat;
+typedef int (*cbm_stat_hook_fn)(const char *path, struct stat *buf);
+void cbm_horizon_pool_set_stat_hook(cbm_stat_hook_fn hook);
 
 #endif /* CBM_HORIZON_POOL_H */

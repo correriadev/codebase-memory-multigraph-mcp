@@ -13,6 +13,10 @@
 #define CBM_ADMISSION_ERR_INVALID_PARAMS -4
 #define CBM_ADMISSION_ERR_BASE_UNAVAILABLE -5
 #define CBM_ADMISSION_ERR_CONCURRENT_CONFLICT -6
+#define CBM_ADMISSION_ERR_CONSOLIDATION_FAILED -7
+#define CBM_ADMISSION_ERR_COMMIT_FAILED -8
+#define CBM_ADMISSION_ERR_SESSION_REQUIRED -9
+#define CBM_ADMISSION_ERR_STATE_TRANSITION_FAILED -11
 
 typedef struct HorizonConflictReport {
     char conflicting_horizon[64];
@@ -53,4 +57,16 @@ int cbm_promote_horizon(AdmissionGate *gate,
                         char *out_error,
                         size_t err_sz);
 
+/* Enforce Union session requirement or environment override */
+int cbm_enforce_union_session(const char *session_id, char *out_err, size_t err_sz);
+
+/* Strict path match: normalized character-by-character equality, bilateral confinement, no traversal */
+bool cbm_paths_match_strict(const char *pa, const char *pb);
+
+/* Strict anchor matching: complete (repo, path, symbol) identity, URI fragment primacy */
+int cbm_find_matching_anchor(const char *uri, const char *lbl,
+                             const char *expected_repo,
+                             const TwoTierAnchor *anchors, size_t anchor_count);
+
 #endif /* CBM_ADMISSION_GATE_H */
+

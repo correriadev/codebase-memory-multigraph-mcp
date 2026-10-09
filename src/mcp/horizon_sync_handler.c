@@ -4,6 +4,7 @@
 #include "../core/horizon_pool.h"
 #include "../core/horizon_spec_parser.h"
 #include "../admission/scope_validator.h"
+#include "../admission/admission_gate.h"
 #include "../store/store.h"
 #include "../foundation/platform.h"
 #include <yyjson/yyjson.h>

@@ -11,6 +11,7 @@ extern "C" {
 
 char *handle_sync_horizon_spec(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 char *handle_validate_scope_horizon(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
+char *handle_check_horizon_conflicts(cbm_mcp_server_t *srv, const char *args_json, HorizonConnectionPool *pool);
 
 #ifdef __cplusplus
 }

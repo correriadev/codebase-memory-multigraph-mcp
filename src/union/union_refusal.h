@@ -47,12 +47,26 @@ typedef enum {
     CBM_REFUSAL_THEME_VERSION_IMMUTABLE = 27,
     CBM_REFUSAL_BINDING_PERSISTENCE_FAILED = 28,
     CBM_REFUSAL_CONCURRENT_CONFLICT = 29,
-    CBM_REFUSAL_CODE_COUNT = 30
+    /* Refusal Taxonomy: CBM_REFUSAL_CONSOLIDATION_FAILED = 30 */
+    CBM_REFUSAL_CONSOLIDATION_FAILED = 30,
+    /* Refusal Taxonomy: CBM_REFUSAL_COMMIT_FAILED = 31 */
+    CBM_REFUSAL_COMMIT_FAILED = 31,
+    /* Refusal Taxonomy: CBM_REFUSAL_SESSION_REQUIRED = 32 */
+    CBM_REFUSAL_SESSION_REQUIRED = 32,
+    CBM_REFUSAL_CODE_COUNT = 33
 } CbmRefusalCode;
+
+/* F002 Refusal Taxonomy Aliases */
+#define CBM_REFUSAL_CONSOLIDATION_FAILED_TAXONOMY 30
+#define CBM_REFUSAL_COMMIT_FAILED_TAXONOMY 31
+#define CBM_REFUSAL_SESSION_REQUIRED_TAXONOMY 32
 
 /* Canonical machine-readable code string ("ANCHOR_NOT_FOUND", ...).
  * Never NULL for a valid code; "UNKNOWN" otherwise. */
 const char *cbm_refusal_code_string(CbmRefusalCode code);
+
+/* Maps admission error code or refusal code to taxonomy string */
+const char *union_refusal_code_to_string(int code);
 
 /* Inverse lookup. CBM_REFUSAL_OK when the string is not in the taxonomy —
  * unknown free-text refusals are a conformance failure, not a code. */
