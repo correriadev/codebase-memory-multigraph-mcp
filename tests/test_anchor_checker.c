@@ -1498,6 +1498,15 @@ TEST(test_promote_horizon_conflict_semantic_step_failure_blocks_promotion_c) {
     PASS();
 }
 
+static int inject_stat_not_dir_cb(const char *path, struct stat *buf) {
+    (void)path;
+    if (buf) {
+        memset(buf, 0, sizeof(*buf));
+        buf->st_mode = S_IFREG; /* Regular file triggers !S_ISDIR(st.st_mode) */
+    }
+    return 0;
+}
+
 static int inject_stat_eacces_cb(const char *path, struct stat *buf) {
     (void)path;
     (void)buf;
@@ -1558,20 +1567,60 @@ TEST(test_promote_horizon_conflict_stat_failure_blocks_promotion_c) {
     ASSERT_EQ(no_count, 0);
     ASSERT_TRUE(no_liveness == NULL);
 
-    /*    b) S_ISDIR failure: horizons is a regular file instead of a directory (return -1) */
-    char corrupt_base[512];
-    snprintf(corrupt_base, sizeof(corrupt_base), "%s/corrupt_base", temp_dir);
-    cbm_mkdir(corrupt_base);
-    th_write_file(TH_PATH(corrupt_base, "horizons"), "regular_file_blocking_stat_directory");
-
-    HorizonConnectionPool file_pool;
-    cbm_horizon_pool_init(&file_pool, corrupt_base);
+    /*    b) S_ISDIR failure: stat returns success but st_mode is S_IFREG, triggering !S_ISDIR */
+    cbm_horizon_pool_set_stat_hook(inject_stat_not_dir_cb);
     ActiveHorizonLiveness *fl_liveness = NULL;
     size_t fl_count = 999;
     char fl_err[256] = {0};
-    ASSERT_EQ(cbm_horizon_pool_get_active_alive(&file_pool, "my_proj", &fl_liveness, &fl_count, fl_err, sizeof(fl_err)), -1);
+    ASSERT_EQ(cbm_horizon_pool_get_active_alive(&pool, "my_proj", &fl_liveness, &fl_count, fl_err, sizeof(fl_err)), -1);
     ASSERT_TRUE(strstr(fl_err, "not a directory") != NULL);
     ASSERT_TRUE(fl_liveness == NULL);
+
+    /*    b.2) End-to-end promotion integration: S_ISDIR failure during cbm_promote_horizon */
+    char err_buf[512];
+    int rc;
+    sqlite3_stmt *stmt = NULL;
+    sqlite3_stmt *hstmt = NULL;
+    char h_path[512];
+    sqlite3 *chk_hdb = NULL;
+
+    memset(err_buf, 0, sizeof(err_buf));
+    rc = cbm_promote_horizon(&gate, &pool, temp_dir, h_cand, anchors, 2, err_buf, sizeof(err_buf));
+    ASSERT_EQ(rc, CBM_ADMISSION_ERR_CONSOLIDATION_FAILED);
+    ASSERT_TRUE(strstr(err_buf, "CONSOLIDATION_FAILED") != NULL);
+    ASSERT_TRUE(strstr(err_buf, "not a directory") != NULL);
+
+    /* Verify isolated, complete 4-dimension state preservation + status ACTIVE */
+    ASSERT_EQ(sqlite3_prepare_v2(base_db, "SELECT COUNT(*) FROM nodes;", -1, &stmt, NULL), SQLITE_OK);
+    ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
+    ASSERT_EQ(sqlite3_column_int(stmt, 0), 0);
+    sqlite3_finalize(stmt);
+    stmt = NULL;
+
+    ASSERT_EQ(sqlite3_prepare_v2(base_db, "SELECT COUNT(*) FROM virtual_edges;", -1, &stmt, NULL), SQLITE_OK);
+    ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
+    ASSERT_EQ(sqlite3_column_int(stmt, 0), 0);
+    sqlite3_finalize(stmt);
+    stmt = NULL;
+
+    ASSERT_EQ(sqlite3_prepare_v2(base_db, "SELECT COUNT(*) FROM generation_log;", -1, &stmt, NULL), SQLITE_OK);
+    ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
+    ASSERT_EQ(sqlite3_column_int(stmt, 0), 0);
+    sqlite3_finalize(stmt);
+    stmt = NULL;
+
+    snprintf(h_path, sizeof(h_path), "%s/horizons/%s.db", temp_dir, h_cand);
+    ASSERT_EQ(sqlite3_open(h_path, &chk_hdb), SQLITE_OK);
+    ASSERT_EQ(sqlite3_prepare_v2(chk_hdb, "SELECT status FROM horizon_metadata WHERE horizon_id = ? LIMIT 1;", -1, &hstmt, NULL), SQLITE_OK);
+    sqlite3_bind_text(hstmt, 1, h_cand, -1, SQLITE_STATIC);
+    ASSERT_EQ(sqlite3_step(hstmt), SQLITE_ROW);
+    ASSERT_TRUE(strcmp((const char *)sqlite3_column_text(hstmt, 0), "ACTIVE") == 0);
+    sqlite3_finalize(hstmt);
+    hstmt = NULL;
+    sqlite3_close_v2(chk_hdb);
+    chk_hdb = NULL;
+
+    ASSERT_EQ(gate.base_generation, 1);
 
     /*    c) Direct stat() == -1 injection with EACCES */
     cbm_horizon_pool_set_stat_hook(inject_stat_eacces_cb);
@@ -1595,41 +1644,42 @@ TEST(test_promote_horizon_conflict_stat_failure_blocks_promotion_c) {
 
     /* 2. End-to-end promotion integration: EACCES injected during cbm_promote_horizon */
     cbm_horizon_pool_set_stat_hook(inject_stat_eacces_cb);
-    char err_buf[512] = {0};
-    int rc = cbm_promote_horizon(&gate, &pool, temp_dir, h_cand, anchors, 2, err_buf, sizeof(err_buf));
+    memset(err_buf, 0, sizeof(err_buf));
+    rc = cbm_promote_horizon(&gate, &pool, temp_dir, h_cand, anchors, 2, err_buf, sizeof(err_buf));
     ASSERT_EQ(rc, CBM_ADMISSION_ERR_CONSOLIDATION_FAILED);
     ASSERT_TRUE(strstr(err_buf, "CONSOLIDATION_FAILED") != NULL);
     ASSERT_TRUE(strstr(err_buf, "failed to access horizons path") != NULL);
     ASSERT_TRUE(strstr(err_buf, "errno=13") != NULL);
 
     /* Verify isolated, complete 4-dimension state preservation + status ACTIVE */
-    sqlite3_stmt *stmt = NULL;
     ASSERT_EQ(sqlite3_prepare_v2(base_db, "SELECT COUNT(*) FROM nodes;", -1, &stmt, NULL), SQLITE_OK);
     ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
     ASSERT_EQ(sqlite3_column_int(stmt, 0), 0);
     sqlite3_finalize(stmt);
+    stmt = NULL;
 
     ASSERT_EQ(sqlite3_prepare_v2(base_db, "SELECT COUNT(*) FROM virtual_edges;", -1, &stmt, NULL), SQLITE_OK);
     ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
     ASSERT_EQ(sqlite3_column_int(stmt, 0), 0);
     sqlite3_finalize(stmt);
+    stmt = NULL;
 
     ASSERT_EQ(sqlite3_prepare_v2(base_db, "SELECT COUNT(*) FROM generation_log;", -1, &stmt, NULL), SQLITE_OK);
     ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
     ASSERT_EQ(sqlite3_column_int(stmt, 0), 0);
     sqlite3_finalize(stmt);
+    stmt = NULL;
 
-    sqlite3_stmt *hstmt = NULL;
-    char h_path[512];
     snprintf(h_path, sizeof(h_path), "%s/horizons/%s.db", temp_dir, h_cand);
-    sqlite3 *chk_hdb = NULL;
     ASSERT_EQ(sqlite3_open(h_path, &chk_hdb), SQLITE_OK);
     ASSERT_EQ(sqlite3_prepare_v2(chk_hdb, "SELECT status FROM horizon_metadata WHERE horizon_id = ? LIMIT 1;", -1, &hstmt, NULL), SQLITE_OK);
     sqlite3_bind_text(hstmt, 1, h_cand, -1, SQLITE_STATIC);
     ASSERT_EQ(sqlite3_step(hstmt), SQLITE_ROW);
     ASSERT_TRUE(strcmp((const char *)sqlite3_column_text(hstmt, 0), "ACTIVE") == 0);
     sqlite3_finalize(hstmt);
+    hstmt = NULL;
     sqlite3_close_v2(chk_hdb);
+    chk_hdb = NULL;
 
     ASSERT_EQ(gate.base_generation, 1);
 
@@ -1647,16 +1697,19 @@ TEST(test_promote_horizon_conflict_stat_failure_blocks_promotion_c) {
     ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
     ASSERT_EQ(sqlite3_column_int(stmt, 0), 0);
     sqlite3_finalize(stmt);
+    stmt = NULL;
 
     ASSERT_EQ(sqlite3_prepare_v2(base_db, "SELECT COUNT(*) FROM virtual_edges;", -1, &stmt, NULL), SQLITE_OK);
     ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
     ASSERT_EQ(sqlite3_column_int(stmt, 0), 0);
     sqlite3_finalize(stmt);
+    stmt = NULL;
 
     ASSERT_EQ(sqlite3_prepare_v2(base_db, "SELECT COUNT(*) FROM generation_log;", -1, &stmt, NULL), SQLITE_OK);
     ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
     ASSERT_EQ(sqlite3_column_int(stmt, 0), 0);
     sqlite3_finalize(stmt);
+    stmt = NULL;
 
     ASSERT_EQ(sqlite3_open(h_path, &chk_hdb), SQLITE_OK);
     ASSERT_EQ(sqlite3_prepare_v2(chk_hdb, "SELECT status FROM horizon_metadata WHERE horizon_id = ? LIMIT 1;", -1, &hstmt, NULL), SQLITE_OK);
@@ -1664,7 +1717,9 @@ TEST(test_promote_horizon_conflict_stat_failure_blocks_promotion_c) {
     ASSERT_EQ(sqlite3_step(hstmt), SQLITE_ROW);
     ASSERT_TRUE(strcmp((const char *)sqlite3_column_text(hstmt, 0), "ACTIVE") == 0);
     sqlite3_finalize(hstmt);
+    hstmt = NULL;
     sqlite3_close_v2(chk_hdb);
+    chk_hdb = NULL;
 
     ASSERT_EQ(gate.base_generation, 1);
 

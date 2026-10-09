@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "8ea82c8ed4cc0b6d101b261b5762874741676298",
-    "indexed_at": "2026-10-09T16:49:16Z",
+    "commit": "3502f36ffde9ddb8a55c29a07464ab1dc06fb876",
+    "indexed_at": "2026-10-09T18:13:02Z",
     "project": "C-Users-User-Documents-codebase-memory-multigraph-mcp",
-    "nodes": 34272,
-    "edges": 148798,
+    "nodes": 34354,
+    "edges": 148806,
     "original_size": 186515456,
-    "compressed_size": 25173702,
+    "compressed_size": 25248915,
     "compression_level": 3
 }

@@ -7,7 +7,7 @@ tags: [testing, unit-tests, e2e-tests, coverage, union-workflows]
 edges:
   - relation: references
     target: "adr:architecture"
-updated: 2026-09-27
+updated: 2026-10-09
 ---
 # Testing Protocol
 
@@ -20,12 +20,13 @@ Multi-tier test protocol combining pure C unit tests under Address and Undefined
 | Foundation Unit | `make -f Makefile.cbm test-foundation` | Executes foundational C unit tests with ASan and UBSan |
 | Federation Unit | `make -f Makefile.cbm test` | Builds and runs all C test suites including federation and admission |
 | Thread Sanitizer | `make -f Makefile.cbm test-tsan` | Runs C test suite under ThreadSanitizer (TSan) for race detection |
-| Union Workflow | `make -f Makefile.cbm test-union-workflow` | Builds and executes the complete Union workflow E2E test suite |
-| Focused Suite | `./build/test-runner <suite>` | Runs targeted C test suite (e.g. `union_gateway`, `union_session`) |
-| Federation Python | `python -m unittest tests/test_multi_graph_federation.py` | Runs Python multi-graph federation unit and regression tests |
+| Admission & Recall (C) | `./build/c/test-runner anchor_checker recall_engine` | Runs 33 native C unit/integration tests for AST anchors and recall |
+| AST Anchor Isolation | `python -m unittest tests/test_ast_anchor_isolation.py` | Runs Tree-sitter anchor isolation, relocation, and trivia rejection tests |
+| Atomic Admission | `python -m unittest tests/test_atomic_admission_concurrency.py` | Runs two-phase promotion, fail-fast consolidation, and refusal tests |
+| Transitive Recall | `python -m unittest tests/test_transitive_recall_closure.py` | Runs reverse causal BFS traversal and atomic contestation tests |
 | Cross-Horizon Admission | `python -m unittest tests/test_cross_horizon_admission.py` | Runs cross-horizon concurrency arbitration and conflict anticipation tests |
-| Full E2E Suite | `python3 tests/e2e/run_e2e.py` | Runs complete 12-scenario black-box MCP stdio JSON-RPC E2E suite |
-| Refactoring Admission | `python3 -m unittest tests.e2e.test_refactoring_admission` | Validates Two-Tier anchor checks, paths, and Base Graph consolidation |
+| Complete Python Suite | `python -m unittest discover tests` | Runs full 186-test Python regression test suite across all modules |
+| Union Workflow | `make -f Makefile.cbm test-union-workflow` | Builds and executes the complete Union workflow E2E test suite |
 
 ## MINIMUM COVERAGE
 REQUIRED: Maintain the following minimum coverage levels:

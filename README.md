@@ -896,8 +896,11 @@ Also supported (not yet benchmarked): Ada, Agda, Apex, Assembly (NASM), Astro, A
 ```
 src/
   main.c              Entry point (MCP stdio server + CLI + install/update/config)
+  admission/          Two-tier AST anchor verification, atomic two-phase promotion, and transitive recall
+  core/               Canonical CBM-URI parsing and LRU SQLite connection pool management
   daemon/             Per-account session coordination, IPC, lifecycle, shared jobs/watchers
-  mcp/                MCP server (15 tools, JSON-RPC 2.0, session detection, auto-index)
+  mcp/                MCP server (35 tools, JSON-RPC 2.0, session detection, auto-index, federated handlers)
+  union/              Session horizons, skill contracts, effect gateways, craft themes, and refusal taxonomy
   cli/                Install/uninstall/update/config (45 client surfaces, hooks, instructions)
   store/              SQLite graph storage (nodes, edges, traversal, search, Louvain)
   pipeline/           Multi-pass indexing (structure → definitions → calls → HTTP links → config → tests)
@@ -909,6 +912,17 @@ src/
   foundation/         Platform abstractions (threads, filesystem, logging, memory)
 internal/cbm/         Vendored tree-sitter grammars (162 languages) + AST extraction engine
 ```
+
+## Documentation
+
+Comprehensive project documentation is maintained under `docs/`:
+
+- [**Documentation Index**](docs/README.md) — complete navigation table and reading order
+- [**Architecture (ADR)**](docs/adr/ARCHITECTURE.md) — layered system architecture, connection pool, and code patterns
+- [**Testing Protocol (ADR)**](docs/adr/TESTS.md) — test execution matrix, sanitizer lanes, and coverage standards
+- [**AST Anchor Isolation (F001)**](docs/feature/ast_anchor_isolation.md) — Tree-sitter AST anchor verification, live declaration search, and relocation
+- [**Atomic Admission & Concurrency (F002)**](docs/feature/atomic_admission_concurrency.md) — fail-fast consolidation and two-phase reconciled promotion
+- [**Transitive Recall Closure (F003)**](docs/feature/transitive_recall_closure.md) — reverse causal BFS traversal and atomic contestation
 
 ## Security
 

@@ -14,7 +14,19 @@ edges:
   - relation: references
     target: "feature:multi-graph-federation"
     read: must
-updated: 2026-10-06
+  - relation: references
+    target: "feature:ast-anchor-isolation"
+    read: optional
+    when: "Required when inspecting two-tier AST anchor verification and relocation"
+  - relation: references
+    target: "feature:atomic-admission-concurrency"
+    read: optional
+    when: "Required when inspecting two-phase promotion ordering and error codes"
+  - relation: references
+    target: "feature:transitive-recall-closure"
+    read: optional
+    when: "Required when inspecting epistemic contestation and reverse dependency recall"
+updated: 2026-10-09
 ---
 ```graph
 {"node_id":"feature:cross-horizon-admission","domain":"cross_horizon_admission","implements":["adr:architecture"],"tested_by":["adr:tests"],"entrypoints":["src/mcp/promote_handler.c","src/mcp/horizon_sync_handler.c"],"registration_files":["src/mcp/mcp.c","src/mcp/horizon_sync_handler.h"],"reference_files":["src/admission/admission_gate.h","src/core/horizon_pool.h"],"code_files":["src/admission/admission_gate.c","src/core/horizon_pool.c","src/union/union_refusal.c","src/union/union_refusal.h"],"test_files":["tests/test_cross_horizon_admission.py"]}
@@ -63,6 +75,9 @@ The Cross-Horizon Admission subsystem extends the Admission Gate into a multi-ho
 6. **Input Sanitization**: Project identifiers are bound using parameterized SQL statements; file paths are verified against directory traversal (`..`) and clamped to 10 MB maximum buffer size.
 
 ## REFERENCES
-- [**ARCHITECTURE.md**](./docs/adr/ARCHITECTURE.md): Multi-graph federation and layered system architecture.
-- [**TESTS.md**](./docs/adr/TESTS.md): Test execution protocol, suites, and coverage standards.
-- [**multi_graph_federation.md**](./docs/feature/multi_graph_federation.md): Epistemic horizons and AST anchor verification.
+- [**ARCHITECTURE.md**](../adr/ARCHITECTURE.md): Multi-graph federation and layered system architecture.
+- [**TESTS.md**](../adr/TESTS.md): Test execution protocol, suites, and coverage standards.
+- [**multi_graph_federation.md**](./multi_graph_federation.md): Epistemic horizons and AST anchor verification.
+- [**ast_anchor_isolation.md**](./ast_anchor_isolation.md): Two-Tier AST anchor verification and relocation.
+- [**atomic_admission_concurrency.md**](./atomic_admission_concurrency.md): Fail-fast consolidation and two-phase promotion.
+- [**transitive_recall_closure.md**](./transitive_recall_closure.md): Reverse causal BFS and atomic contestation.
