@@ -43,6 +43,7 @@ reference/
 
 # Local-only scratch / session notes (never pushed)
 private/
+scratch/
 
 # Build artifacts
 build/
@@ -91,4 +92,5 @@ soak-results-query-leak/
 /result
 /result-*
 
-docs/specs
+docs/specs/*
+!docs/specs/harness_perfect_v2/
