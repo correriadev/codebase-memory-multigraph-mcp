@@ -135,11 +135,11 @@ Oráculos usam bytes decodificados, JSON canônico, hashes, estados de domínio,
 **Then:** rules_revision efetiva e snapshot_id mudam, sem exigir UPDATE durante consulta; recuo detectado do relógio produz CLOCK_UNCERTAIN.  
 **Rastreio:** 003 §2.3; tarefa 03.
 
-### U17 — Should recusar manifesto quando veredito tiver bloqueios ou score não finito
+### U17 — Should classificar REJECTED_BLOCKING quando veredito tiver bloqueios e recusar quando score não for finito
 
 **Given:** um veredito com blocking_violations não vazio e variantes com NaN/Infinity no score.  
 **When:** Manifesto de Admissão é construído.  
-**Then:** construção é recusada; score alto não neutraliza bloqueios e nenhum limiar arbitrário é aplicado a um score finito sem bloqueios.  
+**Then:** variantes com NaN/Infinity são recusadas; veredito com bloqueios e score finito é construído com `admission_status='REJECTED_BLOCKING'` e `fast_path_granted=0` (Opção A); score alto não neutraliza bloqueios e nenhum limiar arbitrário é aplicado a um score finito sem bloqueios.  
 **Rastreio:** 003 §3.3; tarefas 02/11.
 
 ### U18 — Should retornar decisão fail-closed quando condição estrutural falhar
@@ -261,11 +261,11 @@ Nas variantes isoladas, fixtures de DTOs separam condições para testar a polí
 **Then:** pedidos são recusados até recuperação; marcador do arquivo define a geração verificável estabilizada; não se admite usando metadados antigos com arquivo novo.  
 **Rastreio:** 003 §5.3; tarefa 09.
 
-### I14 — Should rejeitar violações bloqueantes quando registro for solicitado
+### I14 — Should gravar REJECTED_BLOCKING e recusar o gate quando houver violações bloqueantes
 
 **Given:** snapshot atual, score finito alto e blocking_violations não vazio.  
 **When:** Registrar Manifesto de Admissão é chamado.  
-**Then:** BLOCKING_VIOLATIONS e zero linhas novas; tentativa direta de inserir array não vazio ou JSON inválido também falha pelas constraints.  
+**Then:** linha imutável é comprometida no ledger com `admission_status='REJECTED_BLOCKING'` e `fast_path_granted=0` (Opção A — *"Advisory to the gate, mandatory in the record"*), e o endpoint retorna `BLOCKING_VIOLATIONS` (`isError=true`) com o `manifest_id` gravado; tentativa direta no SQLite de inserir `blocking_violations` não vazio com `admission_status` diferente de `REJECTED_BLOCKING` ou `fast_path_granted=1` falha pelas constraints CHECK.  
 **Rastreio:** 003 §3.3 e §5.1; tarefa 11.
 
 ### I15 — Should preservar idempotência quando resposta se perder após commit

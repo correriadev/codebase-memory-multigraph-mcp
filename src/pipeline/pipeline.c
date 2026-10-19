@@ -24,6 +24,7 @@ enum { CBM_DIR_PERMS = 0755, PL_RING = 4, PL_RING_MASK = 3, PL_SEQ_PASSES = 6 };
 #include "graph_buffer/graph_buffer.h"
 #include "git/git_context.h"
 #include "store/store.h"
+#include "store/governance_store.h"
 #include "macro_table.h"
 #include "arena.h"
 #include "discover/discover.h"
@@ -1919,15 +1920,57 @@ int cbm_pipeline_finalize_staged_generation(char *stage_path, const char *final_
     }
     cbm_log_info("finalize.timing", "block", "prepare_live", "elapsed_ms",
                  itoa_buf((int)elapsed_ms(t_fin)));
+    /* Harness Perfeito v2 publication fence: derive project_id from final_db_path
+     * (<dir>/<project_id>.db) and fence governance_state during replacement. */
+    cbm_gov_store_t *gov_fence = NULL;
+    char fence_proj[256] = {0};
+    if (final_db_path) {
+        const char *base = strrchr(final_db_path, '/');
+#ifdef _WIN32
+        const char *b2 = strrchr(final_db_path, '\\');
+        if (b2 && (!base || b2 > base)) {
+            base = b2;
+        }
+#endif
+        base = base ? (base + 1) : final_db_path;
+        size_t blen = strlen(base);
+        if (blen > 3 && strcmp(base + blen - 3, ".db") == 0 && (blen - 3) < sizeof(fence_proj)) {
+            memcpy(fence_proj, base, blen - 3);
+            fence_proj[blen - 3] = '\0';
+        }
+    }
+    if (fence_proj[0]) {
+        if (cbm_gov_store_open(NULL, fence_proj, &gov_fence) == CBM_GOV_OK && gov_fence) {
+            (void)cbm_gov_set_publication_status(gov_fence, "PUBLISHING", NULL, (int64_t)time(NULL));
+        }
+    }
+
     cbm_clock_gettime(CLOCK_MONOTONIC, &t_fin);
     if (cbm_rename_replace(stage_path, final_db_path) != 0) {
         char errno_text[16];
         (void)snprintf(errno_text, sizeof(errno_text), "%d", errno);
         cbm_log_error("finalize.rename_failed", "errno", errno_text, "stage", stage_path, "dest",
                       final_db_path);
-        (void)rollback_quarantined_generation(final_db_path, &prepared);
+        int rb_rc = rollback_quarantined_generation(final_db_path, &prepared);
+        if (gov_fence) {
+            (void)cbm_gov_set_publication_status(
+                gov_fence, rb_rc == 0 ? "STABLE" : "RECOVERY_REQUIRED", NULL, (int64_t)time(NULL));
+            cbm_gov_store_close(gov_fence);
+        }
         discard_generation_stage(stage_path);
         return CBM_PIPELINE_PERSIST_FAILED;
+    }
+    if (gov_fence) {
+        char published_gen[64] = {0};
+        cbm_store_t *pub_store = cbm_store_open_path_existing(final_db_path);
+        if (pub_store) {
+            (void)cbm_store_generation(pub_store, published_gen, sizeof(published_gen));
+            cbm_store_close(pub_store);
+        }
+        (void)cbm_gov_set_publication_status(gov_fence, "STABLE",
+                                             published_gen[0] ? published_gen : NULL,
+                                             (int64_t)time(NULL));
+        cbm_gov_store_close(gov_fence);
     }
     cbm_log_info("finalize.timing", "block", "rename", "elapsed_ms",
                  itoa_buf((int)elapsed_ms(t_fin)));
@@ -2652,17 +2695,44 @@ int cbm_pipeline_run(cbm_pipeline_t *p) {
         free(final_path);
         return prepare_rc;
     }
+    /* Harness Perfeito v2 publication fence: mark governance_state as PUBLISHING
+     * while replacing the graph DB, then restore to STABLE with the new generation. */
+    cbm_gov_store_t *gov_fence = NULL;
+    if (p->project_name && p->project_name[0]) {
+        if (cbm_gov_store_open(NULL, p->project_name, &gov_fence) == CBM_GOV_OK && gov_fence) {
+            (void)cbm_gov_set_publication_status(gov_fence, "PUBLISHING", NULL, (int64_t)time(NULL));
+        }
+    }
+
     if ((p->rename_hook ? p->rename_hook(staging_path, final_path, p->rename_hook_ctx)
                         : cbm_rename_replace(staging_path, final_path)) != 0) {
         cbm_log_error("pipeline.err", "phase", "publish", "path", final_path);
         /* Put a quarantined destination back: the publish did not happen, so
          * leaving the previous generation parked under .corrupt would present
          * the caller with no database at all. */
-        (void)rollback_quarantined_generation(final_path, &prepared);
+        int rb_rc = rollback_quarantined_generation(final_path, &prepared);
+        if (gov_fence) {
+            (void)cbm_gov_set_publication_status(
+                gov_fence, rb_rc == 0 ? "STABLE" : "RECOVERY_REQUIRED", NULL, (int64_t)time(NULL));
+            cbm_gov_store_close(gov_fence);
+        }
         cleanup_staging_db(staging_path);
         free(staging_path);
         free(final_path);
         return CBM_PIPELINE_PERSIST_FAILED;
+    }
+
+    if (gov_fence) {
+        char published_gen[64] = {0};
+        cbm_store_t *pub_store = cbm_store_open_path_existing(final_path);
+        if (pub_store) {
+            (void)cbm_store_generation(pub_store, published_gen, sizeof(published_gen));
+            cbm_store_close(pub_store);
+        }
+        (void)cbm_gov_set_publication_status(gov_fence, "STABLE",
+                                             published_gen[0] ? published_gen : NULL,
+                                             (int64_t)time(NULL));
+        cbm_gov_store_close(gov_fence);
     }
 
     rc = export_after_publish(p, final_path);

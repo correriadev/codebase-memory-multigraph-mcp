@@ -82,6 +82,7 @@ enum {
 #include "foundation/compat_regex.h"
 #include "pipeline/artifact.h"
 #include "mcp/union_handler.h"
+#include "mcp/harness_handlers.h"
 #include "union/mutation_journal.h"
 
 #ifdef _WIN32
@@ -938,6 +939,29 @@ static const tool_def_t TOOLS[] = {
      "\"owner_or_reason\":{\"type\":\"string\",\"description\":\"Owner for OPEN_QUESTION or typed reason for DISCARDED (e.g. exploration, dead_end)\"},"
      "\"validator_identity\":{\"type\":\"string\",\"description\":\"Operator identity if validating DECISION/OPEN_QUESTION intent\"}},"
      "\"required\":[\"horizon_id\",\"claim_id\",\"destination\"]}"},
+
+    {"extract_harness_bundle", "Extract an asymmetric bifocal HarnessEvidenceBundle v2 with typed seam map, tri-state effect lattice, and composite snapshot_id",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"task_id\":{\"type\":\"string\"},"
+     "\"change_kind\":{\"type\":\"string\"},\"k_hop\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":3,\"default\":1},"
+     "\"poles\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"poles\"]}"},
+
+    {"evaluate_fast_path", "Evaluate fail-closed Fast-Path eligibility on a HarnessEvidenceBundle v2 or candidate poles",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"change_kind\":{\"type\":\"string\"},"
+     "\"bundle_json\":{\"type\":\"string\"},\"poles\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}"},
+
+    {"record_admission_manifest", "Record an immutable HarnessAdmissionManifest in the SQLite WAL governance ledger (Option A full forensic trail)",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"manifest_id\":{\"type\":\"string\"},"
+     "\"task_id\":{\"type\":\"string\"},\"snapshot_id\":{\"type\":\"string\"},\"bundle_hash\":{\"type\":\"string\"},"
+     "\"fast_path_granted\":{\"type\":\"boolean\"},\"fast_path_reasons\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
+     "\"advisor_invoked\":{\"type\":\"boolean\"},\"blocking_violations\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},"
+     "\"warnings\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"tdd_oracles_passed\":{\"type\":\"boolean\"}},"
+     "\"required\":[\"manifest_id\",\"task_id\",\"snapshot_id\",\"bundle_hash\"]}"},
+
+    {"tradition_propose", "Propose a candidate architectural rule (UNVERIFIED_CANDIDATE) or operator-review an existing rule in the Tradition Graph",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"action\":{\"type\":\"string\",\"enum\":[\"propose\",\"review\"],\"default\":\"propose\"},"
+     "\"rule_id\":{\"type\":\"string\"},\"scope_glob\":{\"type\":\"string\"},\"constraint_kind\":{\"type\":\"string\"},"
+     "\"payload_json\":{\"type\":\"string\"},\"evidence_refs\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},"
+     "\"required\":[\"rule_id\"]}"},
 };
 
 static const int TOOL_COUNT = sizeof(TOOLS) / sizeof(TOOLS[0]);
@@ -982,6 +1006,7 @@ static const tool_annotation_def_t TOOL_ANNOTATIONS[] = {
     {"promote_horizon", false, false, false, false},
     {"sync_horizon_spec", false, false, true, false},
     {"validate_scope_horizon", true, false, true, false},
+    {"check_horizon_conflicts", true, false, true, false},
     {"union_session_open", false, false, false, false},
     {"union_session_get", true, false, true, false},
     {"union_session_close", false, true, false, false},
@@ -1000,6 +1025,10 @@ static const tool_annotation_def_t TOOL_ANNOTATIONS[] = {
     {"contest_verify", false, false, false, false},
     {"union_claim_capture", false, false, false, false},
     {"union_claim_resolve", false, false, false, false},
+    {"extract_harness_bundle", true, false, true, false},
+    {"evaluate_fast_path", true, false, true, false},
+    {"record_admission_manifest", false, false, true, false},
+    {"tradition_propose", false, false, true, false},
 };
 
 
@@ -17749,6 +17778,20 @@ static char *dispatch_tool(cbm_mcp_server_t *srv, const char *tool_name, const c
     }
     if (strcmp(tool_name, "union_claim_resolve") == 0) {
         return handle_union_claim_resolve(srv, args_json);
+    }
+
+    /* Harness Perfeito v2 tools */
+    if (strcmp(tool_name, "extract_harness_bundle") == 0) {
+        return handle_extract_harness_bundle(srv, args_json);
+    }
+    if (strcmp(tool_name, "evaluate_fast_path") == 0) {
+        return handle_evaluate_fast_path(srv, args_json);
+    }
+    if (strcmp(tool_name, "record_admission_manifest") == 0) {
+        return handle_record_admission_manifest(srv, args_json);
+    }
+    if (strcmp(tool_name, "tradition_propose") == 0) {
+        return handle_tradition_propose(srv, args_json);
     }
     char msg[CBM_SZ_256];
     snprintf(msg, sizeof(msg), "unknown tool: %s", tool_name);

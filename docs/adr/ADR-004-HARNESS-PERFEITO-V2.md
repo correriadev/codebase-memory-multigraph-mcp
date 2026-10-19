@@ -97,7 +97,9 @@ CREATE TABLE IF NOT EXISTS harness_admission_manifests (
     blocking_violations TEXT NOT NULL, -- JSON array
     warnings TEXT NOT NULL,            -- JSON array
     fast_path_granted INTEGER NOT NULL CHECK(fast_path_granted IN (0, 1)),
-    admitted_at INTEGER NOT NULL
+    admission_status TEXT NOT NULL CHECK(admission_status IN ('ADMITTED_CLEAN', 'ADMITTED_WITH_WARNINGS', 'REJECTED_BLOCKING')),
+    admitted_at INTEGER NOT NULL,
+    CHECK(json_array_length(blocking_violations) = 0 OR (admission_status = 'REJECTED_BLOCKING' AND fast_path_granted = 0))
 );
 CREATE INDEX IF NOT EXISTS idx_manifest_snapshot ON harness_admission_manifests(snapshot_id);
 ```
@@ -106,7 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_manifest_snapshot ON harness_admission_manifests(
 1. Conexão dedicada para governança configurada com `PRAGMA synchronous = FULL;` e `PRAGMA journal_mode = WAL;`.
 2. As tabelas de governança residem no `governance.db` durável (ou são preservadas via migração transacional durante publicação de gerações preparadas em `pipeline.c`).
 3. Travessia de grafo e montagem de bundle ocorrem em transações de leitura concorrente fora de locks de escrita.
-4. A gravação do manifesto de admissão executa transação curta de escrita com `BEGIN IMMEDIATE`, revalidando obrigatoriamente se o `snapshot_id` da base não avançou (TOCTOU guard).
+4. A gravação do manifesto de admissão executa transação curta de escrita com `BEGIN IMMEDIATE`, revalidando obrigatoriamente se o `snapshot_id` da base não avançou (TOCTOU guard). Sob a invariante *"Advisory to the gate, mandatory in the record"* (Opção A), mesmo vereditos com `blocking_violations` não vazio são gravados de forma imutável com `admission_status = 'REJECTED_BLOCKING'` e `fast_path_granted = 0` antes de recusar o gate com `BLOCKING_VIOLATIONS`.
 
 ### 2.2. Contrato do `HarnessEvidenceBundle v2`
 
@@ -143,7 +145,7 @@ CREATE INDEX IF NOT EXISTS idx_manifest_snapshot ON harness_admission_manifests(
      5. `seam_map.seams` vazio (zero costuras transversais).
    - Retorna estrutura rica: `{"eligible": bool, "reason_codes": string[], "blocking_details": []}`.
 3. `mcp_cbm_record_admission_manifest`:
-   - Persiste auditoria com `BEGIN IMMEDIATE`, valida snapshot atual e bloqueia se houver itens em `blocking_violations`.
+   - Persiste auditoria com `BEGIN IMMEDIATE`, valida snapshot atual e aplica a trilha forense completa (Opção A): grava o manifesto com `admission_status` (`ADMITTED_CLEAN`, `ADMITTED_WITH_WARNINGS` ou `REJECTED_BLOCKING`) e bloqueia o gate (`isError=true`, `code="BLOCKING_VIOLATIONS"`) se houver itens em `blocking_violations`.
 4. `mcp_cbm_tradition_propose`:
    - Registra nova regra exclusivamente com status `UNVERIFIED_CANDIDATE`.
 

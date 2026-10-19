@@ -1361,9 +1361,9 @@ TEST(mcp_metadata_byte_budget) {
     char *json = cbm_mcp_tools_list();
     ASSERT_NOT_NULL(json);
     /* 15 KiB covered the lean surface at the branch point; get_file_outline,
-     * compare_graphs, manage_adr set_sections, and the search_code debug and
-     * list_projects include_details parameters landed on main since. */
-    ASSERT_LT((int)strlen(json), 18 * 1024);
+     * compare_graphs, manage_adr set_sections, Track W Union tools, and
+     * Harness Perfeito v2 tools landed since. Per-tool < 3200 remains enforced. */
+    ASSERT_LT((int)strlen(json), 38 * 1024);
 
     yyjson_doc *doc = yyjson_read(json, strlen(json), 0);
     ASSERT_NOT_NULL(doc);
@@ -1393,13 +1393,6 @@ TEST(mcp_tools_have_behavior_annotations) {
         bool open_world;
     } expected[] = {
         {"index_repository", false, false, true, false},
-        /* The ten query tools resolve their store through the strictly
-         * non-mutating query-only path: a corrupt database is reported and
-         * left in place, never quarantined or rebuilt. Quarantine/rebuild is
-         * a write-side job (index_repository, manage_adr writes), so the
-         * read-only annotations are honest and plan-mode clients can expose
-         * these tools. get_file_outline arrived after this split and keeps
-         * its upstream conservative annotation. */
         {"search_graph", true, false, true, false},
         {"query_graph", true, false, true, false},
         {"trace_path", true, false, true, false},
@@ -1416,7 +1409,34 @@ TEST(mcp_tools_have_behavior_annotations) {
         {"detect_changes", true, false, true, false},
         {"manage_adr", false, true, false, false},
         {"ingest_traces", false, false, false, false},
+        {"list_horizons", true, false, true, false},
+        {"create_horizon", false, false, true, false},
         {"promote_horizon", false, false, false, false},
+        {"sync_horizon_spec", false, false, true, false},
+        {"validate_scope_horizon", true, false, true, false},
+        {"check_horizon_conflicts", true, false, true, false},
+        {"union_session_open", false, false, false, false},
+        {"union_session_get", true, false, true, false},
+        {"union_session_close", false, true, false, false},
+        {"union_record_action", false, false, false, false},
+        {"classify_activity", true, false, true, false},
+        {"validate_provenance", true, false, true, false},
+        {"theme_lookup", true, false, true, false},
+        {"theme_search", true, false, true, false},
+        {"theme_list", true, false, true, false},
+        {"theme_graph_search", true, false, true, false},
+        {"theme_graph_query", true, false, true, false},
+        {"theme_register", false, false, false, false},
+        {"binding_claim", false, false, false, false},
+        {"founding_propose", false, false, false, false},
+        {"founding_decide", false, false, false, false},
+        {"contest_verify", false, false, false, false},
+        {"union_claim_capture", false, false, false, false},
+        {"union_claim_resolve", false, false, false, false},
+        {"extract_harness_bundle", true, false, true, false},
+        {"evaluate_fast_path", true, false, true, false},
+        {"record_admission_manifest", false, false, true, false},
+        {"tradition_propose", false, false, true, false},
     };
 
     char *json = cbm_mcp_tools_list();

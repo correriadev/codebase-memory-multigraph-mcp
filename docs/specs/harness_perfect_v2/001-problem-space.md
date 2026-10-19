@@ -23,7 +23,7 @@ Estão no escopo: `HarnessEvidenceBundle v2`, representação bifocal, impressã
 | INV-04 | Fast-Path exige cobertura `clean`, zero efeitos `unknown`, zero dependências não resolvidas, zero alterações críticas e `seam_map.seams` vazio. |
 | INV-05 | Propostas entram em `UNVERIFIED_CANDIDATE`; somente um operador humano autenticado promove para `APPROVED`. |
 | INV-06 | Ao vencer a cadência, uma regra é avaliada como `REVIEW_PENDING`, permanece disponível e conserva sua força normativa até revisão humana. |
-| INV-07 | Um manifesto com violações bloqueantes não é admitido nem inserido no ledger. |
+| INV-07 | Um manifesto com violações bloqueantes é gravado no ledger com `admission_status='REJECTED_BLOCKING'` e `fast_path_granted=0` (trilha forense completa — Opção A) antes de recusar a admissão com `BLOCKING_VIOLATIONS`. |
 | INV-08 | A admissão compara o `snapshot_id` atual sob exclusão coordenada com publicadores; qualquer divergência causa rollback integral. |
 | INV-09 | Rebuild, reindexação, cancelamento e swap de geração não removem regras nem manifestos comprometidos. |
 | INV-10 | Elegibilidade ao Fast-Path não significa conformidade normativa, autoridade humana ou autorização de escrita no repositório. |
@@ -45,9 +45,9 @@ O fluxo abaixo é temporal por caminho de negócio. Ramificações de recusa e o
 | 09 | Fast-Path Considerado Elegível | Avaliar Fast-Path | Avaliação de Fast-Path | Orquestrador | `eligible=true` — orquestrador |
 | 10 | Fast-Path Bloqueado | Avaliar Fast-Path | Avaliação de Fast-Path | Orquestrador | `reason_codes` e detalhes — Advisor/JEV |
 | 11 | Conformidade Julgada | Julgar evidência e mudança | Veredito JEV, externo ao CBM | JEV | Pontuação, bloqueios e avisos — ledger |
-| 12 | Admissão Recusada por Violação | Registrar manifesto | Manifesto de Admissão | JEV | Recusa estruturada — JEV/orquestrador; nenhuma linha admitida |
+| 12 | Admissão Recusada por Violação | Registrar manifesto | Manifesto de Admissão | JEV | Linha forense `REJECTED_BLOCKING` comprometida no ledger + recusa estruturada `BLOCKING_VIOLATIONS` — JEV/orquestrador |
 | 13 | Admissão Recusada por Snapshot Obsoleto | Revalidar snapshot e registrar manifesto | Manifesto de Admissão | Publicador concorrente | `STALE_SNAPSHOT` — JEV/orquestrador; requer nova evidência |
-| 14 | Manifesto de Admissão Registrado | Registrar manifesto sem bloqueios | Manifesto de Admissão | JEV | Ledger durável — auditor e gate de execução |
+| 14 | Manifesto de Admissão Registrado | Registrar manifesto sem bloqueios | Manifesto de Admissão | JEV | Ledger durável (`ADMITTED_CLEAN` / `ADMITTED_WITH_WARNINGS`) — auditor e gate de execução |
 | 15 | Regra de Tradição Proposta | Propor regra | Regra de Tradição | Advisor/agente | Candidatos não verificados — operador humano |
 | 16 | Regra de Tradição Aprovada | Aprovar candidata via canal humano | Regra de Tradição | Operador humano autenticado | Regras aplicáveis e revisão normativa — extrator/JEV |
 | 17 | Revisão de Regra Tornada Pendente | Avaliar cadência em consulta | Regra de Tradição | Relógio confiável do servidor | Pendências, com norma preservada — operador/JEV |
@@ -91,7 +91,7 @@ Regra de Tradição Proposta não altera o catálogo temático externo. O ledger
 | Cadência de Revisão | Intervalo positivo e prazo absoluto que tornam uma regra aprovada pendente de revisão quando `now >= review_due_at`. | Expirar, apagar ou enfraquecer a norma silenciosamente. |
 | Fast-Path | Elegibilidade à rota simplificada somente quando todas as condições estruturais do ADR-004 são satisfeitas. | Equiparar elegibilidade a pontuação JEV ou permissão de escrita. |
 | JEV (Joint Epistemic Verifier) | Autor externo do julgamento de conformidade da mudança contra evidência e normas aplicáveis. | Inventar limiar de pontuação não definido pelo ADR. |
-| Manifesto de Admissão (`harness_admission_manifest`) | Registro durável e imutável de julgamento sem bloqueios, vinculado ao bundle, mudança e snapshot revalidado. | Inserir admissões recusadas como se fossem admitidas ou sobrescrever histórico. |
+| Manifesto de Admissão (`harness_admission_manifest`) | Registro durável e imutável de julgamento (`ADMITTED_CLEAN`, `ADMITTED_WITH_WARNINGS` ou `REJECTED_BLOCKING`), vinculado ao bundle, mudança e snapshot revalidado. | Registrar admissões recusadas como admitidas (`ADMITTED_*`) ou sobrescrever histórico. |
 
 ## 5. Refinamento e critérios mensuráveis
 
