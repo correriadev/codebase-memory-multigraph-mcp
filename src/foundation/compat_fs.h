@@ -60,6 +60,13 @@ void cbm_closedir(cbm_dir_t *d);
 /* ── Portable popen/pclose ────────────────────────────────────── */
 
 FILE *cbm_popen(const char *cmd, const char *mode);
+
+/* Read-mode cbm_popen for a `git ...` command line: the child environment
+ * omits git's repository-local variables (foundation/git_env.h), so an
+ * inherited GIT_DIR/GIT_WORK_TREE/... can never override `git -C <repo>`.
+ * The caller's own environment is untouched. Close with cbm_pclose. */
+FILE *cbm_popen_git(const char *cmd);
+
 int cbm_pclose(FILE *f);
 
 /* ── File operations ──────────────────────────────────────────── */
@@ -112,6 +119,18 @@ int cbm_canonical_path(const char *path, char *out, size_t out_sz);
 
 /* Delete an empty directory. Returns 0 on success. */
 int cbm_rmdir(const char *path);
+
+/* Exclusive lock file. Opens `path` and takes an exclusive lock the KERNEL
+ * releases on any process death -- POSIX open(O_CLOEXEC|O_NOFOLLOW) +
+ * flock(LOCK_EX|LOCK_NB); Windows _wsopen with _SH_DENYRW (deny every other
+ * open) and _O_NOINHERIT -- so ownership never outlives its holder and is
+ * never inherited by a spawned child. `create` false never creates the file.
+ * Returns the descriptor, or -1 with errno: EWOULDBLOCK/EAGAIN (POSIX) or
+ * EACCES (Windows sharing violation) when another holder is live, ENOENT
+ * when absent, otherwise the open error. Never use this on a SQLite file:
+ * on macOS an flock conflicts with SQLite's own fcntl byte locks. */
+int cbm_lockfile_open(const char *path, bool create);
+void cbm_lockfile_close(int fd);
 
 /* Open a file by UTF-8 path.
  * On Windows, converts to wide-char and calls _wfopen so paths with
