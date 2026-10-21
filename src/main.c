@@ -2896,6 +2896,15 @@ int main(int argc, char **argv) {
         return EXIT_SUCCESS; /* hook adapters are contractually fail-open */
     }
 
+    /* Opt out before timers, stdin, executable hashing, settings, or daemon
+     * admission. Unrecognized tools and shell commands must not stall the
+     * agent merely because a legacy mutation hook is still installed. */
+    if (role == CBM_DAEMON_PROCESS_HOOK_CLIENT &&
+        cbm_hook_mutation_invocation_supported(hook_event, hook_dialect) &&
+        !cbm_hook_mutation_enforcement_enabled()) {
+        return EXIT_SUCCESS;
+    }
+
     /* Hook augmentation is contractually fail-open and time-bounded. E01
      * mutation dialects use explicit denial responses when authority is missing. It is
      * daemon-backed but CONNECT-ONLY: a hook never spawns a daemon (a cold

@@ -1,283 +1,45 @@
-# Configuration Reference
+# Configuração em uso
 
-This page documents the configuration files that `codebase-memory-mcp` reads or writes today.
+## ARQUIVOS E RESPONSABILIDADES
 
-## At a Glance
+| Configuração | Local/formato |
+|---|---|
+| Mapeamento global de extensões | `$XDG_CONFIG_HOME/codebase-memory-mcp/config.json`, fallback `~/.config/codebase-memory-mcp/config.json` |
+| Mapeamento do repositório | `.codebase-memory.json`; sobrepõe entradas globais conflitantes |
+| Settings de runtime | `_config.db` SQLite no cache; gerenciado por `config set/reset` |
+| UI | `config.json` no cache; `ui_enabled` e `ui_port` |
+| Integração MCP/skills/hooks | Configuração do cliente, separada dos bancos do CBM |
 
-| Purpose | Path | Format | Notes |
-|---|---|---|---|
-| Global custom extension mapping | `$XDG_CONFIG_HOME/codebase-memory-mcp/config.json` | JSON | Falls back to `~/.config/codebase-memory-mcp/config.json` when `XDG_CONFIG_HOME` is unset. |
-| Per-project custom extension mapping | `{repo_root}/.codebase-memory.json` | JSON | Overrides conflicting global `extra_extensions` entries. |
-| CLI-managed runtime settings | `${CBM_CACHE_DIR:-~/.cache/codebase-memory-mcp}/_config.db` | SQLite | Written by `codebase-memory-mcp config set/reset`. |
-| UI settings | `${CBM_CACHE_DIR:-~/.cache/codebase-memory-mcp}/config.json` | JSON | Stores `ui_enabled` and `ui_port`. |
-| Daemon operation log | `${CBM_CACHE_DIR:-~/.cache/codebase-memory-mcp}/logs/cbm-daemon.log` | Structured log | Durable daemon lifecycle, watcher/indexing, UI, resource, and error events. |
-| Admission conflict log | `${CBM_CACHE_DIR:-~/.cache/codebase-memory-mcp}/logs/daemon-conflicts.ndjson` | NDJSON | Exact-build, ABI, and canonical-cache conflicts. |
-| Activation log | `${CBM_CACHE_DIR:-~/.cache/codebase-memory-mcp}/logs/activation-events.ndjson` | NDJSON | Install/update/uninstall activation progress and outcomes. |
+Use `codebase-memory-mcp config --help` e o help da build para conhecer chaves/valores aceitos antes de alterá-los. Consulte [limites de descoberta](INDEX_RESOURCE_LIMITS.md) para `index_max_files` e `index_max_source_mb`.
 
-CBM resolves `CBM_CACHE_DIR` to a canonical per-account path before using any of these locations. The log directory and files are private to the account.
-
-## 1. Custom File Extension Mapping
-
-Two optional JSON files let you map additional file extensions to built-in languages.
-
-### Global config
-
-Default path:
-
-```text
-$XDG_CONFIG_HOME/codebase-memory-mcp/config.json
-```
-
-Fallback when `XDG_CONFIG_HOME` is unset:
-
-```text
-~/.config/codebase-memory-mcp/config.json
-```
-
-### Per-project config
-
-Place this file in the repository root:
-
-```text
-.codebase-memory.json
-```
-
-### Format
+Exemplo de extensões adicionais no repositório:
 
 ```json
-{
-  "extra_extensions": {
-    ".blade.php": "php",
-    ".mjs": "javascript",
-    ".twig": "html"
-  }
-}
+{"extra_extensions":{".custom":"python"}}
 ```
 
-Notes:
+O nome de linguagem deve ser reconhecido pelo runtime. Ignorar arquivos é outra função, descrita em [.cbmignore](cbmignore.md).
 
-- Extension keys must include the leading dot.
-- Language names are case-insensitive.
-- Unknown language names are skipped.
-- Missing files are ignored.
-- If the same extension appears in both files, the per-project file wins.
+## AMBIENTE
 
-## 2. CLI-Managed Runtime Settings
+| Variável | Alcance |
+|---|---|
+| `CBM_CACHE_DIR` | Sobrescreve o diretório de índices/configuração; default `~/.cache/codebase-memory-mcp`. |
+| `CBM_RUNTIME_DIR` | Muda o pai do rendezvous do daemon. Não é o mesmo que mudar cache. |
+| `CBM_ALLOWED_ROOT` | Restringe raízes de indexação após resolução; não é sandbox geral do agente. |
+| `CBM_LOG_LEVEL` | Nível de log; conferir eventos do daemon em `logs/cbm-daemon.log` no cache. |
+| `CBM_DIAGNOSTICS` | Habilita artefatos de diagnóstico quando ativado conforme o runtime; a descoberta de seus caminhos é registrada em log. |
+| `CBM_WORKERS` | Sobrescreve contagem de workers de indexação. |
+| `CBM_ENFORCE_MUTATION_GATE` | Somente `1` ativa checks estritos dos hooks de mutação. Default desligado. Exige também integração do hook no cliente. |
+| `CBM_ALLOW_LEGACY_PROMOTION` | Somente `1` permite exceção à exigência de sessão na promoção. Não é necessário para uso básico. |
+| `CBM_OPERATOR_IDENTITY`, `CBM_OPERATOR_TOKEN` | Autoridade configurada pelo host para os caminhos normativos; os handlers comparam credenciais. Não são campos de uma skill. |
 
-The `config` subcommand stores runtime settings in a small SQLite database:
+O runtime também aplica verificações de propriedade/permissão dos diretórios de coordenação e limites de raiz. Se recusar o caminho, leia o erro do executável; não remova controles para fazer uma instalação parecer funcional.
 
-```text
-${CBM_CACHE_DIR:-~/.cache/codebase-memory-mcp}/_config.db
-```
+## INSTALAÇÃO NO CLIENTE
 
-Inspect or change values with the CLI:
+O comando `install` herdado pode configurar clientes e escrever skills/perfis/hooks. Para testar somente o servidor, prefira apontar o MCP à build desejada e revisar `tools/list`. Não confundir fontes em `skills/` ou `skills-fractal/` com algo instalado no ambiente.
 
-```bash
-codebase-memory-mcp config list
-codebase-memory-mcp config get auto_index
-codebase-memory-mcp config set auto_index true
-codebase-memory-mcp config set auto_index_limit 50000
-codebase-memory-mcp config set watcher_enabled false
-codebase-memory-mcp config reset auto_index
-```
+## REFERENCES
 
-Current keys:
-
-| Key | Default | Meaning |
-|---|---|---|
-| `auto_index` | `false` | Automatically index new projects when an MCP session starts. |
-| `auto_index_limit` | `50000` | Maximum file count allowed for automatic indexing of a new project. |
-| `auto_watch` | `true` | Register the session's project with the background git watcher on connect. Set `false` to keep a session from registering its project (the watcher still runs for other projects). |
-| `doc_candidates` | `auto` | Score documentation sections against code to store doc↔code candidates (the possible targets of a section, and the sections that may describe a function or file, each with a judged probability). Unset (`auto`), the index mode decides: on for `full` indexes (the default mode), off for `moderate` and `fast`. Set `true` or `false` to choose for every mode; `config reset doc_candidates` returns to `auto`. The scoring grows with sections × functions: under a second up to ~100k functions, ~15 s at ~400k, ~3 minutes on the Linux kernel. Off stores no candidates and leaves the rest of the graph unchanged; on in `fast` mode stores candidates without adding `fast`'s skipped `SIMILAR_TO` / `SEMANTICALLY_RELATED` edges. `index_repository` also takes `doc_candidates` for a single index, which wins over this setting. Applies from the next index. |
-| `watcher_enabled` | `true` | Master switch for the background watcher subsystem. Set `false` to stop the watcher from starting at all — no poll thread and no project registration. Reindex manually with `index_repository` when disabled. Only an open MCP session's own project is ever watched; `index_status` reports the current state in its `watch` object. |
-| `watch_non_git` | `false` | Also poll project roots that are **not git repositories**. By default the watcher only follows git projects, so a project indexed from a plain directory is never refreshed after its first index — reindex it manually with `index_repository`. Set `true` to poll such roots on the same adaptive cadence with a file-tree scan: the indexer's own discovery walk (same skip lists, `.gitignore` and `.cbmignore` rules) hashed over each file's path, size and mtime. Any change reindexes once; paths the indexer skips (including cbm's own `.codebase-memory/` output) never trigger. The first poll after the daemon starts reindexes each such project once, since nothing records which tree state the index holds. The scan walks the whole tree every poll, so it costs more than git polling on very large trees. Read once when the daemon starts, like `watcher_enabled`. |
-| `index_max_files` | `off` | Optional maximum number of accepted source files in one discovery run. |
-| `index_max_source_mb` | `off` | Optional maximum accepted source size in MiB in one discovery run. |
-
-For a watched project, `index_status` names the polling method in `watch.strategy`:
-`git` (HEAD and dirty-state polling), `tree` (a non-git root polled by the
-`watch_non_git` file-tree scan), `none` (a non-git root that is registered but never
-polled, the default for a plain directory) or `pending` (registered; the first poll
-has not run yet).
-
-> **`watcher_enabled` vs `auto_watch`.** `watcher_enabled` controls whether the
-> watcher *subsystem* starts at all (the background poll thread). `auto_watch` is
-> narrower: it only controls whether a connecting session registers *its own*
-> project with an already-running watcher. When `watcher_enabled=false`,
-> `auto_watch` has no effect — there is no watcher to register with.
->
-> They also differ in **when they are read**, which matters because the watcher
-> lives in the background daemon, not in your MCP client:
->
-> - `auto_watch` is consulted each time a session would register its project, so
->   a change applies to sessions that connect afterwards.
-> - `watcher_enabled` is read **once, when the daemon starts**, because it decides
->   whether the watcher is built at all. The daemon is long-lived and outlives
->   individual MCP sessions, so **reconnecting your client is not enough** — retire
->   the daemon so the next one picks the new value up:
->
-> ```bash
-> codebase-memory-mcp config set watcher_enabled false
-> codebase-memory-mcp daemon stop     # next session starts a daemon without the watcher
-> codebase-memory-mcp daemon status   # confirm
-> ```
->
-> Disabling the watcher does not disable anything else: the daemon still starts,
-> `auto_index` still runs, and `index_repository` stays available for manual
-> reindexing.
-
-The two `index_max_*` settings are independent and disabled by default. They
-apply to explicit indexing, automatic indexing, and watcher re-indexing, but not
-to `cross-repo-intelligence`, which does not scan repository source files.
-Equality is allowed; exceeding either setting fails the complete index request
-and preserves any previously serving database. See
-[Index resource limits](INDEX_RESOURCE_LIMITS.md) for counting, validation, and
-error-response details.
-
-## 3. UI Settings
-
-The optional built-in graph UI stores its settings in:
-
-```text
-${CBM_CACHE_DIR:-~/.cache/codebase-memory-mcp}/config.json
-```
-
-Current format:
-
-```json
-{
-  "ui_enabled": false,
-  "ui_port": 9749
-}
-```
-
-Notes:
-
-- If a UI-enabled binary finds its verified external asset pack and no UI config file exists yet, the UI auto-enables on first run. Missing or invalid assets leave the MCP/daemon service available and keep the UI disabled.
-- `CBM_CACHE_DIR` changes both the UI config location and the runtime settings database location.
-- CBM resolves `CBM_CACHE_DIR` to one canonical per-account cache root. A process configured with a different root fails while any CBM session or command is active; close them before switching roots.
-
-## 4. Environment Variables
-
-These environment variables affect runtime behavior:
-
-| Variable | Default | Description |
-|---|---|---|
-| `CBM_ALLOWED_ROOT` | *(unset)* | Confine `index_repository` to paths within this directory. When set, a `repo_path` that resolves (after symlink / `..` resolution) outside this root is refused, and the same check now applies to the graph UI's `POST /api/index` route rather than only to the MCP tool. Unset imposes no *containment* restriction — but see the always-on limits below, which apply whether or not this is set. Useful when the server may be driven by an untrusted caller, e.g. agentic or multi-tenant deployments. |
-| `CBM_CACHE_DIR` | `~/.cache/codebase-memory-mcp` | Override the cache directory used for indexes, `_config.db`, and UI `config.json`. |
-| `CBM_DIAGNOSTICS` | `false` | Enable periodic `snapshot.json` and retained `trajectory.ndjson` below a fresh owner-private directory in the system temp directory. The daemon records the randomized paths in the `diagnostics.start` discovery record (a single JSON line) in `${CBM_CACHE_DIR}/logs/cbm-daemon.log`; that one record is emitted even when `CBM_LOG_LEVEL` suppresses ordinary logging, so the paths always remain discoverable. |
-| `CBM_DOWNLOAD_URL` | GitHub releases | Override the update download URL. |
-| `CBM_LOG_LEVEL` | role-aware | Set the log level to `debug`, `info`, `warn`, `error`, or `none` (or `0`-`4`). Thin MCP/CLI/hook frontends default to `warn`; the detached daemon and supervised index workers default to `info`. Physical workers retain INFO liveness records because their private logs drive the supervisor's no-progress timeout. Frontend messages use that session's stderr; detached daemon events use `${CBM_CACHE_DIR}/logs/cbm-daemon.log`. |
-| `CBM_RUNTIME_DIR` | `%LOCALAPPDATA%` (Windows), `/private/tmp` (macOS), `/tmp` (other) | Parent directory for the daemon/CLI rendezvous directory, which CBM creates inside it as `cbm-daemon-<uid>` (`cbm-daemon-<key>` on Windows). Set it when the default ancestry cannot pass the private-directory check — see below. `CBM_CACHE_DIR` does **not** move the rendezvous. |
-| `CBM_WORKERS` | auto-detected | Override the indexing worker count. |
-
-### Relocating the daemon rendezvous directory
-
-Before it is used, the rendezvous directory and every ancestor of it are checked:
-each ancestor must be owned by you or by root, must not be world-writable (unless
-it is the standard root-owned sticky directory such as `/tmp`), and must carry no
-allow-ACL — on Windows, no ACE granting mutation rights to another identity. The
-rendezvous directory itself is then forced to owner-only (`0700`, no extended ACL
-/ an owner-only DACL).
-
-That ancestry is not always acceptable in the default location. A Windows profile
-that has acquired a capability-SID ACE with `WRITE_DAC` / `WRITE_OWNER` / `DELETE`
-on `%LOCALAPPDATA%` — something an installed packaged app can add — fails the walk,
-and so can an unusual `/tmp` or home directory on POSIX. When that happens *every*
-command fails, `config list` included, so the settings surface cannot be reached
-either:
-
-```text
-codebase-memory-mcp: secure daemon endpoint could not be created
-```
-
-`CBM_RUNTIME_DIR` points the rendezvous at an ancestry you choose:
-
-```bash
-export CBM_RUNTIME_DIR="$HOME/cbm-runtime"   # any directory you own
-```
-
-```powershell
-$env:CBM_RUNTIME_DIR = "D:\cbm-runtime"
-```
-
-The check is not relaxed for the directory you name: it goes through exactly the
-same validation as the default, and a value that fails it is refused rather than
-silently ignored. Because the rendezvous is how sessions find each other, every
-process that should share one daemon must see the same value — set it in the
-environment of your MCP client and your shell alike, or a CLI invocation without
-it will coordinate through the default location instead.
-
-**WSL2 and Windows drives (`/mnt/c`, `/mnt/e`, ...).** `CBM_CACHE_DIR` goes through
-the same private-directory check. With WSL's default automount options, DrvFs
-reports every directory as `0777` and ignores `chmod`, so a cache under
-`/mnt/<drive>` is refused, and the refusal names this remedy. Either turn on
-permission metadata in `/etc/wsl.conf`, then run `wsl --shutdown` and reopen WSL:
-
-```ini
-[automount]
-options = "metadata,umask=22,fmask=11"
-```
-
-or keep the cache on the Linux filesystem (the default `~/.cache/codebase-memory-mcp`),
-which is also much faster than a 9p-mounted Windows drive.
-
-Environment used by daemon-owned components—such as diagnostics, daemon logging, and process-wide indexing resource limits—is captured from the first daemon-backed session that starts the daemon. Later sessions join the existing process and cannot replace those values. To change them, close every daemon-backed session, update the relevant agent configurations consistently, and restart a session. `CBM_ALLOWED_ROOT` remains session-specific, a conflicting `CBM_CACHE_DIR` is rejected, and a one-shot CLI command is not exempt from the rule above: it connects to the coordination daemon like any other session, starting one if none is running, so its own environment becomes the captured daemon-owned environment only when its invocation is the one that starts the daemon — joining an already-running daemon, it inherits that daemon's already-captured values instead.
-
-
-### Roots that are always refused
-
-Independently of `CBM_ALLOWED_ROOT`, some directories are refused as an indexing
-root because they are too broad or too sensitive to index as a unit:
-
-- a filesystem root, a Windows drive root, or a UNC share root;
-- a top-level system tree — `/etc`, `/var`, `/usr`, `/home`, `/Users`, and on
-  Windows `C:\Windows`, `C:\Users`, `C:\ProgramData`, `C:\Program Files`;
-- your home directory itself (directories *below* it are fine);
-- a credential directory at any depth — `.ssh`, `.aws`, `.gnupg`, `.kube`,
-  `.docker`, `.netrc`, `.git-credentials`, `.password-store`, macOS `Keychains`.
-
-Two limits are worth stating plainly. This constrains *scope*, not
-*sensitivity*: inside a root that is allowed, every file the process can read may
-be indexed and later returned. And the credential list is a denylist, so it
-raises the cost of a mistake rather than closing the class — a directory it does
-not name is permitted.
-
-### Shared / HPC filesystems
-
-On clusters and other shared machines, home directories often live on a network
-filesystem (NFS, Lustre, GPFS, SMB/CIFS), and `~/.cache` is sometimes a symlink
-into a shared tree. Three rules keep CBM working there:
-
-- **Put the cache and the rendezvous on local storage.** Set `CBM_CACHE_DIR` (indexes,
-  `_config.db`) and, if needed, `CBM_RUNTIME_DIR` (the daemon rendezvous) to a
-  local disk you own, for example `/local/scratch/$USER/cbm` or `/tmp/$USER-cbm`.
-  Set the same values in your MCP client's environment and your shell.
-- **Do not route the cache into another account's tree.** A symlinked `~/.cache` is
-  resolved and allowed, but every directory on the *resolved* path must be owned
-  by you or by root. If a parent such as `/shared/fs` belongs to another account,
-  that account can rename or replace anything below it, so CBM refuses the path
-  and names the directory and its owner:
-
-  ```text
-  ... (cache-private) - '/shared/fs' is owned by uid 1234 (alice), not by you (uid 1000) or root; ...
-  ```
-
-  This check has no override. Choose a location with a safe ancestry instead.
-- **Avoid network filesystems for the cache.** The indexes are SQLite databases in
-  WAL mode, which needs shared-memory locking that network filesystems do not
-  provide reliably. On Linux, CBM logs one `daemon.cache_root_network_fs` warning
-  at startup when the cache root is on NFS, Lustre, GPFS, CIFS or SMB2. The cache
-  still works there, but it can be slow, and a database can be corrupted.
-
-## 5. Agent and Editor Integration Files
-
-The `install` command can also write MCP entries and instruction blocks into agent/editor config files such as Claude Code, Codex, Gemini, VS Code, Cursor, Zed, and others.
-
-Those target paths vary by tool and platform, so the easiest way to inspect the exact files for your machine is:
-
-```bash
-codebase-memory-mcp install --dry-run
-```
-
-That prints the specific config files the installer would modify without writing anything.
+- [Consumo](guide/CONSUMPTION.md), [hooks](feature/mutation_gate.md), [build](INFRASTRUCTURE.md).

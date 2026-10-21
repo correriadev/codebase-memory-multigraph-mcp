@@ -1952,6 +1952,14 @@ char *cbm_hook_mutation_deny_response_for_dialect(const char *dialect_name,
     return json;
 }
 
+/* Host interception is optional. The default must not require a Union session
+ * for ordinary agent work or unknown host tools. Keep the strict engine
+ * available for operators who explicitly enable enforcement. */
+bool cbm_hook_mutation_enforcement_enabled(void) {
+    const char *value = getenv("CBM_ENFORCE_MUTATION_GATE");
+    return value && strcmp(value, "1") == 0;
+}
+
 bool cbm_hook_mutation_invocation_supported(const char *forced_event,
                                            const char *dialect_name) {
     ha_lifecycle_dialect_t dialect;
@@ -2701,6 +2709,9 @@ int cbm_cmd_hook_augment(int argc, char **argv) {
      * forced events must be documented lifecycle events for their dialect. */
     if (!ha_invocation_supported(dialect, forced_event)) {
         return 0;
+    }
+    if (ha_mutation_dialect(dialect) && !cbm_hook_mutation_enforcement_enabled()) {
+        return 0; /* No stdin read, daemon contact, journal, or veto by default. */
     }
     if (ha_mutation_dialect(dialect)) {
         cbm_hook_augment_arm_mutation_deadline(

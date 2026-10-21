@@ -1,0 +1,2537 @@
+{
+  "verified_on": "2026-10-21",
+  "source": "src/mcp/mcp.c TOOLS[] and installed executable tools/list",
+  "checkout": "8dd9f4ec7057e642d9c66d0c8d3619f2700e62a5",
+  "upstream_comparison": "3457b21b0a3d75960c07ed3ec666a9e684985ef9",
+  "local_changes": true,
+  "caveat": "Schema capture, not proof that handler validation is identical or that every tool passed tests.",
+  "inherited_tools": [
+    "index_repository",
+    "search_graph",
+    "query_graph",
+    "trace_path",
+    "get_code_snippet",
+    "get_file_outline",
+    "get_graph_schema",
+    "compare_graphs",
+    "get_architecture",
+    "search_code",
+    "list_projects",
+    "delete_project",
+    "index_status",
+    "check_index_coverage",
+    "detect_changes",
+    "manage_adr",
+    "ingest_traces"
+  ],
+  "exclusive_tools": [
+    "binding_claim",
+    "check_horizon_conflicts",
+    "classify_activity",
+    "contest_verify",
+    "create_horizon",
+    "evaluate_fast_path",
+    "extract_harness_bundle",
+    "founding_decide",
+    "founding_propose",
+    "list_horizons",
+    "promote_horizon",
+    "record_admission_manifest",
+    "sync_horizon_spec",
+    "theme_graph_query",
+    "theme_graph_search",
+    "theme_list",
+    "theme_lookup",
+    "theme_register",
+    "theme_search",
+    "tradition_propose",
+    "union_claim_capture",
+    "union_claim_resolve",
+    "union_record_action",
+    "union_session_close",
+    "union_session_get",
+    "union_session_open",
+    "validate_provenance",
+    "validate_scope_horizon"
+  ],
+  "tools": [
+    {
+      "name": "index_repository",
+      "description": "Index a repository. full/moderate add semantics; fast omits them; cross-repo-intelligence links services. Reports coverage gaps. Waits for the whole index by default; a large repo can exceed a client's per-call deadline. async:true starts (or joins) the index in the daemon and returns at once; poll with status:true (same repo_path) until state is succeeded, failed or cancelled. async needs a daemon that outlives the call: an MCP session or `daemon start`.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "repo_path": {
+            "type": "string",
+            "description": "Repository path"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "full",
+              "moderate",
+              "fast",
+              "cross-repo-intelligence"
+            ],
+            "default": "full",
+            "description": "full: all+semantic; moderate: filtered+semantic; fast: filtered only; cross-repo-intelligence: link services."
+          },
+          "target_projects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Cross-repo targets; [\"*\"] means all."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name override; Non-ASCII bytes are encoded; unsafe characters normalized."
+          },
+          "persistence": {
+            "type": "boolean",
+            "default": false,
+            "description": "Write .codebase-memory/graph.db.zst."
+          },
+          "doc_candidates": {
+            "type": "boolean",
+            "description": "Doc-code candidates; default: the doc_candidates setting, else on for full, off for moderate/fast."
+          },
+          "async": {
+            "type": "boolean",
+            "default": false,
+            "description": "Start the index in the background and return immediately; it keeps running if this call is cancelled or times out. Not with status or cross-repo-intelligence. Refused for a one-shot cli call that is the only client of a temporary daemon (run daemon start)."
+          },
+          "status": {
+            "type": "boolean",
+            "default": false,
+            "description": "Report the running or last index job (queued/running/succeeded/failed/cancelled) instead of indexing. Pass the same repo_path (and name, if any) as the index call."
+          }
+        },
+        "required": [
+          "repo_path"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_graph",
+      "description": "Find symbols via BM25 query, regex name/qn filters, or semantic_query. Rows keep qn/file/lines and in/out over CALLS/USAGE/CALL_REFERENCE/INHERITS/IMPLEMENTS.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "active_horizons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional active horizon IDs for federated speculative overlay"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name_pattern": {
+            "type": "string"
+          },
+          "qn_pattern": {
+            "type": "string"
+          },
+          "file_pattern": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Resource kind, e.g. Deployment."
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Resource namespace."
+          },
+          "relationship": {
+            "type": "string"
+          },
+          "min_degree": {
+            "type": "integer"
+          },
+          "max_degree": {
+            "type": "integer"
+          },
+          "exclude_entry_points": {
+            "type": "boolean"
+          },
+          "include_connected": {
+            "type": "boolean"
+          },
+          "semantic_query": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Not with query."
+          },
+          "semantic_limit": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 0,
+            "maximum": 500
+          },
+          "semantic_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 99998
+          },
+          "limit": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "maximum": 500
+          },
+          "offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "default": 3200,
+            "minimum": 128,
+            "maximum": 1000000
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "detail": {
+            "type": "string",
+            "enum": [
+              "ids",
+              "default"
+            ],
+            "default": "default"
+          }
+        },
+        "required": [
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      }
+    },
+    {
+      "name": "query_graph",
+      "description": "Read-only Cypher for multi-hop, aggregation, complexity, or cross-service analysis. Default: 200 visible rows with exact/lower-bound totals and truncation; continue safely with next_cursor. graph=missed is a file tree of flagged coverage gaps; absence is not proof of completeness. Use get_graph_schema(diagnostics=full) for properties.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Cypher query"
+          },
+          "project": {
+            "type": "string"
+          },
+          "active_horizons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional active horizon IDs for federated speculative overlay"
+          },
+          "graph": {
+            "type": "string",
+            "enum": [
+              "code",
+              "missed"
+            ],
+            "default": "code",
+            "description": "code graph (default) or missed coverage-gap file tree."
+          },
+          "max_rows": {
+            "type": "integer",
+            "description": "Visible rows (default 200; max 99998); 0 uses the legacy maximum. Evaluation is unchanged.",
+            "minimum": 0,
+            "default": 200
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Live compatibility paging; cannot be combined with cursor."
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Snapshot continuation; keep query/project/graph. Format, budget, and max_rows may change."
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "minimum": 128,
+            "maximum": 1000000,
+            "description": "Sizing hint; hard ceiling is 4 UTF-8 bytes/token. Rows stay whole."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree",
+            "description": "tree may use local @N+suffix prefix refs; json uses direct strings."
+          }
+        },
+        "required": [
+          "query",
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "trace_path",
+      "description": "Trace callers/callees, data flow, or cross-service paths. Defaults exclude tests and resolver evidence. Rows keep qn/hop with explicit totals, relations, and continuations.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "function_name": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "active_horizons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional active horizon IDs for federated speculative overlay"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "inbound",
+              "outbound",
+              "both"
+            ],
+            "default": "both"
+          },
+          "depth": {
+            "type": "integer",
+            "default": 3,
+            "minimum": 1,
+            "maximum": 15
+          },
+          "limit": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 1,
+            "maximum": 5000,
+            "description": "Rows/page; gte flags the 5000-node engine ceiling."
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "default": 3200,
+            "minimum": 128,
+            "maximum": 1000000,
+            "description": "Sizing hint; hard ceiling is 4 UTF-8 bytes/token. Evidence/args yield before nearest graph rows."
+          },
+          "cursor": {
+            "type": "string",
+            "description": "Pass next/next_cursor with traversal args unchanged; budget may increase."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "calls",
+              "data_flow",
+              "cross_service",
+              "topology",
+              "deploy",
+              "run"
+            ],
+            "default": "calls",
+            "description": "calls; argument-aware data_flow; service edges; topology: infra objects, routes, controllers (from a Resource/Route); deploy: what CI jobs and scripts run and deploy; run: what a Service runs (image, Dockerfile, program, env)."
+          },
+          "parameter_name": {
+            "type": "string",
+            "description": "data_flow parameter filter."
+          },
+          "edge_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "risk_labels": {
+            "type": "boolean",
+            "default": false,
+            "description": "Add hop-risk labels."
+          },
+          "include_tests": {
+            "type": "boolean",
+            "default": false
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree",
+            "description": "tree chooses smaller complete direct/grouped output; json uses stable grouped tables."
+          },
+          "include_evidence": {
+            "type": "boolean",
+            "default": false,
+            "description": "Add resolver class and confidence."
+          }
+        },
+        "required": [
+          "function_name",
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      }
+    },
+    {
+      "name": "get_code_snippet",
+      "description": "Read a search_graph symbol. auto bounds source and outlines large containers; full restores up to 500 lines. Source/outline pages continue; coverage_note marks gaps.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "qualified_name": {
+            "type": "string",
+            "description": "search_graph qn, or short name."
+          },
+          "project": {
+            "type": "string"
+          },
+          "include_neighbors": {
+            "type": "boolean",
+            "default": false
+          },
+          "source_mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "full",
+              "outline"
+            ],
+            "default": "auto",
+            "description": "auto outlines 200+ line containers; full returns source; outline lists members."
+          },
+          "member_limit": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "maximum": 500
+          },
+          "member_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "start_line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_lines": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "minimum": 128,
+            "maximum": 1000000,
+            "description": "auto/outline sizing hint (default 2500), hard ceiling 4 UTF-8 bytes/token. Lines stay whole; explicit full is uncapped unless set."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          }
+        },
+        "required": [
+          "qualified_name",
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "anthropic/alwaysLoad": true
+      }
+    },
+    {
+      "name": "get_file_outline",
+      "description": "Declaration outline of one exact repository-relative file: optional exact label filter, source order, exact total/offset/limit paging; file/folder/container nodes excluded.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "file_path": {
+            "type": "string",
+            "description": "Exact repository-relative file path"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "description": "Optional exact node-label filter"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 100
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "project",
+          "file_path"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_graph_schema",
+      "description": "Get node-label and edge-type counts. diagnostics=full also lists queryable properties.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          },
+          "diagnostics": {
+            "type": "string",
+            "enum": [
+              "none",
+              "full"
+            ],
+            "default": "none"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "maximum": 500
+          },
+          "offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "compare_graphs",
+      "description": "Compare two indexed snapshots: deterministic target-only additions and base-only removals of stable node/edge identities; each set capped by limit and a 512 KiB budget with exact totals and truncation reasons.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "base_project": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target_project": {
+            "type": "string",
+            "minLength": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 200
+          },
+          "scan_limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000000,
+            "default": 2000000
+          }
+        },
+        "required": [
+          "base_project",
+          "target_project"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_architecture",
+      "description": "Bounded static architecture; poll pending jobs. include_behavior_evidence=true adds indexed call arguments, parameter declarations and return types; not full dataflow or runtime traces.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "Directory prefix."
+          },
+          "aspects": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "all",
+                "overview",
+                "structure",
+                "dependencies",
+                "routes",
+                "languages",
+                "packages",
+                "entry_points",
+                "hotspots",
+                "boundaries",
+                "layers",
+                "file_tree",
+                "clusters",
+                "cycles",
+                "system_structure"
+              ]
+            },
+            "description": "Default: languages/packages/entry_points. overview omits file_tree. cycles/system_structure opt-in; system_structure alone, no path."
+          },
+          "entry_node_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Start symbol."
+          },
+          "target_node_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Requires entry_node_id."
+          },
+          "expected_generation": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Required generation."
+          },
+          "include_behavior_evidence": {
+            "type": "boolean",
+            "default": false,
+            "description": "system_structure only."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          }
+        },
+        "required": [
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_code",
+      "description": "Graph-ranked text search: compact symbols, full bounded source, or file paths.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "file_pattern": {
+            "type": "string"
+          },
+          "path_filter": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "compact",
+              "full",
+              "files"
+            ],
+            "default": "compact"
+          },
+          "context": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 200
+          },
+          "regex": {
+            "type": "boolean",
+            "default": false
+          },
+          "debug": {
+            "type": "boolean",
+            "default": false,
+            "description": "Add scope_ms/scan_ms/enrich_ms phase timings."
+          },
+          "limit": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 500
+          },
+          "result_limit": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 500
+          },
+          "result_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "raw_limit": {
+            "type": "integer",
+            "default": 5,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "raw_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "raw_content_offset": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Raw-line byte offset; omit for match-centered preview."
+          },
+          "directory_limit": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 0,
+            "maximum": 64
+          },
+          "directory_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "match_limit": {
+            "type": "integer",
+            "default": 8,
+            "minimum": 1,
+            "maximum": 500
+          },
+          "source_max_lines": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 1,
+            "maximum": 200
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "minimum": 128,
+            "maximum": 1000000
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          }
+        },
+        "required": [
+          "pattern",
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_projects",
+      "description": "List projects with stable paging. Identity is lean; stats adds graph sizes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          },
+          "detail": {
+            "type": "string",
+            "enum": [
+              "identity",
+              "stats"
+            ],
+            "default": "identity",
+            "description": "stats adds node/edge/database-size counts."
+          },
+          "include_details": {
+            "type": "boolean",
+            "default": false,
+            "description": "Alias for detail=stats: include branch, node/edge counts and database size. Slower."
+          },
+          "limit": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "maximum": 500
+          },
+          "offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "metadata_only": {
+            "type": "boolean",
+            "default": false,
+            "description": "Compatibility: omit counts, size, and branch."
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "delete_project",
+      "description": "Delete a project from the index",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "index_status",
+      "description": "Project readiness, counts, root, watch state, coverage gaps, and doc_links (doc-comment references: MENTIONS edges, unresolved by reason). diagnostics adds coverage rows; verbose adds Git paths. Best-effort only; verify cited paths with check_index_coverage.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "verbose": {
+            "type": "boolean",
+            "default": false,
+            "description": "Add worktree/shadow Git paths for index-location debugging."
+          },
+          "diagnostics": {
+            "type": "string",
+            "enum": [
+              "none",
+              "summary",
+              "full"
+            ],
+            "default": "none",
+            "description": "Coverage rows: counts, five samples, or up to 500."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          }
+        },
+        "required": [
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "check_index_coverage",
+      "description": "Best-effort exact-path/scope coverage and freshness, paged separately. full diagnostics adds raw detail. Clean is not proof of completeness.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 128
+          },
+          "path_limit": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 1,
+            "maximum": 128
+          },
+          "path_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32
+          },
+          "scope_limit": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "scope_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "diagnostics": {
+            "type": "string",
+            "enum": [
+              "none",
+              "full"
+            ],
+            "default": "none"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          }
+        },
+        "required": [
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "detect_changes",
+      "description": "Map a Git diff to files and impact. Page with snapshot cursors.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "files",
+              "impact",
+              "tests"
+            ],
+            "default": "impact"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "inbound",
+              "outbound",
+              "both"
+            ],
+            "default": "inbound",
+            "description": "inbound=callers; outbound=dependencies; both=union."
+          },
+          "depth": {
+            "type": "integer",
+            "default": 2
+          },
+          "edge_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Inbound walk; default CALLS."
+          },
+          "fixpoint": {
+            "type": "boolean",
+            "description": "Walk to closure; no depth."
+          },
+          "via": {
+            "type": "boolean",
+            "description": "Add via_qn, via_edge."
+          },
+          "seeds": {
+            "type": "string",
+            "enum": [
+              "none",
+              "list"
+            ],
+            "default": "none",
+            "description": "List changed-symbol seeds with independent pagination."
+          },
+          "seed_filter": {
+            "type": "string",
+            "enum": [
+              "all",
+              "product"
+            ],
+            "default": "all",
+            "description": "Product excludes indexed test metadata and configured test globs."
+          },
+          "config_path": {
+            "type": "string",
+            "description": "Project config override; absolute or project-relative."
+          },
+          "seed_limit": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "seed_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "seed_cursor": {
+            "type": "string",
+            "description": "Continue seeds:list; excludes nonzero seed_offset."
+          },
+          "limit": {
+            "type": "integer",
+            "default": 200,
+            "maximum": 5000
+          },
+          "impact_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "impact_cursor": {
+            "type": "string"
+          },
+          "changed_limit": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 0,
+            "maximum": 5000
+          },
+          "changed_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "changed_cursor": {
+            "type": "string"
+          },
+          "module_limit": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 0,
+            "maximum": 256
+          },
+          "module_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "module_cursor": {
+            "type": "string"
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "default": 3200,
+            "minimum": 128,
+            "maximum": 1000000,
+            "description": "Sizing hint; hard ceiling is 4 UTF-8 bytes/token."
+          },
+          "base_branch": {
+            "type": "string",
+            "description": "Default: origin/HEAD, else main, else master, else the upstream."
+          },
+          "since": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          }
+        },
+        "required": [
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "manage_adr",
+      "description": "Outline an ADR by default; get reads it; update replaces it",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "outline",
+              "get",
+              "update",
+              "set_sections",
+              "sections"
+            ],
+            "default": "outline",
+            "description": "outline pages headings; get reads; update replaces the whole document; set_sections rewrites only the named sections and leaves every other byte untouched (an identical repeated write is byte-identical, so retrying is safe); sections is legacy."
+          },
+          "content": {
+            "type": "string",
+            "description": "Whole document for update"
+          },
+          "section_updates": {
+            "type": "object",
+            "description": "set_sections: section name -> new body. Any heading name works; names match exactly, including case.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "section_limit": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "maximum": 500
+          },
+          "section_offset": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "tree",
+              "json"
+            ],
+            "default": "tree"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "ingest_traces",
+      "description": "Record observed runtime calls so the graph can distinguish observed from merely possible paths. Each trace is a call path (qualified names, adjacent = callerâ†’callee) or a bare caller/callee pair. Stored per run label, keyed by qualified name (reindex-proof). Only pairs whose both endpoints are indexed symbols are stored; the response reports unresolved names (up to 10) so the producer can fix its naming.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "traces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Call path of qualified names, caller before callee; 2..256 entries"
+                },
+                "caller": {
+                  "type": "string"
+                },
+                "callee": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "description": "How often this trace was observed (default 1)"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "label": {
+            "type": "string",
+            "description": "Run identity, e.g. 'pytest 2026-08-27' (default 'unlabeled'); counts accumulate per label and whole runs age out together"
+          },
+          "project": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "traces",
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_horizons",
+      "description": "Discover stored horizons for an exact project; stable ID paging, metadata and context previews. Does not activate or mutate horizons.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "PROMOTED",
+              "DISCARDED",
+              "ALL"
+            ],
+            "default": "ACTIVE"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 50
+          }
+        },
+        "required": [
+          "project"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "create_horizon",
+      "description": "Create or update an ephemeral cognitive horizon overlay with speculative nodes and virtual edges",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizon_id": {
+            "type": "string",
+            "description": "Identifier for the horizon (e.g. h_calculadora_mobile)"
+          },
+          "project": {
+            "type": "string",
+            "description": "Project name or path to associate with this horizon"
+          },
+          "nodes": {
+            "type": "array",
+            "description": "Speculative symbolic nodes",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cbm_uri": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "epistemic_status": {
+                  "type": "string",
+                  "enum": [
+                    "PROPOSED",
+                    "ACCEPTED",
+                    "CONTESTED",
+                    "SHADOWED"
+                  ],
+                  "default": "PROPOSED"
+                },
+                "is_dangling": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "code_snippet": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "cbm_uri",
+                "label"
+              ]
+            }
+          },
+          "edges": {
+            "type": "array",
+            "description": "Virtual edges connecting speculative nodes",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source_uri": {
+                  "type": "string"
+                },
+                "target_uri": {
+                  "type": "string"
+                },
+                "edge_type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source_uri",
+                "target_uri",
+                "edge_type"
+              ]
+            }
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "promote_horizon",
+      "description": "Validate Two-Tier anchors and admit a horizon into the base graph",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizon_id": {
+            "type": "string",
+            "description": "Identifier of the horizon to promote"
+          },
+          "anchors": {
+            "type": "array",
+            "description": "Optional Two-Tier anchors for drift validation",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file_path": {
+                  "type": "string"
+                },
+                "symbol_name": {
+                  "type": "string"
+                },
+                "byte_start": {
+                  "type": "integer"
+                },
+                "byte_len": {
+                  "type": "integer"
+                },
+                "ast_signature_hash": {
+                  "type": "integer"
+                },
+                "expected_text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file_path"
+              ]
+            }
+          }
+        },
+        "required": [
+          "horizon_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "sync_horizon_spec",
+      "description": "Sync and compile tactical specification markdown into an ephemeral horizon overlay",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizon_id": {
+            "type": "string",
+            "description": "Identifier of the target horizon"
+          },
+          "file_path": {
+            "type": "string",
+            "description": "Path of the markdown specification file"
+          },
+          "content": {
+            "type": "string",
+            "description": "Optional markdown text content (reads from file_path on disk if omitted)"
+          },
+          "project": {
+            "type": "string",
+            "description": "Optional repository or project name"
+          }
+        },
+        "required": [
+          "horizon_id",
+          "file_path"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "validate_scope_horizon",
+      "description": "Validate scope adjacency and detect isolated dangling nodes in a horizon overlay",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizon_id": {
+            "type": "string",
+            "description": "Identifier of the horizon to validate"
+          },
+          "strict_connectivity": {
+            "type": "boolean",
+            "description": "Whether dangling nodes without edges fail validation (default true)"
+          },
+          "check_conflicts": {
+            "type": "boolean",
+            "description": "Check concurrent conflicts (default false)"
+          }
+        },
+        "required": [
+          "horizon_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "check_horizon_conflicts",
+      "description": "Check preventive concurrent conflicts between an ephemeral horizon and sibling horizons",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizon_id": {
+            "type": "string",
+            "description": "Identifier of the horizon"
+          }
+        },
+        "required": [
+          "horizon_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "union_session_open",
+      "description": "Open a bounded Union session; optional host/context/grounding fields bind it to the E01 repository mutation gate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "identity": {
+            "type": "string",
+            "description": "Skill archetype identity (e.g. developer, architect)"
+          },
+          "contract_id": {
+            "type": "string",
+            "description": "Registered skill contract identifier"
+          },
+          "based_on_seq": {
+            "type": "string",
+            "description": "Belief sequence or generation hash this session is grounded upon"
+          },
+          "client_pid": {
+            "type": "integer",
+            "description": "Client process ID"
+          },
+          "host": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "antigravity"
+            ],
+            "description": "Host that owns the work context"
+          },
+          "context_id": {
+            "type": "string",
+            "description": "Host-issued stable thread or conversation ID"
+          },
+          "grounding_kind": {
+            "type": "string",
+            "enum": [
+              "canon_citation",
+              "declared_invention"
+            ]
+          },
+          "intent_key": {
+            "type": "string",
+            "description": "Change intent authorized by this session"
+          },
+          "intent_scope": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Absolute target path"
+                },
+                "operation": {
+                  "type": "string",
+                  "enum": [
+                    "create",
+                    "modify",
+                    "delete",
+                    "rename"
+                  ]
+                }
+              },
+              "required": [
+                "path",
+                "operation"
+              ]
+            },
+            "description": "Exact path and operation pairs this session may write"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Required canon citation for canon_citation"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Required rationale for declared_invention"
+          }
+        },
+        "required": [
+          "identity"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "union_session_get",
+      "description": "Query the live state of an open session horizon",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizon_id": {
+            "type": "string",
+            "description": "Identifier of the session horizon"
+          }
+        },
+        "required": [
+          "horizon_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "union_session_close",
+      "description": "Close a session horizon, emitting a typed closure event and destroying speculative content",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizon_id": {
+            "type": "string",
+            "description": "Identifier of the session horizon to close"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "NORMAL",
+              "ABNORMAL",
+              "EMPTY"
+            ],
+            "default": "NORMAL"
+          }
+        },
+        "required": [
+          "horizon_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "union_record_action",
+      "description": "Authorize and record a skill action through the effect-class gateway",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizon_id": {
+            "type": "string",
+            "description": "Active session horizon ID"
+          },
+          "action_name": {
+            "type": "string",
+            "description": "Name of the action being invoked"
+          },
+          "effect_class": {
+            "type": "string",
+            "enum": [
+              "IDEMPOTENT",
+              "COMPENSABLE",
+              "IRREVERSIBLE",
+              "UNCLASSIFIED"
+            ],
+            "default": "IDEMPOTENT"
+          },
+          "auth_id": {
+            "type": "string",
+            "description": "Scoped operator authorization ID (required for IRREVERSIBLE)"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "description": "Idempotency key for COMPENSABLE actions"
+          }
+        },
+        "required": [
+          "horizon_id",
+          "action_name"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "classify_activity",
+      "description": "Heuristically label intent CONSULTATIVE or SPECIALTY; this is not a gate for thematic discovery or agent execution",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intent": {
+            "type": "string",
+            "description": "The user intent, prompt, or task description"
+          }
+        },
+        "required": [
+          "intent"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "validate_provenance",
+      "description": "Validate specialty judgment provenance (requires active canon citation or declared invention with rationale)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "theme_id": {
+            "type": "string",
+            "description": "Governing craft theme ID for canon citation"
+          },
+          "node_uri": {
+            "type": "string",
+            "description": "Theme rule node URI"
+          },
+          "pinned_version": {
+            "type": "string",
+            "description": "Pinned version of the theme"
+          },
+          "declared_invention": {
+            "type": "boolean",
+            "description": "True if novel craft is explicitly declared"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Rationale for declared invention"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "theme_lookup",
+      "description": "Lookup a Thematic Knowledge Base in the registry (surfaces ABSENT as a first-class state)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "theme_id": {
+            "type": "string",
+            "description": "Thematic Knowledge Base ID"
+          },
+          "version": {
+            "type": "string",
+            "description": "Optional exact immutable version"
+          }
+        },
+        "required": [
+          "theme_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "theme_search",
+      "description": "Search the thematic knowledge catalog by topic, aliases, tags, and applicability metadata",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Topic or craft method to discover"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "DEPRECATED",
+              "ABSENT"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "theme_list",
+      "description": "List thematic knowledge catalog entries with optional namespace and status filters",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "DEPRECATED",
+              "ABSENT"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "theme_graph_search",
+      "description": "Search the selected thematic graph for method, principle, practice, condition, exception, and evidence nodes",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "theme_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "description": "Exact immutable version; defaults to latest catalog entry"
+          },
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 50
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        },
+        "required": [
+          "theme_id",
+          "query"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "theme_graph_query",
+      "description": "Traverse the selected thematic graph with a read-only Cypher query to inspect relations and method nuances",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "theme_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "description": "Exact immutable version; defaults to latest catalog entry"
+          },
+          "query": {
+            "type": "string",
+            "description": "Read-only graph query"
+          },
+          "max_rows": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99998,
+            "default": 200
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          }
+        },
+        "required": [
+          "theme_id",
+          "query"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "theme_register",
+      "description": "Register or catalog a Thematic Knowledge Base",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "theme_id": {
+            "type": "string",
+            "description": "Theme ID (e.g. @org/clean-arch)"
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Namespace"
+          },
+          "curator": {
+            "type": "string",
+            "description": "Curator identifier"
+          },
+          "version": {
+            "type": "string",
+            "description": "Theme semantic version"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable theme name"
+          },
+          "target_uri": {
+            "type": "string",
+            "description": "Stable URI of a whole read-only registered CBM project graph (cbm-project://<project>)"
+          },
+          "description": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "string"
+          },
+          "founding_provenance": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "DEPRECATED",
+              "ABSENT"
+            ],
+            "default": "ACTIVE"
+          }
+        },
+        "required": [
+          "theme_id",
+          "namespace",
+          "curator",
+          "version"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "binding_claim",
+      "description": "Declare or query a project binding to a craft theme (DEVE normative or PODE consulted)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "claim_id": {
+            "type": "string",
+            "description": "Unique binding claim ID"
+          },
+          "theme_id": {
+            "type": "string",
+            "description": "Theme ID"
+          },
+          "pinned_version": {
+            "type": "string",
+            "description": "Pinned version"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "NORMATIVE",
+              "CONSULTED"
+            ],
+            "default": "NORMATIVE"
+          },
+          "binding_scope": {
+            "type": "string",
+            "description": "Scope of code or architecture affected"
+          },
+          "validated_by": {
+            "type": "string",
+            "description": "Validating entity (operator required for NORMATIVE)"
+          }
+        },
+        "required": [
+          "claim_id",
+          "theme_id",
+          "pinned_version",
+          "validated_by"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "founding_propose",
+      "description": "Propose a new Thematic Knowledge Base from declared inventions harvested during closure sweep",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "suggested_theme_id": {
+            "type": "string",
+            "description": "Proposed theme ID"
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Proposed namespace"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why this craft convention warrants formalization"
+          },
+          "origin_session": {
+            "type": "string",
+            "description": "Origin session horizon ID"
+          },
+          "suggested_curator": {
+            "type": "string",
+            "description": "Suggested curator"
+          }
+        },
+        "required": [
+          "suggested_theme_id",
+          "namespace",
+          "rationale",
+          "origin_session"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "founding_decide",
+      "description": "Operator decision on a founding proposal (accept into DRAFT theme or decline)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "suggested_theme_id": {
+            "type": "string",
+            "description": "Theme ID of the proposal"
+          },
+          "operator_accepted": {
+            "type": "boolean",
+            "description": "True to accept proposal into DRAFT, false to decline"
+          },
+          "decided_by": {
+            "type": "string",
+            "description": "Identity of operator deciding the proposal (e.g. 'operator')"
+          },
+          "is_agent_autonomous": {
+            "type": "boolean",
+            "description": "True if caller is an agent (autonomous founding forbidden)",
+            "default": false
+          }
+        },
+        "required": [
+          "suggested_theme_id",
+          "operator_accepted"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "contest_verify",
+      "description": "Submit a typed contestation with evidence against a target claim (caller-blind verification)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "target_ref": {
+            "type": "string",
+            "description": "Target claim or horizon reference"
+          },
+          "target_horizon": {
+            "type": "string",
+            "description": "Target session horizon ID containing the claim"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "INFORMATIVE",
+              "BLOCKING",
+              "INVALIDATING"
+            ],
+            "default": "BLOCKING"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Mandatory concrete evidence references"
+          }
+        },
+        "required": [
+          "target_ref",
+          "evidence"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "union_claim_capture",
+      "description": "Capture a conversational claim into a session horizon as PROPOSED (Scope C03)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizon_id": {
+            "type": "string",
+            "description": "Target session horizon ID"
+          },
+          "claim_id": {
+            "type": "string",
+            "description": "Unique claim ID"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "DECISION",
+              "OPEN_QUESTION",
+              "CONSTRAINT",
+              "FACT",
+              "VERDICT"
+            ],
+            "description": "Claim epistemic type"
+          },
+          "predicate": {
+            "type": "string",
+            "description": "Single self-contained declarative sentence ending with period"
+          },
+          "consequence": {
+            "type": "string",
+            "description": "Consequence if ignored or unanswered"
+          },
+          "based_on_seq": {
+            "type": "string",
+            "description": "Belief sequence baseline"
+          },
+          "exchange_seq": {
+            "type": "integer",
+            "description": "Host log exchange sequence number"
+          }
+        },
+        "required": [
+          "horizon_id",
+          "claim_id",
+          "type",
+          "predicate"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "union_claim_resolve",
+      "description": "Assign a mandatory destination to a conversational claim before session closure (Scope C03)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizon_id": {
+            "type": "string",
+            "description": "Target session horizon ID"
+          },
+          "claim_id": {
+            "type": "string",
+            "description": "Claim ID to resolve"
+          },
+          "destination": {
+            "type": "string",
+            "enum": [
+              "PROMOTED",
+              "CONVERTED_OPEN_QUESTION",
+              "DISCARDED"
+            ],
+            "description": "Mandatory destination"
+          },
+          "owner_or_reason": {
+            "type": "string",
+            "description": "Owner for OPEN_QUESTION or typed reason for DISCARDED (e.g. exploration, dead_end)"
+          },
+          "validator_identity": {
+            "type": "string",
+            "description": "Operator identity if validating DECISION/OPEN_QUESTION intent"
+          }
+        },
+        "required": [
+          "horizon_id",
+          "claim_id",
+          "destination"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "extract_harness_bundle",
+      "description": "Extract an asymmetric bifocal HarnessEvidenceBundle v2 with typed seam map, tri-state effect lattice, and composite snapshot_id",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "change_kind": {
+            "type": "string"
+          },
+          "k_hop": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3,
+            "default": 1
+          },
+          "poles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "poles"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "evaluate_fast_path",
+      "description": "Evaluate fail-closed Fast-Path eligibility on a HarnessEvidenceBundle v2 or candidate poles",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "change_kind": {
+            "type": "string"
+          },
+          "bundle_json": {
+            "type": "string"
+          },
+          "poles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "record_admission_manifest",
+      "description": "Record an immutable HarnessAdmissionManifest in the SQLite WAL governance ledger (Option A full forensic trail)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "manifest_id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "snapshot_id": {
+            "type": "string"
+          },
+          "bundle_hash": {
+            "type": "string"
+          },
+          "fast_path_granted": {
+            "type": "boolean"
+          },
+          "fast_path_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "advisor_invoked": {
+            "type": "boolean"
+          },
+          "blocking_violations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tdd_oracles_passed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "manifest_id",
+          "task_id",
+          "snapshot_id",
+          "bundle_hash"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "tradition_propose",
+      "description": "Propose a candidate architectural rule (UNVERIFIED_CANDIDATE) or operator-review an existing rule in the Tradition Graph",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "propose",
+              "review"
+            ],
+            "default": "propose"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "scope_glob": {
+            "type": "string"
+          },
+          "constraint_kind": {
+            "type": "string"
+          },
+          "payload_json": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "rule_id"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  ]
+}

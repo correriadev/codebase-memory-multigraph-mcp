@@ -1,145 +1,45 @@
 ---
 doc_type: feature
-domain: mutation_gate
-stack: [C, SQLite, JSON-RPC, Antigravity-Hooks, Codex-Hooks]
+domain: hooks
+stack: [C, SQLite, MCP]
 node_id: "feature:mutation-gate"
-tags: [mutation-gate, hooks, lifecycle-seam, cognitive-respiration, intent-scope]
+tags: [hooks, mutation-gate]
 edges:
-  - relation: implements
+  - relation: references
     target: "adr:architecture"
-  - relation: tested_by
-    target: "adr:tests"
-updated: 2026-10-01
+    read: must
+updated: 2026-10-21
 ---
-# Lifecycle Seam & Repository Mutation Gate
-
-Governs the physical boundary between agent deliberation and filesystem modification across Google Antigravity and OpenAI Codex hosts, enforcing strict `intent_scope` whitelists and durable mutation journals.
-
 ```graph
-{
-  "node_id": "feature:mutation-gate",
-  "domain": "mutation_gate",
-  "implements": ["adr:architecture"],
-  "tested_by": ["adr:tests"],
-  "entrypoints": [
-    "src/cli/hook_augment.c",
-    "src/main.c"
-  ],
-  "registration_files": [
-    "src/cli/cli.c",
-    "src/mcp/union_handler.c"
-  ],
-  "reference_files": [
-    "src/union/mutation_gate.c",
-    "src/union/mutation_gate.h"
-  ],
-  "code_files": [
-    "src/union/mutation_journal.c",
-    "src/union/mutation_journal.h",
-    "src/cli/config_toml_edit.c"
-  ],
-  "test_files": [
-    "tests/test_cli.c",
-    "tests/test_union_session.c",
-    "tests/test_config_toml_edit.c"
-  ]
-}
+{"node_id":"feature:mutation-gate","domain":"hooks","implements":["adr:architecture"],"tested_by":["adr:tests"],"entrypoints":["src/main.c","src/cli/hook_augment.c"],"registration_files":["src/mcp/mcp.c"],"reference_files":[],"code_files":["src/union/mutation_gate.c","src/union/mutation_journal.c"],"test_files":["tests/test_cli.c","tests/windows/test_hook_augment.py"],"knowledge":{"schema_version":1,"entities":[{"id":"capability:host-mutation-hook","type":"capability","label":"Hook de mutação","definition":"Intercepta mutações reconhecidas quando ativado.","aliases":[]},{"id":"rule:strict-opt-in","type":"rule","label":"Ativação estrita explícita","definition":"Somente valor 1 habilita enforcement.","aliases":[]}],"claims":[{"id":"claim:implemented-boundary","subject":"capability:host-mutation-hook","relation":"constrained_by","object":"rule:strict-opt-in","statement":"cbm_hook_mutation_enforcement_enabled retorna true somente para CBM_ENFORCE_MUTATION_GATE=1; o handler sai cedo com sucesso nos demais casos.","kind":"observation","status":"supported","evidence":[{"kind":"code","source":"src/cli/hook_augment.c","locator":"cbm_hook_mutation_enforcement_enabled e guard do hook","snapshot":null}],"derived_from":[],"gap":null}]}}
 ```
+
+# Hooks e verificação opcional de mutação
 
 ## OVERVIEW
-The Mutation Gate subsystem implements the **Cognitive Respiration Seam** (SCOPE-E01). It connects native IDE lifecycle hooks (Antigravity's `PreToolUse` and Codex's `pre_tool_use`) with the CBM Union engine. It guarantees that autonomous agents cannot write, modify, delete, or rename repository files without an active session horizon whose `intent_scope` explicitly covers those exact paths.
 
-## FOLDER STRUCTURE
-<folder_structure>
-```
-src/
-├── union/                  # Core gate evaluation, intent scoping, and durable journal
-│   ├── mutation_gate.c     # Path canonicalization and scope matching logic
-│   ├── mutation_gate.h     # Gate verdict enums and struct definitions
-│   ├── mutation_journal.c  # SQLite WAL durable intent logging and recovery
-│   └── mutation_journal.h  # Journal entry structs and prototypes
-└── cli/                    # Host hook adapters and CLI augmentation
-    ├── hook_augment.c      # Hook installation and configuration generator
-    └── config_toml_edit.c  # Atomic Codex config.toml patcher
-```
-</folder_structure>
+Hooks integram eventos do cliente ao CBM. Hooks de contexto fornecem orientação/grounding; hooks de mutação podem consultar o gate antes de alterações reconhecidas. São recursos distintos do servidor MCP e não são requisito para usar o grafo.
 
-## MAIN CONCEPTS
+## POLÍTICA ATUAL
 
-### The Mutation Seam
-- **Passive Reads**: All discovery, inspection, and graph queries execute without gate interference.
-- **Physical Mutation Limiar**: When an agent invokes file mutation tools (`write_to_file`, `replace_file_content`), the host hook intercepts the execution before touching disk.
-- **Intent Scope Whitelist**: Sessions must explicitly declare 1 to 4 exact path and operation pairs (`create`, `modify`, `delete`, `rename`). Any target outside this whitelist is vetoed immediately.
-- **Atomicity of Multi-File Patches**: In tools like `apply_patch`, if any single file among the targets is outside the session's `intent_scope`, the entire patch is refused atomically before any file is touched.
+A interceptação estrita de mutação está **desligada por padrão**. `cbm_hook_mutation_enforcement_enabled()` só habilita quando `CBM_ENFORCE_MUTATION_GATE` é exatamente `1`. Sem isso, os modos de mutação retornam sucesso sem ler payload, calcular hashes ou chamar o daemon. A checagem também ocorre na entrada do executável.
 
-### Host Hook Contracts
+Quando habilitada e registrada no cliente, a engine verifica contexto do host, sessão, grounding e pares exatos de caminho/operação do escopo. Há journal e recusas estruturadas. A engine interna não foi afrouxada: mudou a ativação do interceptador no host.
 
-| Host | Configuration Location | Event Intercepted | Denial Protocol |
-| :--- | :--- | :--- | :--- |
-| **Google Antigravity** | `~/.gemini/antigravity/hooks.json` or `.agents/hooks.json` | `PreToolUse` | Returns JSON `{"decision": "deny", "reason": "..."}` |
-| **OpenAI Codex** | `~/.codex/config.toml` or `.codex/hooks.json` | `pre_tool_use` | Returns JSON with `hookSpecificOutput.permissionDecision: deny` |
+## USO
 
-### Path Canonicalization & Boundary Rules
-- **Workspace Confinement**: All paths are resolved to canonical absolute paths via `cbm_path_within_root`. Traversal escapes (`../`) are detected and rejected.
-- **Intermediate Directories**: When creating files in nested directories that do not yet exist, intermediate path canonicalization resolves safely to the closest existing ancestor within workspace boundaries.
-- **Renames**: A rename requires two explicit scope declarations: one for the source path (`delete` or `rename`) and one for the destination path (`create` or `rename`).
+Para testar o MCP, mantenha hooks fora da configuração do cliente e invoque as tools diretamente. Para experimentar interceptação estrita, primeiro prepare sessão/contexto/escopo e então configure o hook compatível com o cliente e a variável no ambiente do processo que o executa. Só definir a variável sem registrar hook não intercepta ferramentas.
 
-## HOW TO CONFIGURE & RUN THE MUTATION GATE
+`install` pode escrever integrações conforme cliente e opções; revisar sua configuração depois de usá-lo. Copiar uma skill não instala automaticamente um hook. O estado instalado em uma máquina não faz parte do contrato do repositório.
 
-### 1. Augment Host Configuration via CLI
-The CBM binary provides automated hook installation commands:
-```bash
-# Augment Antigravity hooks
-cbm hook-augment --host antigravity
+## LIMITES
 
-# Augment Codex config.toml
-cbm hook-augment --host codex
-```
+O gate não é um sandbox do sistema operacional. Seu alcance depende de eventos, payloads e ferramentas reconhecidas pelo adaptador. Scripts arbitrários ou editores fora da integração não são cobertos universalmente. Não há garantia de impedir alucinação nem justificativa para tornar todo uso do agente dependente desse fluxo.
 
-### 2. Manual Evaluation via CLI
-For testing hook integration, evaluate tool inputs via stdin:
-```bash
-echo '{"tool_name": "write_to_file", "tool_input": {"TargetFile": "src/main.c"}}' | cbm hook-eval --host antigravity --stdin
-```
-
-<code_example>
-# Session opening with explicit 2-path whitelist
-union_session_open(
-    identity="developer-backend",
-    contract_id="c_strict_tdd",
-    based_on_seq="gen_2026_09_30",
-    client_id="conv_86bef9aa",
-    intent_scope=[
-        {"path": "c:/Users/corre/Documents/codebase-memory-mcp/tests/test_auth.c", "operation": "create"},
-        {"path": "c:/Users/corre/Documents/codebase-memory-mcp/src/auth/auth_service.c", "operation": "create"}
-    ]
-)
-
-# Authorized file modification (within scope):
-write_to_file(TargetFile="c:/Users/corre/Documents/codebase-memory-mcp/src/auth/auth_service.c", CodeContent="...")
-
-# Vetoed file modification (outside scope -> hook blocks execution):
-write_to_file(TargetFile="c:/Users/corre/Documents/codebase-memory-mcp/src/unauthorized.c", CodeContent="...")
-</code_example>
-
-## TELEMETRY & REPORTING
-The gate maintains a strict separation in session telemetry:
-- `refusals`: Semantic Union gateway refusals (e.g. effect budget exceeded, contract violation).
-- `hook_refusals`: Durable host hook vetoes recorded in `mutation_hook_refusal_journal`.
-Both counters are queryable via `union_session_get` and validated during `union_session_close`.
-
-## DOCUMENT MAP
-
-```mermaid
-graph TD
-    THIS["Lifecycle Seam & Mutation Gate"] -->|implements| ARCH["Project Architecture"]
-    THIS -->|tested_by| TESTS["Testing Protocol"]
-    click ARCH "../adr/ARCHITECTURE.md"
-    click TESTS "../adr/TESTS.md"
-```
+Testes relevantes ficam em `tests/test_cli.c` e na camada Windows; conferir build e seleção antes de interpretar resultados históricos.
 
 ## REFERENCES
-- [**ARCHITECTURE.md**](../adr/ARCHITECTURE.md): System architecture and layer breakdown.
-- [**TESTS.md**](../adr/TESTS.md): Test suites and coverage requirements.
-- [**ADR-001-COGNITIVE-RESPIRATION.md**](../adr/ADR-001-COGNITIVE-RESPIRATION.md): Respiration architecture decision.
-- [**union_workflow.md**](./union_workflow.md): The 14 Union tools and epistemic governance.
+
+- [Arquitetura](../adr/ARCHITECTURE.md).
+- [Testes](../adr/TESTS.md).
+- [Catálogo de tools](../guide/TOOLS_REFERENCE.md).

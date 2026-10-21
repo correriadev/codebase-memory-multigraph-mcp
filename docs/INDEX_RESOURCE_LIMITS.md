@@ -37,18 +37,7 @@ publish a partial graph as a complete index.
 For an explicit MCP request the error payload contains:
 
 ```json
-{
-  "status": "error",
-  "code": "resource_limit_exceeded",
-  "stage": "discovery",
-  "resource": "files",
-  "observed": 250001,
-  "limit": 250000,
-  "unit": "files",
-  "retryable": true,
-  "serving_index_preserved": true,
-  "message": "Index discovery exceeded index_max_files"
-}
+{"status":"error","code":"resource_limit_exceeded","stage":"discovery","resource":"files","observed":250001,"limit":250000,"unit":"files","retryable":true,"serving_index_preserved":true,"message":"Index discovery exceeded index_max_files"}
 ```
 
 The previous database remains available because publication occurs only after a

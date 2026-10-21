@@ -9974,7 +9974,8 @@ static void install_cli_agent_configs(const cbm_detected_agents_t *agents, const
             if (!hook_ok) {
                 record_agent_config_error(false, "Codex CLI", "hook_install", hook_target);
             } else {
-                printf("  hooks: SessionStart + SubagentStart + PreToolUse mutation gate\n");
+                printf("  hooks: SessionStart + SubagentStart (graph context); mutation gate off by default\n");
+                printf("  opt-in: CBM_ENFORCE_MUTATION_GATE=1 enables strict mutation checks\n");
                 printf("  note: non-managed hooks require /hooks trust; definition changes "
                        "require re-trust\n");
             }
@@ -10052,7 +10053,7 @@ static void install_cli_agent_configs(const cbm_detected_agents_t *agents, const
                 record_agent_config_error(false, "Antigravity", "mutation_hook_install",
                                           hooks_path);
             } else {
-                printf("  hooks: %s (PreToolUse mutation gate)\n", hooks_path);
+                printf("  hooks: %s (mutation gate off by default; opt-in CBM_ENFORCE_MUTATION_GATE=1)\n", hooks_path);
             }
         }
         /* SessionStart is not part of Antigravity's documented hook surface.

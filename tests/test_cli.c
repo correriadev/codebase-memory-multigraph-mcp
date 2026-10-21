@@ -13555,6 +13555,27 @@ TEST(cli_hook_augment_context_tracks_search_json_shape) {
     PASS();
 }
 
+TEST(cli_mutation_hook_enforcement_requires_explicit_opt_in) {
+    char *saved = save_test_env("CBM_ENFORCE_MUTATION_GATE");
+    cbm_unsetenv("CBM_ENFORCE_MUTATION_GATE");
+    bool default_off = !cbm_hook_mutation_enforcement_enabled();
+    char *args[] = {"--event", "PreToolUse", "--dialect", "codex-mutation"};
+    int default_result = cbm_cmd_hook_augment(4, args);
+    cbm_setenv("CBM_ENFORCE_MUTATION_GATE", "1", 1);
+    bool explicit_on = cbm_hook_mutation_enforcement_enabled();
+    cbm_setenv("CBM_ENFORCE_MUTATION_GATE", "0", 1);
+    bool explicit_off = !cbm_hook_mutation_enforcement_enabled();
+    cbm_setenv("CBM_ENFORCE_MUTATION_GATE", "true", 1);
+    bool typo_off = !cbm_hook_mutation_enforcement_enabled();
+    restore_test_env("CBM_ENFORCE_MUTATION_GATE", saved);
+    ASSERT_TRUE(default_off);
+    ASSERT_EQ(default_result, 0);
+    ASSERT_TRUE(explicit_on);
+    ASSERT_TRUE(explicit_off);
+    ASSERT_TRUE(typo_off);
+    PASS();
+}
+
 TEST(cli_mutation_hook_adapters_fail_closed_and_keep_reads_side_effect_free) {
     ASSERT_TRUE(cbm_hook_mutation_invocation_supported("PreToolUse", "codex-mutation"));
     ASSERT_TRUE(cbm_hook_mutation_invocation_supported("PreToolUse", "antigravity-mutation"));
@@ -19162,6 +19183,7 @@ SUITE(cli) {
     RUN_TEST(cli_codex_preflight_reports_heading_and_reason);
 #endif
     RUN_TEST(cli_hook_augment_context_tracks_search_json_shape);
+    RUN_TEST(cli_mutation_hook_enforcement_requires_explicit_opt_in);
     RUN_TEST(cli_mutation_hook_adapters_fail_closed_and_keep_reads_side_effect_free);
     RUN_TEST(cli_mutation_hook_rename_requires_both_scoped_endpoints);
     RUN_TEST(cli_mutation_apply_patch_requires_one_file);

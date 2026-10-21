@@ -1,234 +1,33 @@
-# Consumption & Integration Guide — Codebase Memory MCP
+# Uso do fork no ambiente de um agente
 
-This guide details how human engineers and autonomous AI agents configure, initialize, and consume `codebase-memory-mcp` across supported platforms and IDEs.
+## COMEÇAR PELO GRAFO
 
----
+O executável MCP oferece as tools. Uma skill é um roteiro que o agente lê; não acrescenta capacidade ao servidor. Um hook é um adaptador de evento do cliente. É possível usar o fork diretamente por MCP sem as skills experimentais ou hooks.
 
-## 1. System Requirements & Binary Architecture
+1. Compile o fork ou use uma build comprovadamente originada dele; o instalador remoto do upstream não garante as extensões deste checkout.
+2. Configure o cliente para iniciar **esse executável** em modo MCP. Use a configuração MCP já suportada pelo cliente; depois reinicie a conexão.
+3. Confira `tools/list`: esta revisão verificou 45 nomes. Ter só os 17 herdados indica outra superfície/build ou filtragem do cliente; conferir caminho e versão antes de atribuir isso ao fork.
+4. Use `list_projects`, `index_repository`, `index_status` e consultas estruturais. A [referência](TOOLS_REFERENCE.md) diferencia as famílias.
 
-`codebase-memory-mcp` is compiled as a single native C11 executable with embedded SQLite and Tree-sitter parsers. It requires **no external daemon, no Docker, and no runtime interpreter (Node/Python)** to run the core MCP server.
+O cliente pode impor allowlists e não expor todas as tools anunciadas. Nomes e schemas do servidor são verificáveis; disponibilidade em cada cliente é uma integração separada.
 
-| Platform | Binary Name | Build Requirements | Notes |
-| :--- | :--- | :--- | :--- |
-| **Windows Native** | `cbm.exe` | MSYS2 / MinGW-w64 (GCC 11+ or Clang 13+) | Native Win32 file locking, memory-mapped I/O, path normalization. |
-| **Linux / POSIX** | `cbm` | GCC 9+ / Clang 10+, `make`, `libzstd` | Native POSIX threads, SQLite WAL mode, UNIX domain sockets. |
-| **macOS (Darwin)** | `cbm` | Apple Clang (Xcode CLI Tools) | Universal binary (ARM64 / x86_64). |
-| **WSL2 / DrvFs** | `cbm` | Linux toolchain | Cross-filesystem boundary support, `ETXTBSY` avoidance. |
+## RECURSOS OPCIONAIS
 
----
+| Necessidade concreta | Recurso |
+|---|---|
+| Encontrar implementação e dependências | Grafo herdado; dispensa governança Union. |
+| Consultar hipótese junto à base | Horizonte e `active_horizons`, com [limites do overlay](../feature/multi_graph_federation.md). |
+| Consultar conhecimento separado/versionado | [Catálogo de temas](../feature/tradition.md). |
+| Registrar claims e encerramento | [Union](../feature/union_workflow.md). |
+| Obter contexto de uma mudança e registrar avaliação | [Harness](../feature/harness_v2.md). |
+| Interceptar mutações reconhecidas pelo cliente | [Hooks opcionais](../feature/mutation_gate.md). |
 
-## 2. Client Configuration
+## CONTRATOS E LIMITES
 
-### 2.1 Google Antigravity & AI Studio
+Use os identificadores devolvidos pelo servidor, não nomes imaginados de projeto/sessão. Confira erro MCP e erro no conteúdo. Há diferenças entre schemas públicos e handlers, sobretudo em promoção, autoridade normativa e revisão de regras. Essas lacunas estão registradas nos documentos de cada família; uma skill não as corrige.
 
-In Antigravity, CBM is registered as an MCP server in the client configuration, and optionally protected by the **Cognitive Respiration Mutation Gate** (`hooks.json`).
+Não use `CBM_ALLOW_LEGACY_PROMOTION=1` como requisito padrão. Não distribua credenciais de operador dentro de skills. Instalação não demonstra que o agente seguirá um protocolo em toda tarefa, nem que os mecanismos reduzirão erros no seu trabalho; isso exige comparação de tarefas reais.
 
-#### MCP Server Registration (`~/.gemini/antigravity/mcp_servers.json` or project settings):
-```json
-{
-  "mcpServers": {
-    "codebase-memory-mcp": {
-      "command": "c:/Users/corre/Documents/codebase-memory-mcp/build/cbm.exe",
-      "args": ["serve", "--storage-dir", "c:/Users/corre/Documents/codebase-memory-mcp/.codebase-memory"],
-      "env": {
-        "CBM_LOG_LEVEL": "info",
-        "CBM_MAX_FDS": "16"
-      }
-    }
-  }
-}
-```
+## REFERENCES
 
-#### Mutation Gate Hook (`.agents/hooks.json` or `~/.gemini/antigravity/hooks.json`):
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "write_to_file|replace_file_content",
-        "command": "c:/Users/corre/Documents/codebase-memory-mcp/build/cbm.exe",
-        "args": ["hook-eval", "--host", "antigravity", "--stdin"]
-      }
-    ]
-  }
-}
-```
-
----
-
-### 2.2 Claude Desktop
-
-Add CBM to your `claude_desktop_config.json`:
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "codebase-memory": {
-      "command": "C:\\Users\\corre\\Documents\\codebase-memory-mcp\\build\\cbm.exe",
-      "args": ["serve", "--storage-dir", "C:\\Users\\corre\\.codebase-memory"],
-      "env": {
-        "CBM_LOG_LEVEL": "info"
-      }
-    }
-  }
-}
-```
-
----
-
-### 2.3 Cursor IDE
-
-In Cursor, navigate to **Settings > Features > MCP** and add a new MCP server:
-
-- **Name**: `codebase-memory`
-- **Type**: `command`
-- **Command**: `C:\Users\corre\Documents\codebase-memory-mcp\build\cbm.exe serve --storage-dir C:\Users\corre\.codebase-memory`
-
-Alternatively, add it to `.cursor/mcp.json` in your workspace:
-```json
-{
-  "mcpServers": {
-    "codebase-memory": {
-      "command": "cbm",
-      "args": ["serve"]
-    }
-  }
-}
-```
-
----
-
-### 2.4 OpenAI Codex CLI
-
-In Codex, register CBM in `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.codebase_memory]
-command = "cbm"
-args = ["serve"]
-
-[hooks]
-pre_tool_use = "cbm hook-eval --host codex --stdin"
-```
-
----
-
-## 3. CLI Direct Consumption
-
-The CBM binary can be used directly from the command line for indexing, queries, and maintenance without launching an MCP client.
-
-```bash
-# 1. Index the current repository
-cbm index . --mode full
-
-# 2. Check indexing status and coverage
-cbm status --project codebase-memory-mcp
-
-# 3. Search symbols by regex pattern
-cbm search ".*mutation_gate.*" --format tree
-
-# 4. Trace inbound callers of a function
-cbm trace "cbm_mutation_gate_evaluate" --direction inbound --depth 3
-
-# 5. Run a Cypher query
-cbm query "MATCH (f:Function) WHERE f.degree > 10 RETURN f.name, f.degree LIMIT 10"
-
-# 6. Audit active ephemeral horizons
-cbm horizon list
-```
-
----
-
-## 4. Agent Consumption Rules & Evidence Tiers
-
-When an LLM agent consumes CBM, it must follow the **Axiom of Containment and Testimony** (PRD_V3, ADR_V1). The agent must never rely on self-report or assumption.
-
-### Evidence Tiers
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  Tier 1: SCOUT (Provisional Lookup)                         │
-│  - Quick positive checks using search_graph or search_code. │
-│  - PROHIBITED: Negative claims ("X does not exist").        │
-├─────────────────────────────────────────────────────────────┤
-│  Tier 2: VERIFY (Default Task Grounding)                    │
-│  - Directed trace_path (inbound & outbound).                │
-│  - Exact get_code_snippet inspection.                       │
-│  - Single call to check_index_coverage on evidence paths.   │
-├─────────────────────────────────────────────────────────────┤
-│  Tier 3: AUDITOR (Exhaustive & Refusal-Grade)               │
-│  - Bounded-scope complete verification.                     │
-│  - Complete pagination over query_graph and trace_path.     │
-│  - Both call directions examined.                           │
-│  - check_index_coverage called on all candidate scopes.     │
-│  - Every limitation and unindexed gap explicitly disclosed. │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 5. The Cognitive Respiration Cycle (Practical Agent Loop)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Dev as Developer / User
-    participant Agent as Autonomous Agent
-    participant CBM as CBM MCP Server
-    participant Hook as Mutation Hook Gate
-    participant FS as Host Filesystem
-
-    Note over Dev, CBM: FASE 1: DIÁSTOLE (Exploração Contemplativa)
-    Dev->>Agent: "Como funciona a validação de escopo no CBM?"
-    Agent->>CBM: search_graph(name_pattern=".*validate_scope.*")
-    CBM-->>Agent: Returns symbolic nodes & file locations
-    Agent->>CBM: trace_path(function_name="validate_scope_horizon", direction="inbound")
-    CBM-->>Agent: Returns caller hierarchy
-    Agent->>CBM: get_code_snippet(qualified_name="src/mcp/horizon_handler.c::validate_scope_horizon")
-    CBM-->>Agent: Returns exact C implementation snippet
-    Agent-->>Dev: Explains architecture in clear prose (Zero sessions, Zero locks)
-
-    Note over Dev, FS: FASE 2: THE SEAM (O Limiar da Mutação)
-    Dev->>Agent: "Adicione uma validação para caminhos com caracteres especiais."
-    Agent->>Agent: Plans code changes (Level 1-2)
-    Agent->>FS: Calls write_to_file("src/union/mutation_gate.c")
-    Hook->>Hook: Intercepts PreToolUse event!
-    Hook-->>Agent: VETO: Refused! No active session horizon with intent_scope covering this file.
-
-    Note over Dev, CBM: FASE 3: SÍSTOLE (Aterramento e Governança)
-    Agent->>CBM: union_session_open(identity="dev", contract="c_cbm", intent_scope=[{"path":"src/union/mutation_gate.c","operation":"modify"}])
-    CBM-->>Agent: Session opened (horizon_id="h_sess_01")
-    Agent->>CBM: validate_provenance(theme_id="theme_c11_standards", rationale="Following C11 boundary validation")
-    CBM-->>Agent: Provenance verified (CITED_CANON)
-    Agent->>FS: Writes failing test (TDD Nigredo / Red Phase)
-    Agent->>FS: Calls write_to_file("src/union/mutation_gate.c")
-    Hook->>Hook: Matches intent_scope! PERMITTED.
-    Agent->>CBM: union_record_action(horizon_id="h_sess_01", action_name="update_mutation_gate")
-    CBM-->>Agent: Action debited in ledger
-    Agent->>CBM: union_session_close(horizon_id="h_sess_01", reason="NORMAL")
-    CBM-->>Agent: Sweep verified, trace persisted.
-    Agent-->>Dev: Delivers verified change with factual evidence.
-```
-
----
-
-## 6. Troubleshooting Common Issues
-
-### 6.1 `PROVENANCE_UNDECLARED` Refusal
-- **Symptom**: Calling `union_record_action` or modifying code results in error `PROVENANCE_UNDECLARED`.
-- **Cause**: The agent attempted a specialty code modification without either citing a registered theme or confessing declared invention.
-- **Fix**: Call `validate_provenance` before acting:
-  - If following team standards: pass `theme_id`, `node_uri`, `pinned_version`.
-  - If improvising or creating a novel solution: pass `declared_invention=true` with a clear `rationale`.
-
-### 6.2 `MUTATION_OUT_OF_SCOPE` Hook Refusal
-- **Symptom**: The host hook blocks `write_to_file` or `replace_file_content` with a veto message.
-- **Cause**: The target file path is not present in the active session's `intent_scope` whitelist, or no session is currently open.
-- **Fix**: Call `union_session_open` providing an exact absolute path and operation pair in `intent_scope`. Remember that `intent_scope` is strictly limited to **1 to 4 files**.
-
-### 6.3 SQLite Handle Exhaustion (`EMFILE` / Error 24)
-- **Symptom**: `Failed to allocate horizon database handle: too many open files`.
-- **Cause**: Unmanaged SQLite connections or lingering stale horizons.
-- **Fix**: CBM enforces an LRU connection pool capped at 16 file descriptors (`HorizonConnectionPool`). The background `horizon_reaper` automatically closes and unlinks abandoned horizons older than TTL (default: 3600s). Ensure tests use `cbm_horizon_pool_get` and `cbm_horizon_pool_release`.
+- [Fluxos de validação](WORKFLOWS.md), [configuração](../CONFIGURATION.md), [build](../INFRASTRUCTURE.md).

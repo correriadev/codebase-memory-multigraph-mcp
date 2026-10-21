@@ -1,10 +1,18 @@
 # codebase-memory-mcp
 
-> Codebase Memory is an open-source local MCP server for AI coding agents. It connects code, documentation, configuration, and infrastructure in a persistent knowledge graph, with 17 MCP tools and native CLI access. Search for a feature, follow callers and dependencies, trace services and deployments, and inspect change impact. Indexing, graph queries, and semantic embeddings run locally without a hosted service or API key. CBM Lens is the optional visual companion, currently in open beta (v0.0.1); its optional browser model supports on-device code chat after an opt-in download.
+> Codebase Memory is an open-source local MCP server for AI coding agents. It connects code, documentation, configuration, and infrastructure in a persistent knowledge graph, with 45 MCP tools and native CLI access. Search for a feature, follow callers and dependencies, trace services and deployments, and inspect change impact. Indexing, graph queries, and semantic embeddings run locally without a hosted service or API key. CBM Lens is the optional visual companion, currently in open beta (v0.0.1); its optional browser model supports on-device code chat after an opt-in download.
+
+## Fork scope
+
+This checkout adds 28 tools to the 17 inherited tools: speculative horizons, Union sessions/claims, versioned themes and local harness governance. Current contracts: guide/TOOLS_REFERENCE.md and guide/mcp-tools.json. Start at README.md inside docs/.
+
+Hooks are optional and mutation enforcement is off unless CBM_ENFORCE_MUTATION_GATE=1. Basic graph use needs neither experimental skills nor Union sessions. Published themes and local governance rules are separate stores. Schema/handler gaps affect normative authority, promotion and manifests; see the family documentation. Internal recall is not wired into a production caller located in this review. Tool availability does not establish reduced hallucinations or corporate readiness.
+
+The site/release links below describe inherited upstream distribution. They do not install this fork. Historical upstream measurements are not validation of the fork extensions.
 
 ## Capabilities
 
-- Code exploration: symbol and structural search, BM25 text search, semantic search, source snippets and file outlines, call paths, data flow, architecture summaries, hotspots, cycles, and coverage diagnostics. The server registers 17 MCP tools.
+- Code exploration: symbol and structural search, BM25 text search, semantic search, source snippets and file outlines, call paths, data flow, architecture summaries, hotspots, cycles, and coverage diagnostics. The server registers 45 MCP tools.
 - Semantic and similarity relationships: bundled embeddings support natural-language discovery; SEMANTICALLY_RELATED edges connect vocabulary-mismatch matches, and SIMILAR_TO edges expose near-clone candidates.
 - Languages and formats: vendored parsers cover source, documentation, and configuration formats. Hybrid LSP adds semantic type resolution for Python, TypeScript/JavaScript/JSX/TSX, PHP, C#, Go, C/C++, Java, Kotlin, Rust, and Perl. Support and resolution depth differ by language; use the README language matrix and check_index_coverage for the indexed project.
 - Documentation connected to code: Markdown, reStructuredText, and AsciiDoc sections; PDF text pages (no OCR); supported document and language doc-comment references to code; ADR metadata and supersession. Supported diagrams and OpenAPI descriptions contribute entities, with format-specific reference-resolution limits.

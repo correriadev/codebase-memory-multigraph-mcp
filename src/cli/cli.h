@@ -632,6 +632,9 @@ char *cbm_hook_augment_process(cbm_mcp_server_t *srv, const char *input_json);
 bool cbm_hook_augment_invocation_supported(const char *forced_event, const char *dialect_name);
 /* E01 pre-tool adapters use documented host denial envelopes and fail closed
  * when the daemon or its mutation authority is unavailable. */
+/* Host mutation interception is off unless CBM_ENFORCE_MUTATION_GATE=1.
+ * Explicit MCP admission APIs and the strict internal engine are unchanged. */
+bool cbm_hook_mutation_enforcement_enabled(void);
 bool cbm_hook_mutation_invocation_supported(const char *forced_event,
                                            const char *dialect_name);
 char *cbm_hook_mutation_deny_response_for_dialect(const char *dialect_name,

@@ -114,9 +114,3 @@ always skipped.
   `.worktrees`, `.claude-worktrees`), the repo `.gitignore`/`info/exclude`,
   nested `.gitignore` files, the built-in suffix/filename filters, or the
   size cap.
-
-### Planned follow-up
-
-- Auxiliary filesystem walkers will honor the same ignore predicate as
-  discovery, so every code path sees an identical ignore decision
-  (unification tracked in a follow-up issue).
