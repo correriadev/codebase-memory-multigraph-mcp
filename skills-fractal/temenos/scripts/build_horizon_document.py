@@ -10,6 +10,11 @@ def serialized(value):
 
 
 def build(data, project, path, artifact_id, graph):
+    if not isinstance(graph, dict) or not isinstance(graph.get("nodes", []), list) or not isinstance(graph.get("edges", []), list):
+        raise ValueError("Graph must contain node and edge arrays")
+    for node in graph.get("nodes", []):
+        if not isinstance(node, dict) or any(not isinstance(node.get(k), str) or not node[k].strip() for k in ("symbol", "type", "cbm_uri", "description")):
+            raise ValueError("Each semantic node requires nonempty symbol, type, cbm_uri and description")
     text = data.decode("utf-8")  # Strict; preserve BOM and line endings.
     digest = hashlib.sha256(data).hexdigest()
     base = f"cbm://{project}/{path}#"
@@ -43,12 +48,22 @@ def build(data, project, path, artifact_id, graph):
         edges.append({"source": artifact_id, "target": symbol, "type": "CONTAINS_PART"})
         if index:
             edges.append({"source": f"{artifact_id}-P{index-1:05d}", "target": symbol, "type": "NEXT_PART"})
+    # Connect the document to the supplied semantic graph, so strict validation
+    # does not leave a separate artifact component.
+    for node in graph.get("nodes", []):
+        edges.append({"source": artifact_id, "target": node["symbol"], "type": "DESCRIBES"})
     nodes.extend(graph.get("nodes", []))
     edges.extend(graph.get("edges", []))
     symbols = [n['symbol'] for n in nodes]
     uris = [n['cbm_uri'] for n in nodes]
     if len(set(symbols)) != len(symbols) or len(set(uris)) != len(uris):
         raise ValueError("Duplicate symbols or URIs")
+    endpoints = set(symbols) | set(uris)
+    for edge in edges:
+        if not isinstance(edge, dict) or any(not isinstance(edge.get(k), str) or not edge[k].strip() for k in ("source", "target", "type")):
+            raise ValueError("Each edge requires nonempty source, target and type")
+        if edge["source"] not in endpoints or edge["target"] not in endpoints:
+            raise ValueError("Unresolved endpoint; include verified external endpoints as local reference nodes")
     for node in nodes:
         if len(node['description'].encode('utf-8')) >= 3000:
             raise ValueError("Oversized payload: " + node['symbol'])

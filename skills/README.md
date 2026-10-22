@@ -14,11 +14,15 @@ Tradition is not a third plane inside the project. The project holds references 
 
 ## Use
 
+These eight procedures and the three `skills-fractal/` skills are not an automatic eleven-step pipeline. The fractal experiment is independently invoked through `temenos`; do not force it onto ordinary work or silently mix its overlay lifecycle with Union sessions. `refusal-discipline` provides instructions, not an automatically enforced runtime guardrail. Deferred skills remain analysis-only even when installed.
+
 1. `graph-grounding` classifies the activity and consults the project planes first. For specialty production, it then consults applicable Tradition.
 2. `horizon-deliberator` develops provisional possibilities. Each craft judgment cites verifiable canon or declares invention with a reason.
 3. `adversarial-traverser` contests claims with evidence and checks provenance, deviations, and territory boundaries.
 4. `union-tracer` reconciles closure with observable facts. `refusal-discipline` guides responses to refusals throughout the work.
 5. `skill-contract-attestor` checks that a skill defines a procedure while domain standards remain in themes.
+
+When combining explicitly requested analysis, reconcile evidence before closure, resolve captured claims through supported destinations, close the Union session, then invoke `union-tracer` on its returned trace. Fractal consolidation preserves its overlay separately; `union_session_close` destroys speculative session content and must not be used to close a fractal overlay. Export required evidence before destructive closure.
 
 `constellation-individuator` and `level-graduator` remain deferred. The first prepares evidence-backed proposals; the second prepares non-regression evidence. Neither can admit or supersede skills through the current CBM interface.
 

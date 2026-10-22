@@ -141,7 +141,7 @@ Consulta contextual do grafo e memória de horizonte são obrigatórias. Para co
 
 Não equiparar `create_horizon` a `union_session_open`: um overlay especulativo e uma sessão governada têm contratos diferentes. Não pressupor que claims de uma sessão sejam pesquisáveis após encerramento. Não promover conteúdo não técnico por âncoras AST fictícias. Espelhamento arquivo/grafo exige referência real e correspondência verificada; divergência ou escrita parcial fica registrada. Não existe atomicidade presumida entre os dois.
 
-Quase toda ferramenta pode ser útil em algum recorte; nenhuma lista completa de chamadas é obrigatória. O mínimo obrigatório é abertura, sincronização e recuperação confirmada do horizonte. Usar a menor capacidade suficiente para as demais questões. Uma conversa não autoriza execução de produto, acesso adicional ou promoção só por ter integrado suas sombras. Não carregar outras skills neste experimento; incompatibilidades com instruções superiores devem ser explicitadas.
+Quase toda ferramenta pode ser útil em algum recorte; nenhuma lista completa de chamadas é obrigatória. O mínimo obrigatório é abertura, sincronização e recuperação confirmada do horizonte. Usar a menor capacidade suficiente para as demais questões. Uma conversa não autoriza execução de produto, acesso adicional ou promoção só por ter integrado suas sombras. Não acionar outras skills apenas para cumprir uma sequência experimental. Quando o pedido humano ou instruções superiores exigirem outra skill, use-a no escopo necessário e explicite a integração; o isolamento experimental não revoga o pedido autorizado.
 
 ## Limites de validação
 
