@@ -10,6 +10,7 @@ Este repositório documenta decisões arquiteturais fundamentais em `docs/adr/`.
 | [ADR-002](file:///docs/adr/ADR-002-THREE-TERRITORIES.md) | Three Territories Architecture (Base, Horizon, Speculative) | ACCEPTED | 2026-10-01 |
 | [ADR-003](file:///docs/adr/ADR-003-TWO-TIER-ANCHORS.md) | Two-Tier AST Anchors & Horizon Admission Gate | ACCEPTED | 2026-10-01 |
 | **[ADR-004](file:///docs/adr/ADR-004-HARNESS-PERFEITO-V2.md)** | **Arquitetura do Harness Perfeito v2 no CBM-MGH (C11 / SQLite WAL)** | **ACCEPTED** | **2026-10-09** |
+| [ADR-005](file:///docs/adr/ADR-005-AGENT-EXECUTION-CONTRACT.md) | Contrato de Execução de Agentes para a camada TS de orquestração (Q04 do PBB) | PROPOSED | 2026-10-23 |
 
 ---
 
