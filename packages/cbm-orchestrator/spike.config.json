@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "budget": {
+    "cycle_token_cap": 60000,
+    "builder_reservation": 20000,
+    "adversarial_reservation": 10000,
+    "max_iterations": 2,
+    "agent_timeout_seconds": 180,
+    "mcp_call_timeout_seconds": 15,
+    "cycle_timeout_seconds": 900,
+    "cycle_monetary_cap_usd": 2.0
+  },
+  "roles": {
+    "builder": {
+      "host": "codex",
+      "sandbox": "workspace-write"
+    },
+    "adversarial": {
+      "host": "codex",
+      "sandbox": "read-only"
+    }
+  }
+}

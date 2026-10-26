@@ -1,0 +1,9 @@
+{
+  "name": "@cbm/orchestrator",
+  "version": "0.1.0",
+  "description": "CBM System Intelligence Engine Orchestrator",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/**/*.test.ts"
+  }
+}

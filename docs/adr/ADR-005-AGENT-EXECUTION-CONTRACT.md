@@ -13,7 +13,7 @@ updated: 2026-10-23
 
 # Contrato de execução de agentes para a camada de orquestração (Q04 do PBB)
 
-**Status: PROPOSED** — pendente do spike de viabilidade antes de comprometer as tasks do slice inicial.
+**Status: ACCEPTED** — comprovado pelo spike de viabilidade S0 executado em `packages/cbm-orchestrator/`. Todos os 5 critérios de aceite e as invariantes INV-01/INV-02 foram verificados.
 
 ## CONTEXTO
 
