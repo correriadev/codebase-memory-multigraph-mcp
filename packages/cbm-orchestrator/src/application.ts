@@ -1,5 +1,5 @@
 import path from "node:path";
-import { mkdirSync, readFileSync, writeFileSync, openSync, closeSync, unlinkSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, openSync, closeSync, unlinkSync, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { StdioMcpClient, type ProcessCommand } from "./mcp-transport.ts";
 import { CbmBackend, type CbmBackendConfig } from "./cbm-backend.ts";
@@ -16,13 +16,29 @@ export interface OrchestratorConfig {
   stateDirectory: string;
 }
 
+function resolveArgPath(arg: string, configDir: string): string {
+  if (path.isAbsolute(arg)) return arg;
+  const fromConfig = path.resolve(configDir, arg);
+  if (existsSync(fromConfig)) return fromConfig;
+  const fromCwd = path.resolve(arg);
+  if (existsSync(fromCwd)) return fromCwd;
+  return arg;
+}
+
 export function readConfiguration(file: string): OrchestratorConfig {
+  const configDir = path.dirname(path.resolve(file));
   const config = JSON.parse(readFileSync(file, "utf8")) as OrchestratorConfig;
   validateBudgetPolicy(config.policy);
   if (!config.policy.breakerFailureThreshold || !config.policy.breakerWindowSeconds) throw new Error("Live runtime requires explicit circuit breaker threshold and window");
   if (!config.backend?.command || !config.stateDirectory || !path.isAbsolute(config.stateDirectory) ||
     !config.knowledge?.workspace || !path.isAbsolute(config.knowledge.workspace) || !config.codex?.model) {
     throw new Error("Configuration requires backend command, absolute state/workspace directories and a Codex model");
+  }
+  if (Array.isArray(config.backend.args)) {
+    config.backend.args = config.backend.args.map((a) => resolveArgPath(a, configDir));
+  }
+  if (Array.isArray(config.codex.args)) {
+    config.codex.args = config.codex.args.map((a) => resolveArgPath(a, configDir));
   }
   config.codex.evidenceDirectory = path.join(config.stateDirectory, "evidence");
   mkdirSync(config.stateDirectory, { recursive: true });
@@ -39,7 +55,15 @@ export class OrchestratorApplication {
   }
 
   private connection(): { client: StdioMcpClient; backend: CbmBackend } {
-    const client = new StdioMcpClient(this.config.backend, 15_000);
+    const backendCmd: ProcessCommand = {
+      ...this.config.backend,
+      env: {
+        ...process.env,
+        ...this.config.backend.env,
+        FIXTURE_WORKSPACE: this.config.knowledge.workspace,
+      },
+    };
+    const client = new StdioMcpClient(backendCmd, 15_000);
     return { client, backend: new CbmBackend(client, this.config.knowledge) };
   }
 
@@ -114,6 +138,37 @@ export class OrchestratorApplication {
   getRun(runId: string): unknown {
     if (!/^run-[A-Za-z0-9-]+$/.test(runId)) throw new Error("Invalid run ID");
     return JSON.parse(readFileSync(path.join(this.config.stateDirectory, `${runId}.json`), "utf8"));
+  }
+
+  listRuns(limit = 20): unknown[] {
+    const dbPath = path.join(this.config.stateDirectory, "journal.db");
+    if (!existsSync(dbPath)) return [];
+    const journal = new Journal(dbPath);
+    try {
+      return journal.listRuns(limit);
+    } finally {
+      journal.close();
+    }
+  }
+
+  isLocked(): { locked: boolean; info?: Record<string, unknown> } {
+    const lockPath = path.join(this.config.stateDirectory, "cycle.lock");
+    if (!existsSync(lockPath)) return { locked: false };
+    try {
+      const info = JSON.parse(readFileSync(lockPath, "utf8"));
+      return { locked: true, info };
+    } catch {
+      return { locked: true };
+    }
+  }
+
+  unlock(): boolean {
+    const lockPath = path.join(this.config.stateDirectory, "cycle.lock");
+    if (existsSync(lockPath)) {
+      unlinkSync(lockPath);
+      return true;
+    }
+    return false;
   }
 
   cancel(operationId?: string): unknown {

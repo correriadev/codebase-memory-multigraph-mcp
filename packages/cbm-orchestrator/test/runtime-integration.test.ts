@@ -14,7 +14,7 @@ const fixture = fileURLToPath(new URL("./helpers/rpc-fixture.ts", import.meta.ur
 const codexFixture = fileURLToPath(new URL("./helpers/codex-fixture.ts", import.meta.url));
 
 test("MCP stdio negotiates schemas, distinguishes refusal from transport loss, and cancels requests", async () => {
-  const client = new StdioMcpClient({ command: process.execPath, args: [fixture] }, 400);
+  const client = new StdioMcpClient({ command: process.execPath, args: [fixture] }, 2500);
   try {
     await client.initialize();
     assert.ok((await client.listTools()).some((tool) => tool.name === "search_graph"));

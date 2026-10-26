@@ -29,7 +29,7 @@ Contrato mínimo (as cinco operações de Q04):
 | --- | --- |
 | **iniciar** | Spawn de processo com perfil + `union_session_open` (`identity`, `client_pid`, `host`, `context_id`); builder mutante registra `intent_key`/`intent_scope` com pares exatos path+operação. |
 | **cancelar** | Término do processo + `union_session_close` (ABNORMAL) e/ou descarte do território especulativo; interrupção registrada no journal. |
-| **isolar** | Um processo por agente + sessão `restricted` limitando a superfície de ferramentas; o admission gate já recusa operações de escrita sem sessão válida com intent scope exato. |
+| **isolar** | Um processo OS por agente. A separação de papéis (Builder / Adversarial / Gatekeeper) e a recusa estrita de mutações fora do intent scope são garantidas pelo mediador TypeScript (McpProxy / Gateway), enquanto o admission gate do core C valida a existência de sessão Union ativa. |
 | **medir** | Contabilidade por ciclo no journal do orquestrador (tokens/custo, veredictos) — subconjunto do PBI-31 (telemetria mínima do slice). |
 | **recuperar** | Journal de execução próprio em SQLite WAL; reconstrução = reler journal + `union_session_get`/estado de horizonte; semântica de crash conforme o PBB (sem F05: reinício/reexecução; com F05: retomada idempotente per PBI-20). |
 
@@ -53,14 +53,15 @@ Falha em qualquer item devolve este ADR a PROPOSED com revisão, antes da quebra
 
 - `src/union/union_session.h` / `src/union/union_session.c` — `CbmSessionHorizon` (campos `restricted`, `client_pid`, `host`); sessões persistidas como horizontes.
 - `src/mcp/union_handler.c` — `handle_union_session_open` / `handle_union_session_get` / `handle_union_session_close` (linhas 454–829).
-- `src/admission/admission_gate.c` — `cbm_enforce_union_session` (linhas 1538–1552): o gate recusa operação sem sessão válida.
+- `src/admission/admission_gate.c` — `cbm_enforce_union_session` (linhas 1538–1552): o gate no core C valida a existência de sessão Union não-vazia. O enforcement granular de papéis e o bloqueio de ferramentas de mutação/promoção por papel é provido pelo `McpProxy` (`packages/cbm-orchestrator/src/mcp-proxy.ts`).
 - `docs/guide/WORKFLOWS.md` — protocolo de sessão com `identity`/`restricted`.
 - Testes: `tests/test_union_session.c`, `tests/test_union_workflow_e2e.c` (session open exige e registra intent scope exato), `tests/test_atomic_admission_concurrency.py`.
 - ADR-002 (três territórios) e ADR-004 (SQLite WAL, Harness v2).
 
 ## LIMITES
 
-- O journal do orquestrador é **novo**: nada dele existe ainda; o spike é a prova da cadeia completa.
+- O journal do orquestrador em SQLite WAL foi implementado em `packages/cbm-orchestrator/src/journal.ts` e possui testes unitários e de integração locais (S0/S1). A validação formal ponta-a-ponta com agentes reais ao vivo e CBM de produção permanece o critério de transição de PROPOSED para ACCEPTED.
+- A autorização por perfil (Builder vs Adversarial) depende estritamente do mediador `McpProxy`. Se um processo de agente acessar o CBM diretamente contornando o proxy, o core C11 atual valida apenas a existência de sessão, sem RBAC nativo.
 - Sessões Union persistem estado de conhecimento e protocolo, **não** o contexto conversacional interno do host do agente; reconstrução do raciocínio do agente está fora de contrato — o journal registra entradas, saídas e efeitos.
 - Medição depende do host reportar uso (codex CLI reporta tokens; outros hosts variam).
 - A interface atual aceita hosts `codex` e `antigravity`; estender a outros hosts é extensão futura, não presumida por este ADR.

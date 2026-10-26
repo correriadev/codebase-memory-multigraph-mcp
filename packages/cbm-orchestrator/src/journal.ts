@@ -528,6 +528,17 @@ export class Journal {
     return Boolean(row && row.status === "S0_APPROVED" && (!configurationDigest || row.report_digest === configurationDigest));
   }
 
+  public listRuns(limit = 20): RunRecord[] {
+    const stmt = this.db.prepare(
+      "SELECT run_id as runId, project_id as projectId, horizon_id as horizonId, objective, state, phase, termination_reason as terminationReason, parent_run_id as parentRunId, is_recovered as isRecovered, policy_json as policyJson, created_at as createdAt, updated_at as updatedAt FROM runs ORDER BY created_at DESC LIMIT ?"
+    );
+    const rows = stmt.all(limit) as any[];
+    return rows.map((r) => ({
+      ...r,
+      isRecovered: Boolean(r.isRecovered),
+    }));
+  }
+
   public close(): void {
     this.db.close();
   }

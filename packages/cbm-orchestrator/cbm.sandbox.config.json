@@ -1,0 +1,56 @@
+{
+  "backend": {
+    "command": "node",
+    "args": [
+      "C:\\Users\\User\\Documents\\codebase-memory-multigraph-mcp\\packages\\cbm-orchestrator\\test\\helpers\\rpc-fixture.ts"
+    ]
+  },
+  "knowledge": {
+    "project": "sandbox-exploratory",
+    "workspace": "C:\\Users\\User\\Documents\\codebase-memory-multigraph-mcp",
+    "targets": [
+      {
+        "path": "packages/cbm-orchestrator/src/cli.ts",
+        "symbol": "main"
+      }
+    ],
+    "poles": [
+      "main"
+    ]
+  },
+  "codex": {
+    "command": "node",
+    "args": [
+      "C:\\Users\\User\\Documents\\codebase-memory-multigraph-mcp\\packages\\cbm-orchestrator\\test\\helpers\\codex-fixture.ts"
+    ],
+    "model": "gpt-6-luna",
+    "rates": {
+      "inputPerMillion": 1.5,
+      "cachedPerMillion": 0.375,
+      "outputPerMillion": 6,
+      "revision": "fixture"
+    },
+    "verification": {
+      "command": "node",
+      "args": [
+        "-e",
+        "process.exit(0)"
+      ]
+    },
+    "evidenceDirectory": "C:\\Users\\User\\Documents\\codebase-memory-multigraph-mcp\\.cbm-orchestrator-sandbox\\evidence",
+    "provider": "codex",
+    "effort": "low"
+  },
+  "policy": {
+    "cycleTokenCap": 60000,
+    "builderReservation": 20000,
+    "adversarialReservation": 10000,
+    "maxIterations": 2,
+    "agentTimeoutSeconds": 60,
+    "cycleTimeoutSeconds": 300,
+    "cycleMonetaryCapUsd": 2,
+    "breakerFailureThreshold": 3,
+    "breakerWindowSeconds": 600
+  },
+  "stateDirectory": "C:\\Users\\User\\Documents\\codebase-memory-multigraph-mcp\\.cbm-orchestrator-sandbox"
+}

@@ -65,9 +65,10 @@ export function createCandidateVersion(input: CandidateVersionInput): CandidateV
 
   const artifactDigest = sha256(input.artifactContent + ":" + input.baselineDigest);
 
-  // Serialização canônica determinística para a tupla C01
+  // Serialização canônica determinística para a tupla C01 (vinculação atômica da candidata)
   const tuplePayload = JSON.stringify({
     artifactDigest,
+    baselineDigest: input.baselineDigest,
     contractVersion: input.contractVersion,
     coverageRevision: input.coverageRevision,
     graphGeneration: input.graphGeneration,

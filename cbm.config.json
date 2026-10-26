@@ -1,0 +1,39 @@
+{
+  "backend": {
+    "command": "codebase-memory-mcp"
+  },
+  "knowledge": {
+    "project": "C-Users-User-Documents-codebase-memory-multigraph-mcp",
+    "workspace": "C:\\Users\\User\\Documents\\codebase-memory-multigraph-mcp",
+    "targets": [
+      { "path": "packages/cbm-orchestrator/src/cli.ts", "symbol": "main" }
+    ],
+    "poles": ["main"]
+  },
+  "codex": {
+    "command": "codex",
+    "model": "gpt-6.1-sol",
+    "rates": {
+      "inputPerMillion": 1.5,
+      "cachedPerMillion": 0.375,
+      "outputPerMillion": 6.0,
+      "revision": "openai-2026"
+    },
+    "verification": {
+      "command": "npm",
+      "args": ["--prefix", "packages/cbm-orchestrator", "test"]
+    }
+  },
+  "policy": {
+    "cycleTokenCap": 60000,
+    "builderReservation": 20000,
+    "adversarialReservation": 10000,
+    "maxIterations": 2,
+    "agentTimeoutSeconds": 180,
+    "cycleTimeoutSeconds": 900,
+    "cycleMonetaryCapUsd": 2.0,
+    "breakerFailureThreshold": 3,
+    "breakerWindowSeconds": 600
+  },
+  "stateDirectory": "C:\\Users\\User\\Documents\\codebase-memory-multigraph-mcp\\.cbm-orchestrator"
+}

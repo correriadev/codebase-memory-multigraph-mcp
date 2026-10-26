@@ -56,6 +56,13 @@ test("AD-01 / C01: alteração de revisão de conhecimento (grafo/regras/cobertu
 
   const vNewCoverage = createCandidateVersion({ ...BASE_INPUT, coverageRevision: "cov-gen1-101" });
   assert.notEqual(v1.versionId, vNewCoverage.versionId);
+
+  const vNewBaseline = createCandidateVersion({
+    ...BASE_INPUT,
+    baselineDigest: "sha256-baseline-new99999999999999999999999999999999999999999999999999999999",
+  });
+  assert.notEqual(v1.versionId, vNewBaseline.versionId);
+  assert.notEqual(v1.artifactDigest, vNewBaseline.artifactDigest);
 });
 
 test("AD-01 / C04: vinculação válida de EvidenceRecord com CandidateVersion", () => {

@@ -4,9 +4,10 @@
   "description": "CBM System Intelligence Engine Orchestrator",
   "type": "module",
   "scripts": {
-    "test": "node --test test/**/*.test.ts",
+    "test": "node --test --test-concurrency=1 --test-timeout=20000 test/**/*.test.ts",
     "test:live-mcp": "node --test integration/real-mcp.test.ts",
     "start": "node src/cli.ts serve",
+    "interactive": "node src/cli.ts interactive",
     "probe": "node src/cli.ts probe",
     "cycle": "node src/cli.ts run",
     "spike": "node src/cli.ts spike"

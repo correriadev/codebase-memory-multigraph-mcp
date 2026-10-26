@@ -97,3 +97,8 @@ soak-results-query-leak/
 
 docs/specs/*
 !docs/specs/harness_perfect_v2/
+!docs/specs/graph_engineering/
+
+# Local orchestrator state and sandbox
+.cbm-orchestrator/
+.cbm-orchestrator-sandbox/

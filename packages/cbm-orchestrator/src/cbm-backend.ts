@@ -72,7 +72,12 @@ export class CbmBackend implements CbmClient, AgentWorkspace {
       if (!this.announced.some((tool) => tool.name === name)) throw new Error(`CBM capability unavailable: ${name}`);
     }
     const status = await this.transport.callTool("index_status", { project: this.config.project, format: "json" });
-    if (status?.status !== "ready" || !status.root_path || realpathSync(status.root_path) !== this.directory) {
+    const statusRoot = status?.root_path ? path.resolve(realpathSync(status.root_path)) : "";
+    const expectedRoot = path.resolve(this.directory);
+    const matchesWorkspace = process.platform === "win32"
+      ? statusRoot.toLowerCase() === expectedRoot.toLowerCase()
+      : statusRoot === expectedRoot;
+    if (status?.status !== "ready" || !status.root_path || !matchesWorkspace) {
       throw new Error("CBM project does not resolve to the configured indexed workspace");
     }
     const boundedReads = new Set(["search_graph", "query_graph", "trace_path", "get_code_snippet", "get_graph_schema",

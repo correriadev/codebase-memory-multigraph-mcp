@@ -12,7 +12,9 @@ import type { ProcessCommand, ToolDefinition } from "./mcp-transport.ts";
 export interface CodexRunnerConfig {
   command: string;
   args?: string[];
+  provider?: "codex" | "antigravity" | "opencode" | "claude";
   model: string;
+  effort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | string;
   rates: ModelRates & { revision: string };
   evidenceDirectory: string;
   verification: ProcessCommand;
@@ -50,6 +52,10 @@ export class CodexAgentRunner implements AgentRunner {
 
   async inspectHost(signal?: AbortSignal): Promise<string> {
     if (this.hostVersion) return this.hostVersion;
+    if (this.config.provider === "antigravity" || this.config.provider === "opencode") {
+      this.hostVersion = `${this.config.provider} (delegated runner)`;
+      return this.hostVersion;
+    }
     const version = await executeAgentProcess({ command: this.config.command, args: [...this.config.args ?? [], "--version"],
       inputPrompt: "", timeoutSeconds: 10, signal });
     if (version.exitCode !== 0 || !/^codex(?:-cli)?\s+\d/i.test(version.stdout.trim())) throw new Error("Configured agent command is not a supported Codex CLI");
@@ -81,7 +87,13 @@ export class CodexAgentRunner implements AgentRunner {
       "-c", "features.multi_agent=false", "-c", "features.hooks=false", "-c", "features.memories=false",
       "-c", "features.computer_use=false", "-c", "features.browser_use=false", "-c", "features.image_generation=false",
       "-c", "features.unified_exec=false", "-c", "features.code_mode=false", "-c", "features.code_mode_host=false",
-      "-c", `mcp_servers=${mcpConfig}`, "-"];
+      "-c", `mcp_servers=${mcpConfig}`];
+
+    if (this.config.effort) {
+      args.push("-c", `model_reasoning_effort="${this.config.effort}"`);
+    }
+
+    args.push("-");
     let finalText = "";
     let sessionId: string | undefined;
     let sessionPromise: Promise<string> | undefined;
