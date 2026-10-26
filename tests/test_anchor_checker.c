@@ -3,6 +3,7 @@
 #include "../src/admission/anchor_checker.h"
 #include "../src/admission/admission_gate.h"
 #include "../src/core/cbm_uri.h"
+#include "../src/store/store.h"
 #include <sqlite3.h>
 
 
@@ -419,6 +420,64 @@ TEST(test_promote_horizon_atomic_2pc_success_c) {
     sqlite3_finalize(stmt);
     sqlite3_close_v2(recheck_hdb);
 
+    th_rmtree(temp_dir);
+    PASS();
+}
+
+TEST(test_promote_horizon_guarded_generation_and_idempotency_c) {
+    char temp_dir[256] = "/tmp/cbm_guarded_XXXXXX";
+    if (!cbm_mkdtemp(temp_dir)) FAIL("temp dir creation failed");
+    HorizonConnectionPool pool;
+    ASSERT_EQ(cbm_horizon_pool_init(&pool, temp_dir), 0);
+    AdmissionGate gate;
+    cbm_admission_gate_init(&gate, "my_proj", 1);
+    sqlite3 *base_db = NULL;
+    char base_path[512];
+    snprintf(base_path, sizeof(base_path), "%s/base.db", temp_dir);
+    ASSERT_EQ(sqlite3_open(base_path, &base_db), SQLITE_OK);
+    ASSERT_EQ(sqlite3_exec(base_db,
+        "PRAGMA journal_mode=DELETE;"
+        "CREATE TABLE nodes(cbm_uri TEXT PRIMARY KEY,label TEXT);"
+        "CREATE TABLE virtual_edges(source_uri TEXT,target_uri TEXT,edge_type TEXT,origin_horizon TEXT,created_at INTEGER,PRIMARY KEY(source_uri,target_uri,edge_type));",
+        NULL, NULL, NULL), SQLITE_OK);
+    cbm_admission_gate_set_base_db(&gate, base_db);
+    ASSERT_EQ(cbm_store_generation_advance_db(base_db), CBM_STORE_OK);
+    ASSERT_EQ(cbm_store_generation_read_db(base_db, gate.expected_graph_generation, sizeof(gate.expected_graph_generation)), CBM_STORE_OK);
+    snprintf(gate.candidate_version_id, sizeof(gate.candidate_version_id), "sha256:reviewed-candidate");
+    snprintf(gate.idempotency_key, sizeof(gate.idempotency_key), "guarded-promotion");
+    char h_id[CBM_HORIZON_ID_MAX] = {0};
+    ASSERT_EQ(cbm_create_horizon(&pool, 1234, "h_guarded", "0", h_id, sizeof(h_id)), 0);
+    sqlite3 *hdb = NULL;
+    ASSERT_EQ(cbm_horizon_pool_get(&pool, h_id, &hdb), 0);
+    ASSERT_EQ(sqlite3_exec(hdb, "INSERT INTO symbolic_nodes(cbm_uri,label,epistemic_status,code_snippet,created_at) VALUES('cbm://my_proj/src/foo.c#A','A','ACCEPTED','{}',1);", NULL, NULL, NULL), SQLITE_OK);
+    TwoTierAnchor anchor;
+    init_valid_c_anchor(temp_dir, &anchor);
+    char error[512] = {0};
+
+    /* A write after review must reject without consuming the horizon or receipt. */
+    ASSERT_EQ(cbm_store_generation_advance_db(base_db), CBM_STORE_OK);
+    ASSERT_EQ(cbm_promote_horizon(&gate, &pool, temp_dir, h_id, &anchor, 1, error, sizeof(error)), CBM_ADMISSION_ERR_CONCURRENT_CONFLICT);
+    ASSERT_TRUE(strstr(error, "STALE_BASE") != NULL);
+    ASSERT_EQ(cbm_store_generation_read_db(base_db, gate.expected_graph_generation, sizeof(gate.expected_graph_generation)), CBM_STORE_OK);
+    ASSERT_EQ(cbm_promote_horizon(&gate, &pool, temp_dir, h_id, &anchor, 1, error, sizeof(error)), CBM_ADMISSION_OK);
+    char promoted_generation[64] = {0};
+    ASSERT_EQ(cbm_store_generation_read_db(base_db, promoted_generation, sizeof(promoted_generation)), CBM_STORE_OK);
+    ASSERT_TRUE(strcmp(promoted_generation, gate.expected_graph_generation) != 0);
+
+    /* An exact receipt replay succeeds once; a different candidate cannot reuse it. */
+    ASSERT_EQ(cbm_promote_horizon(&gate, &pool, temp_dir, h_id, &anchor, 1, error, sizeof(error)), CBM_ADMISSION_OK);
+    char replay_generation[64] = {0};
+    ASSERT_EQ(cbm_store_generation_read_db(base_db, replay_generation, sizeof(replay_generation)), CBM_STORE_OK);
+    ASSERT_STR_EQ(promoted_generation, replay_generation);
+    snprintf(gate.candidate_version_id, sizeof(gate.candidate_version_id), "sha256:different-candidate");
+    ASSERT_EQ(cbm_promote_horizon(&gate, &pool, temp_dir, h_id, &anchor, 1, error, sizeof(error)), CBM_ADMISSION_ERR_INVALID_PARAMS);
+    sqlite3_stmt *count = NULL;
+    ASSERT_EQ(sqlite3_prepare_v2(base_db, "SELECT COUNT(*) FROM promotion_receipts", -1, &count, NULL), SQLITE_OK);
+    ASSERT_EQ(sqlite3_step(count), SQLITE_ROW);
+    ASSERT_EQ(sqlite3_column_int(count, 0), 1);
+    sqlite3_finalize(count);
+    cbm_horizon_pool_close_all(&pool);
+    sqlite3_close_v2(base_db);
     th_rmtree(temp_dir);
     PASS();
 }
@@ -1748,6 +1807,7 @@ SUITE(anchor_checker) {
     RUN_TEST(test_find_matching_anchor_complete_identity_repo_path_symbol);
     RUN_TEST(test_promote_horizon_in_memory_base_db_rejected_c);
     RUN_TEST(test_promote_horizon_atomic_2pc_success_c);
+    RUN_TEST(test_promote_horizon_guarded_generation_and_idempotency_c);
     RUN_TEST(test_promote_horizon_rollback_on_trigger_failure_c);
     RUN_TEST(test_promote_horizon_requires_active_status_c);
     RUN_TEST(test_promote_horizon_properties_relocation_c);

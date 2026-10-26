@@ -30,6 +30,13 @@ typedef struct AdmissionGate {
     uint64_t base_generation;
     uint32_t active_recalls_count;
     sqlite3 *base_db;
+    char expected_graph_generation[64];
+    char candidate_version_id[80];
+    char idempotency_key[192];
+    char expected_snapshot_id[65];
+    const char *const *snapshot_poles;
+    int snapshot_pole_count;
+    struct cbm_gov_store *snapshot_governance;
 } AdmissionGate;
 
 /* Initialize admission gate */

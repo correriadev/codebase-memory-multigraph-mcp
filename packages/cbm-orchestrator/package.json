@@ -4,6 +4,12 @@
   "description": "CBM System Intelligence Engine Orchestrator",
   "type": "module",
   "scripts": {
-    "test": "node --test test/**/*.test.ts"
-  }
+    "test": "node --test test/**/*.test.ts",
+    "test:live-mcp": "node --test integration/real-mcp.test.ts",
+    "start": "node src/cli.ts serve",
+    "probe": "node src/cli.ts probe",
+    "cycle": "node src/cli.ts run",
+    "spike": "node src/cli.ts spike"
+  },
+  "engines": { "node": ">=24" }
 }

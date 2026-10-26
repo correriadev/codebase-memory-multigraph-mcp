@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { SimulatedAgentRunner } from "./helpers/simulated-runner.ts";
+import { Journal } from "../src/journal.ts";
 import {
   CycleOrchestrator,
   type StartCycleRequest,
@@ -22,7 +24,7 @@ test("S1 Orchestrator: ciclo autônomo completo com aprovação (PBI-01 a PBI-05
   const mockCbm: CbmClientMock = {
     async callTool(tool, args) {
       if (tool === "index_status") {
-        return { graphGeneration: 1, baselineDigest: "sha256-baseline-root" };
+        return { graphGeneration: 1, baselineDigest: "sha256-baseline-root", rulesRevision: "rules-s1-root", coverageRevision: "cov-s1-root" };
       }
       if (tool === "promote_horizon") {
         cbmPromoted = true;
@@ -32,7 +34,7 @@ test("S1 Orchestrator: ciclo autônomo completo com aprovação (PBI-01 a PBI-05
     },
   };
 
-  const orchestrator = new CycleOrchestrator(dbPath, mockCbm);
+  const orchestrator = new CycleOrchestrator(dbPath, mockCbm, new SimulatedAgentRunner());
 
   const req: StartCycleRequest = {
     projectId: "cbm-multigraph-s1",
@@ -49,13 +51,16 @@ test("S1 Orchestrator: ciclo autônomo completo com aprovação (PBI-01 a PBI-05
     },
     builderPrompt: "Crie o parser de eventos",
     builderIntentScope: [{ path: "src/parser.ts", operation: "write" }],
-    s0GateStatus: "S0_APPROVED",
   };
 
   // Verificação de bloqueio pré-S0 (ER-06)
   await assert.rejects(async () => {
-    await orchestrator.executeCycle({ ...req, s0GateStatus: undefined });
+    await orchestrator.executeCycle(req);
   }, /Prerequisite S0_APPROVED gate required/i);
+
+  const approval = new Journal(dbPath);
+  approval.recordS0Approval(req.projectId, "fixture-only");
+  approval.close();
 
   const cycleResult = await orchestrator.executeCycle(req);
 
@@ -79,16 +84,17 @@ test("S1 Orchestrator: ciclo autônomo completo com aprovação (PBI-01 a PBI-05
   orchestrator.close();
 });
 
-test("S1 Orchestrator: interrupção por circuit breaker após falhas repetidas (ER-11 / PBI-03)", async () => {
+test("S1 Orchestrator: rejeição após atingir teto de iterações", async () => {
   const dbPath = getTempDbPath();
 
   const mockCbm: CbmClientMock = {
-    async callTool() {
+    async callTool(tool) {
+      if (tool === "index_status") return { graphGeneration: 1, baselineDigest: "fixture-baseline", rulesRevision: "rules-s1-root", coverageRevision: "cov-s1-root" };
       return { success: true };
     },
   };
 
-  const orchestrator = new CycleOrchestrator(dbPath, mockCbm);
+  const orchestrator = new CycleOrchestrator(dbPath, mockCbm, new SimulatedAgentRunner({ simulateAlwaysRed: true }));
 
   // Força simulação de verificador RED em todas as iterações
   const req: StartCycleRequest = {
@@ -106,10 +112,11 @@ test("S1 Orchestrator: interrupção por circuit breaker após falhas repetidas 
     },
     builderPrompt: "Código com erro recorrente",
     builderIntentScope: [{ path: "src/broken.ts", operation: "write" }],
-    s0GateStatus: "S0_APPROVED",
-    _simulateAlwaysRed: true,
   };
 
+  const approval = new Journal(dbPath);
+  approval.recordS0Approval(req.projectId, "fixture-only");
+  approval.close();
   const cycleResult = await orchestrator.executeCycle(req);
 
   // Deve parar no teto de iterações com REJECTED
@@ -129,7 +136,7 @@ test("S1 Orchestrator: diagnóstico de crash pré-F05 sem retomada automática (
     },
   };
 
-  const orchestrator = new CycleOrchestrator(dbPath, mockCbm);
+  const orchestrator = new CycleOrchestrator(dbPath, mockCbm, new SimulatedAgentRunner());
 
   // Simula um ciclo que sofreu crash
   const crashedRunId = "run-crashed-pre-f05";

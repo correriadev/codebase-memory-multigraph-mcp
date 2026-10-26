@@ -28,6 +28,8 @@ export interface BudgetPolicy {
   agentTimeoutSeconds: number;
   cycleTimeoutSeconds: number;
   cycleMonetaryCapUsd: number;
+  breakerFailureThreshold?: number;
+  breakerWindowSeconds?: number;
 }
 
 export interface CreateRunParams {
@@ -103,6 +105,13 @@ export class Journal {
 
   private initSchema(): void {
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS execution_events (
+        event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS runs (
         run_id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
@@ -207,6 +216,7 @@ export class Journal {
       `);
 
       insertLedger.run(params.runId, initialCap, initialAvailable, initialCost, initialUnknown);
+      this.recordEvent(params.runId, "RUN_CREATED", { objective: params.objective, policy: params.policy, parentRunId: params.parentRunId });
       this.db.exec("COMMIT;");
     } catch (err) {
       this.db.exec("ROLLBACK;");
@@ -254,21 +264,25 @@ export class Journal {
     runId: string,
     update: { state?: RunState; phase?: RunPhase; terminationReason?: TerminationReason }
   ): void {
-    const now = new Date().toISOString();
-    const current = this.getRun(runId);
-    if (!current) throw new Error(`Run ${runId} not found`);
-
-    const newState = update.state ?? current.state;
-    const newPhase = update.phase ?? current.phase;
-    const newReason = update.terminationReason !== undefined ? update.terminationReason : current.terminationReason;
-
-    const stmt = this.db.prepare(`
-      UPDATE runs
-      SET state = ?, phase = ?, termination_reason = ?, updated_at = ?
-      WHERE run_id = ?
-    `);
-
-    stmt.run(newState, newPhase, newReason, now, runId);
+    this.db.exec("BEGIN IMMEDIATE;");
+    try {
+      const current = this.getRun(runId);
+      if (!current) throw new Error(`Run ${runId} not found`);
+      const newState = update.state ?? current.state;
+      const allowed: Record<RunState, RunState[]> = { CREATED: ["RUNNING"], RUNNING: ["PAUSED", "COMPLETED"], PAUSED: ["RUNNING", "COMPLETED"], COMPLETED: [] };
+      if (current.state === "COMPLETED" || (newState !== current.state && !allowed[current.state].includes(newState))) {
+        throw new Error(`Invalid execution transition ${current.state} -> ${newState}`);
+      }
+      const newPhase = update.phase ?? current.phase;
+      const newReason = update.terminationReason !== undefined ? update.terminationReason : current.terminationReason;
+      if (newState === "COMPLETED" && !newReason) throw new Error("Completion requires a termination reason");
+      const result = this.db.prepare(`UPDATE runs SET state = ?, phase = ?, termination_reason = ?, updated_at = ?
+        WHERE run_id = ? AND state = ? AND phase = ? AND updated_at = ?`)
+        .run(newState, newPhase, newReason, new Date().toISOString(), runId, current.state, current.phase, current.updatedAt);
+      if (result.changes !== 1) throw new Error("Concurrent execution transition rejected");
+      this.recordEvent(runId, "STATE_CHANGED", { from: current.state, state: newState, phase: newPhase, terminationReason: newReason });
+      this.db.exec("COMMIT;");
+    } catch (error) { this.db.exec("ROLLBACK;"); throw error; }
   }
 
   public getLedger(runId: string): LedgerRecord {
@@ -297,7 +311,7 @@ export class Journal {
   ): { success: boolean; reservationId?: string; reason?: string } {
     this.db.exec("BEGIN IMMEDIATE;");
     try {
-      if (typeof tokens !== "number" || isNaN(tokens) || tokens <= 0) {
+      if (!Number.isSafeInteger(tokens) || tokens <= 0) {
         this.db.exec("ROLLBACK;");
         return {
           success: false,
@@ -358,6 +372,10 @@ export class Journal {
    * Reconciliação atômica de orçamento vinculada à reserva única (C03).
    */
   public reconcileBudget(params: ReconcileBudgetParams): void {
+    if (params.status !== "UNKNOWN" && (!Number.isSafeInteger(params.actualTokens) || params.actualTokens! < 0 ||
+      !Number.isFinite(params.costUsd) || params.costUsd! < 0)) {
+      throw new Error("Negative or invalid measured tokens/cost rejected; finite nonnegative values are required");
+    }
     if (
       (params.actualTokens !== undefined && params.actualTokens !== null && params.actualTokens < 0) ||
       (params.costUsd !== undefined && params.costUsd !== null && params.costUsd < 0)
@@ -479,6 +497,21 @@ export class Journal {
     };
   }
 
+  public recordEvent(runId: string, kind: string, payload: unknown): void {
+    this.db.prepare("INSERT INTO execution_events (run_id, kind, payload, created_at) VALUES (?, ?, ?, ?)")
+      .run(runId, kind, JSON.stringify(payload), new Date().toISOString());
+  }
+
+  public getEvents(runId: string): unknown[] {
+    return this.db.prepare("SELECT event_id, kind, payload, created_at FROM execution_events WHERE run_id = ? ORDER BY event_id")
+      .all(runId).map((row: any) => ({ ...row, payload: JSON.parse(row.payload) }));
+  }
+
+  public getEffects(runId: string): EffectRecord[] {
+    return this.db.prepare("SELECT idempotency_key FROM effects WHERE run_id = ?").all(runId)
+      .map((row: any) => this.getEffect(row.idempotency_key)!);
+  }
+
   public recordS0Approval(projectId: string, reportDigest: string): void {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO project_gates (project_id, gate_name, status, report_digest, updated_at)
@@ -487,12 +520,12 @@ export class Journal {
     stmt.run(projectId, reportDigest, new Date().toISOString());
   }
 
-  public hasS0Approval(projectId: string): boolean {
+  public hasS0Approval(projectId: string, configurationDigest?: string): boolean {
     const stmt = this.db.prepare(
-      "SELECT status FROM project_gates WHERE project_id = ? AND gate_name = 'S0'"
+      "SELECT status, report_digest FROM project_gates WHERE project_id = ? AND gate_name = 'S0'"
     );
     const row = stmt.get(projectId) as any;
-    return Boolean(row && row.status === "S0_APPROVED");
+    return Boolean(row && row.status === "S0_APPROVED" && (!configurationDigest || row.report_digest === configurationDigest));
   }
 
   public close(): void {

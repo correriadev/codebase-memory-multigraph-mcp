@@ -10,6 +10,8 @@
 | [**.graph.json**](.graph.json) | Mapa compacto de relações documentais. | **Mandatory** |
 | [**adr/ARCHITECTURE.md**](adr/ARCHITECTURE.md) | Arquitetura e fronteiras atuais. | **Mandatory** |
 | [**adr/TESTS.md**](adr/TESTS.md) | Comandos, camadas de teste e limites da evidência. | **Mandatory** |
+| [**SPEC-010-ORCHESTRATOR-IMPLEMENTATION-PROGRESS.md**](adr/SPEC-010-ORCHESTRATOR-IMPLEMENTATION-PROGRESS.md) | Progresso, validações e pendências da integração real do orquestrador. | Optional |
+| [**ADR-005-AGENT-EXECUTION-CONTRACT.md**](adr/ADR-005-AGENT-EXECUTION-CONTRACT.md) | Contrato de execução de agentes; a evidência de aceitação precisa da reconciliação registrada na Spec 010. | Optional |
 | [**guide/CONSUMPTION.md**](guide/CONSUMPTION.md) | Entrada prática para usar o fork. | Optional |
 | [**guide/TOOLS_REFERENCE.md**](guide/TOOLS_REFERENCE.md) | Catálogo das 45 tools e diferenças de contrato. | Optional |
 | [**guide/mcp-tools.json**](guide/mcp-tools.json) | Snapshot integral dos schemas anunciados. | Optional |

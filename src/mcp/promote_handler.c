@@ -6,6 +6,7 @@
 #include "../foundation/log.h"
 #include "../union/union_refusal.h"
 #include "../union/union_contest.h"
+#include "../store/governance_store.h"
 #include <yyjson/yyjson.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,44 +54,7 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
         return cbm_mcp_text_result("{\"isError\":true,\"code\":\"INVALID_PARAMS\",\"message\":\"horizon_id required\"}", true);
     }
 
-    /* W03: Session and contest checks */
-    CbmSessionRegistry *sessions = srv ? cbm_mcp_server_sessions(srv) : NULL;
-    CbmContestRegistry *contests = srv ? cbm_mcp_server_contest_registry(srv) : NULL;
-
-    if (contests && cbm_contest_is_blocked(contests, horizon_id) > 0) {
-        cbm_refusal_emit(CBM_REFUSAL_CONTEST_UNPROVEN, horizon_id, "promotion blocked by active blocking contestation");
-        char err_resp[512];
-        snprintf(err_resp, sizeof(err_resp),
-                 "{\"isError\":true,\"code\":\"CONTEST_BLOCKED\",\"message\":\"Promotion blocked by active blocking contestation\"}");
-        free(horizon_id);
-        return cbm_mcp_text_result(err_resp, true);
-    }
-
-    const CbmSessionHorizon *sh = sessions ? cbm_session_get(sessions, horizon_id) : NULL;
-    if (!sh) {
-        const char *legacy = getenv("CBM_ALLOW_LEGACY_PROMOTION");
-        if (legacy && strcmp(legacy, "1") == 0) {
-            cbm_log(CBM_LOG_WARN, "union.promotion_legacy_override", "horizon_id", horizon_id, "warning", "legacy_promotion_allowed_via_env", NULL);
-        } else {
-            cbm_refusal_emit(CBM_REFUSAL_SESSION_REQUIRED, horizon_id, "promotion blocked: active Union session required");
-            char err_resp[512];
-            snprintf(err_resp, sizeof(err_resp),
-                     "{\"isError\":true,\"code\":\"SESSION_REQUIRED\",\"message\":\"Promotion requires an active Union session. Set CBM_ALLOW_LEGACY_PROMOTION=1 for legacy override.\"}");
-            free(horizon_id);
-            return cbm_mcp_text_result(err_resp, true);
-        }
-    } else {
-        if (sh->refusals > 0) {
-            cbm_refusal_emit(CBM_REFUSAL_SCOPE_EXCEEDED, horizon_id, "promotion blocked by uncompensated gateway refusal");
-            char err_resp[512];
-            snprintf(err_resp, sizeof(err_resp),
-                     "{\"isError\":true,\"code\":\"GATEWAY_BLOCKED\",\"message\":\"Promotion blocked by uncompensated gateway refusal\"}");
-            free(horizon_id);
-            return cbm_mcp_text_result(err_resp, true);
-        }
-    }
-
-    /* Parse anchors from JSON */
+    /* Parse and validate anchors from JSON before lookup */
     TwoTierAnchor *anchors = NULL;
     size_t anchor_count = 0;
     bool invalid_anchors = false;
@@ -102,12 +66,11 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
     } else {
         yyjson_val *root = yyjson_doc_get_root(doc);
         yyjson_val *arr = root && yyjson_is_obj(root) ? yyjson_obj_get(root, "anchors") : NULL;
-        if (arr && !yyjson_is_arr(arr)) {
-            invalid_anchors = true;
-        }
-        if (!invalid_anchors && arr) {
-            size_t n = yyjson_arr_size(arr);
-            if (n > 0) {
+        if (arr) {
+            if (!yyjson_is_arr(arr) || yyjson_arr_size(arr) == 0) {
+                invalid_anchors = true;
+            } else {
+                size_t n = yyjson_arr_size(arr);
                 anchors = (TwoTierAnchor *)calloc(n, sizeof(TwoTierAnchor));
                 if (!anchors) {
                     allocation_failed = true;
@@ -202,6 +165,46 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
             true);
     }
 
+    /* W03: Session and contest checks */
+    CbmSessionRegistry *sessions = srv ? cbm_mcp_server_sessions(srv) : NULL;
+    CbmContestRegistry *contests = srv ? cbm_mcp_server_contest_registry(srv) : NULL;
+
+    if (contests && cbm_contest_is_blocked(contests, horizon_id) > 0) {
+        cbm_refusal_emit(CBM_REFUSAL_CONTEST_UNPROVEN, horizon_id, "promotion blocked by active blocking contestation");
+        char err_resp[512];
+        snprintf(err_resp, sizeof(err_resp),
+                 "{\"isError\":true,\"code\":\"CONTEST_BLOCKED\",\"message\":\"Promotion blocked by active blocking contestation\"}");
+        if (anchors) free(anchors);
+        free(horizon_id);
+        return cbm_mcp_text_result(err_resp, true);
+    }
+
+    const CbmSessionHorizon *sh = sessions ? cbm_session_get(sessions, horizon_id) : NULL;
+    if (!sh) {
+        const char *legacy = getenv("CBM_ALLOW_LEGACY_PROMOTION");
+        if (legacy && strcmp(legacy, "1") == 0) {
+            cbm_log(CBM_LOG_WARN, "union.promotion_legacy_override", "horizon_id", horizon_id, "warning", "legacy_promotion_allowed_via_env", NULL);
+        } else {
+            cbm_refusal_emit(CBM_REFUSAL_SESSION_REQUIRED, horizon_id, "promotion blocked: active Union session required");
+            char err_resp[512];
+            snprintf(err_resp, sizeof(err_resp),
+                     "{\"isError\":true,\"code\":\"SESSION_REQUIRED\",\"message\":\"Promotion requires an active Union session. Set CBM_ALLOW_LEGACY_PROMOTION=1 for legacy override.\"}");
+            if (anchors) free(anchors);
+            free(horizon_id);
+            return cbm_mcp_text_result(err_resp, true);
+        }
+    } else {
+        if (sh->refusals > 0) {
+            cbm_refusal_emit(CBM_REFUSAL_SCOPE_EXCEEDED, horizon_id, "promotion blocked by uncompensated gateway refusal");
+            char err_resp[512];
+            snprintf(err_resp, sizeof(err_resp),
+                     "{\"isError\":true,\"code\":\"GATEWAY_BLOCKED\",\"message\":\"Promotion blocked by uncompensated gateway refusal\"}");
+            if (anchors) free(anchors);
+            free(horizon_id);
+            return cbm_mcp_text_result(err_resp, true);
+        }
+    }
+
     /* Fallback local pool and gate if NULL provided so integrity checks cannot be bypassed. */
     HorizonConnectionPool local_pool;
     bool own_pool = false;
@@ -216,6 +219,55 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
         cbm_admission_gate_init(&local_gate, "default", 1);
         gate = &local_gate;
     }
+
+    AdmissionGate *shared_gate = gate;
+    AdmissionGate request_gate = *gate;
+    request_gate.expected_graph_generation[0] = '\0';
+    request_gate.candidate_version_id[0] = '\0';
+    request_gate.idempotency_key[0] = '\0';
+    request_gate.expected_snapshot_id[0] = '\0';
+    request_gate.snapshot_governance = NULL;
+    request_gate.snapshot_poles = NULL;
+    request_gate.snapshot_pole_count = 0;
+    char pole_storage[64][512];
+    const char *pole_names[64];
+    yyjson_doc *guard_doc = yyjson_read(args_json, strlen(args_json), 0);
+    yyjson_val *guard_root = guard_doc ? yyjson_doc_get_root(guard_doc) : NULL;
+    yyjson_val *expected = guard_root ? yyjson_obj_get(guard_root, "expected_graph_generation") : NULL;
+    yyjson_val *candidate = guard_root ? yyjson_obj_get(guard_root, "candidate_version_id") : NULL;
+    yyjson_val *key = guard_root ? yyjson_obj_get(guard_root, "idempotency_key") : NULL;
+    yyjson_val *snapshot = guard_root ? yyjson_obj_get(guard_root, "expected_snapshot_id") : NULL;
+    yyjson_val *poles = guard_root ? yyjson_obj_get(guard_root, "snapshot_poles") : NULL;
+    bool guarded = expected || candidate || key;
+    bool guard_valid = !guarded ||
+        (promotion_json_string(expected, request_gate.expected_graph_generation, sizeof(request_gate.expected_graph_generation)) &&
+         promotion_json_string(candidate, request_gate.candidate_version_id, sizeof(request_gate.candidate_version_id)) &&
+         promotion_json_string(key, request_gate.idempotency_key, sizeof(request_gate.idempotency_key)));
+    if (snapshot || poles) {
+        guard_valid = guard_valid && guarded &&
+            promotion_json_string(snapshot, request_gate.expected_snapshot_id, sizeof(request_gate.expected_snapshot_id)) &&
+            poles && yyjson_is_arr(poles) && yyjson_arr_size(poles) > 0 && yyjson_arr_size(poles) <= 64;
+        if (guard_valid) {
+            for (size_t i = 0; i < yyjson_arr_size(poles); i++) {
+                if (!promotion_json_string(yyjson_arr_get(poles, i), pole_storage[i], sizeof(pole_storage[i]))) {
+                    guard_valid = false;
+                    break;
+                }
+                pole_names[i] = pole_storage[i];
+                request_gate.snapshot_pole_count++;
+            }
+            request_gate.snapshot_poles = pole_names;
+        }
+    }
+    if (guard_doc) yyjson_doc_free(guard_doc);
+    if (!guard_valid) {
+        if (anchors) free(anchors);
+        if (own_pool) cbm_horizon_pool_close_all(&local_pool);
+        free(horizon_id);
+        return cbm_mcp_text_result(
+            "{\"isError\":true,\"code\":\"INVALID_PARAMS\",\"message\":\"expected_graph_generation, candidate_version_id and idempotency_key require nonempty bounded strings together\"}", true);
+    }
+    gate = &request_gate;
 
     char err_buf[512] = {0};
     char *arg_repo = cbm_mcp_get_string_arg(args_json, "repo_path");
@@ -297,7 +349,24 @@ char *handle_promote_horizon(cbm_mcp_server_t *srv, const char *args_json, Horiz
         }
     }
 
-    int rc = cbm_promote_horizon(gate, pool, repo_root, horizon_id, anchors, anchor_count, err_buf, sizeof(err_buf));
+    cbm_gov_store_t *guard_governance = NULL;
+    int rc = CBM_ADMISSION_ERR_BASE_UNAVAILABLE;
+    bool snapshot_locked = !gate->expected_snapshot_id[0];
+    if (gate->expected_snapshot_id[0] && proj_name &&
+        cbm_gov_store_open(NULL, proj_name, &guard_governance) == CBM_GOV_OK) {
+        snapshot_locked = sqlite3_exec(cbm_gov_store_get_db(guard_governance), "BEGIN IMMEDIATE;", NULL, NULL, NULL) == SQLITE_OK;
+        if (snapshot_locked) gate->snapshot_governance = guard_governance;
+    }
+    if (snapshot_locked && (!guarded || owned_base_db || !arg_project)) {
+        rc = cbm_promote_horizon(gate, pool, repo_root, horizon_id, anchors, anchor_count, err_buf, sizeof(err_buf));
+    } else {
+        snprintf(err_buf, sizeof(err_buf), "Promotion could not lock the exact project graph and governance snapshot");
+    }
+    if (guard_governance) {
+        sqlite3_exec(cbm_gov_store_get_db(guard_governance), "ROLLBACK;", NULL, NULL, NULL);
+        cbm_gov_store_close(guard_governance);
+    }
+    if (rc == CBM_ADMISSION_OK) shared_gate->base_generation = gate->base_generation;
     if (owned_base_db) {
         cbm_admission_gate_set_base_db(gate, prev_base_db);
         snprintf(gate->project_id, sizeof(gate->project_id), "%s", prev_project_id);

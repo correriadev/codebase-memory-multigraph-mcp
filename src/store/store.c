@@ -2880,6 +2880,18 @@ int cbm_store_generation(cbm_store_t *s, char *buf, size_t bufsz) {
     return CBM_STORE_OK;
 }
 
+int cbm_store_generation_read_db(sqlite3 *db, char *buf, size_t bufsz) {
+    cbm_store_t borrowed = {0};
+    borrowed.db = db;
+    return cbm_store_generation(&borrowed, buf, bufsz);
+}
+
+int cbm_store_generation_advance_db(sqlite3 *db) {
+    cbm_store_t borrowed = {0};
+    borrowed.db = db;
+    return cbm_store_generation_advance(&borrowed);
+}
+
 int cbm_store_meta_get(cbm_store_t *s, const char *key, char **out) {
     if (!out) {
         return CBM_STORE_ERR;

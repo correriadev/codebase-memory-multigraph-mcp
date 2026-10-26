@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { S0SpikeCoordinator, type S0SpikeReport } from "../src/s0-spike.ts";
+import { S0SpikeCoordinator, type S0SpikeReport } from "./helpers/simulated-spike.ts";
 
 function getTempDbPath(): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cbm-s0-spike-"));
   return path.join(tmpDir, "spike.db");
 }
 
-test("S0 Spike: Execução completa dos 5 critérios do ADR-005 e avaliação do gate S0_APPROVED", async () => {
+test("S0 fixture: simulação dos critérios do ADR-005, sem comprovação de viabilidade real", async () => {
   const dbPath = getTempDbPath();
   const coordinator = new S0SpikeCoordinator(dbPath);
 

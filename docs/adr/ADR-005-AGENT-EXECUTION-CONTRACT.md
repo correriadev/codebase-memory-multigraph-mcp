@@ -13,7 +13,7 @@ updated: 2026-10-23
 
 # Contrato de execução de agentes para a camada de orquestração (Q04 do PBB)
 
-**Status: ACCEPTED** — comprovado pelo spike de viabilidade S0 executado em `packages/cbm-orchestrator/`. Todos os 5 critérios de aceite e as invariantes INV-01/INV-02 foram verificados.
+**Status: PROPOSED (Implementação e validação ao vivo em andamento)** — A aceitação formal permanece pendente até a demonstração ponta-a-ponta do ciclo real S0/S1 com modelos reais Codex e CBM conectado (Spec 010). A viabilidade conceitual e os testes em subprocessos locais com SQLite WAL foram verificados em `packages/cbm-orchestrator/`.
 
 ## CONTEXTO
 

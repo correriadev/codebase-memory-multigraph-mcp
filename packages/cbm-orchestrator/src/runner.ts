@@ -23,6 +23,10 @@ export interface AgentRunOptions {
   timeoutSeconds: number;
   cwd?: string;
   env?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+  onSpawn?: (pid: number) => void | Promise<void>;
+  onEvent?: (event: any) => void;
+  maxOutputBytes?: number;
 }
 
 export interface AgentRunResult {
@@ -31,6 +35,7 @@ export interface AgentRunResult {
   stderr: string;
   usage: CodexUsage | null;
   timedOut: boolean;
+  cancelled?: boolean;
   error?: string;
 }
 
@@ -44,6 +49,7 @@ export function parseCodexTurnUsage(line: string): CodexUsage | null {
       const input = Number(data.usage.input_tokens ?? 0);
       const cached = Number(data.usage.cached_input_tokens ?? 0);
       const output = Number(data.usage.output_tokens ?? 0);
+      if (![input, cached, output].every((value) => Number.isSafeInteger(value) && value >= 0) || cached > input) return null;
 
       return {
         inputTokens: input,
@@ -124,12 +130,18 @@ export async function killProcessTree(pid: number): Promise<{ killed: boolean; r
  */
 export function executeAgentProcess(options: AgentRunOptions): Promise<AgentRunResult> {
   return new Promise((resolve) => {
+    if (options.signal?.aborted) {
+      resolve({ exitCode: null, stdout: "", stderr: "", usage: null, timedOut: false, cancelled: true });
+      return;
+    }
     let timedOut = false;
+    let cancelled = false;
     let stdoutBuffer = "";
     let stderrBuffer = "";
     let usageFound: CodexUsage | null = null;
     let unparsedStdout = "";
     let resolved = false;
+    let startupError: string | undefined;
 
     let forceCloseTimer: NodeJS.Timeout | undefined;
 
@@ -137,6 +149,7 @@ export function executeAgentProcess(options: AgentRunOptions): Promise<AgentRunR
       if (!resolved) {
         resolved = true;
         clearTimeout(timeoutTimer);
+        options.signal?.removeEventListener("abort", abort);
         if (forceCloseTimer) clearTimeout(forceCloseTimer);
         resolve(res);
       }
@@ -147,7 +160,21 @@ export function executeAgentProcess(options: AgentRunOptions): Promise<AgentRunR
       env: options.env,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
+      detached: process.platform !== "win32",
     });
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+
+    const stop = async () => {
+      if (child.pid) await killProcessTree(child.pid);
+      if (resolved) return;
+      forceCloseTimer = setTimeout(() => {
+        safeResolve({ exitCode: -1, stdout: stdoutBuffer, stderr: stderrBuffer, usage: usageFound,
+          timedOut, cancelled, error: "Process did not close after cancellation" });
+      }, 2000);
+    };
+    const abort = () => { cancelled = true; void stop(); };
+    options.signal?.addEventListener("abort", abort, { once: true });
 
     const timeoutTimer = setTimeout(async () => {
       timedOut = true;
@@ -168,12 +195,19 @@ export function executeAgentProcess(options: AgentRunOptions): Promise<AgentRunR
     }, options.timeoutSeconds * 1000);
 
     if (child.stdin) {
-      child.stdin.end(options.inputPrompt);
+      child.stdin.on("error", () => {}); // The process may exit before consuming its prompt.
+      Promise.resolve().then(() => child.pid ? options.onSpawn?.(child.pid) : undefined)
+        .then(() => { if (!resolved && !cancelled) child.stdin.end(options.inputPrompt); })
+        .catch((error) => { startupError = (error as Error).message; cancelled = true; void stop(); });
     }
 
-    child.stdout?.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
+    child.stdout?.on("data", (text: string) => {
       stdoutBuffer += text;
+      if (Buffer.byteLength(stdoutBuffer) > (options.maxOutputBytes ?? 8 * 1024 * 1024)) {
+        cancelled = true;
+        void stop();
+        return;
+      }
 
       // Preserva fragmentos de linha entre chunks JSONL
       unparsedStdout += text;
@@ -184,19 +218,31 @@ export function executeAgentProcess(options: AgentRunOptions): Promise<AgentRunR
         if (!line.trim()) continue;
         const u = parseCodexTurnUsage(line);
         if (u) {
-          usageFound = u;
+          usageFound = usageFound ? {
+            inputTokens: usageFound.inputTokens + u.inputTokens,
+            cachedInputTokens: usageFound.cachedInputTokens + u.cachedInputTokens,
+            outputTokens: usageFound.outputTokens + u.outputTokens,
+            totalTokens: usageFound.totalTokens + u.totalTokens,
+          } : u;
         }
+        try { options.onEvent?.(JSON.parse(line)); } catch {}
       }
     });
 
-    child.stderr?.on("data", (chunk: Buffer) => {
-      stderrBuffer += chunk.toString();
+    child.stderr?.on("data", (chunk: string) => {
+      stderrBuffer = (stderrBuffer + chunk).slice(-8000);
     });
 
     child.on("close", (code) => {
       if (unparsedStdout.trim()) {
         const u = parseCodexTurnUsage(unparsedStdout);
-        if (u) usageFound = u;
+        if (u) usageFound = usageFound ? {
+          inputTokens: usageFound.inputTokens + u.inputTokens,
+          cachedInputTokens: usageFound.cachedInputTokens + u.cachedInputTokens,
+          outputTokens: usageFound.outputTokens + u.outputTokens,
+          totalTokens: usageFound.totalTokens + u.totalTokens,
+        } : u;
+        try { options.onEvent?.(JSON.parse(unparsedStdout)); } catch {}
       }
 
       safeResolve({
@@ -205,6 +251,8 @@ export function executeAgentProcess(options: AgentRunOptions): Promise<AgentRunR
         stderr: stderrBuffer,
         usage: usageFound,
         timedOut,
+        cancelled,
+        error: startupError,
       });
     });
 

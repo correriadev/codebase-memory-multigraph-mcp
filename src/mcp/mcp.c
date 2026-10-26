@@ -898,7 +898,14 @@ static const tool_def_t TOOLS[] = {
 
     {"promote_horizon", "Validate Two-Tier anchors and admit a horizon into the base graph",
      "{\"type\":\"object\",\"properties\":{\"horizon_id\":{\"type\":\"string\",\"description\":"
-     "\"Identifier of the horizon to promote\"},\"anchors\":{\"type\":\"array\",\"description\":"
+     "\"Identifier of the horizon to promote\"},"
+     "\"project\":{\"type\":\"string\"},\"repo_path\":{\"type\":\"string\"},"
+     "\"expected_graph_generation\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":63,\"description\":\"Opaque harness graph_generation checked under the promotion write lock; requires candidate_version_id and idempotency_key\"},"
+     "\"candidate_version_id\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":79},"
+     "\"expected_snapshot_id\":{\"type\":\"string\",\"minLength\":64,\"maxLength\":64,\"description\":\"Composite graph, rules and coverage snapshot checked while both stores are locked; requires snapshot_poles\"},"
+     "\"snapshot_poles\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":64,\"items\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":511}},"
+     "\"idempotency_key\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":191},"
+     "\"anchors\":{\"type\":\"array\",\"description\":"
      "\"Optional Two-Tier anchors for drift validation\",\"items\":{\"type\":\"object\","
      "\"properties\":{\"file_path\":{\"type\":\"string\"},\"symbol_name\":{\"type\":\"string\"},"
      "\"byte_start\":{\"type\":\"integer\"},\"byte_len\":{\"type\":\"integer\"},"

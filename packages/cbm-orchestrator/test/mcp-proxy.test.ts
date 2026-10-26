@@ -6,7 +6,7 @@ import {
   type McpToolCallRequest,
   type CbmClientMock,
 } from "../src/mcp-proxy.ts";
-import { createCandidateVersion, type IndependentVerdict } from "../src/candidate.ts";
+import { createCandidateVersion, type IndependentVerdict, type EvidenceRecord } from "../src/candidate.ts";
 
 test("MCP Proxy / PBI-16: bloqueio estrito de promoção direta para o Builder", async () => {
   let cbmPromoteCalled = false;

@@ -553,6 +553,11 @@ int cbm_store_generation_advance(cbm_store_t *s);
  * an error. */
 int cbm_store_generation(cbm_store_t *s, char *buf, size_t bufsz);
 
+/* Borrow a caller-owned SQLite connection without opening or closing a transaction.
+ * Admission uses these inside its base/horizon transaction. */
+int cbm_store_generation_read_db(struct sqlite3 *db, char *buf, size_t bufsz);
+int cbm_store_generation_advance_db(struct sqlite3 *db);
+
 /* Per-store feature metadata in store_meta (key/value text). Keys are
  * namespaced by the owning feature, e.g. "cross_repo_last_run:<project>".
  * get: CBM_STORE_OK with *out owned by the caller (release with

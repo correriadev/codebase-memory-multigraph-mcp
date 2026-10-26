@@ -2,6 +2,8 @@
 #include "../foundation/log.h"
 #include "../union/union_refusal.h"
 #include "../core/cbm_uri.h"
+#include "../store/store.h"
+#include "../harness/harness_v2.h"
 #if __has_include(<yyjson/yyjson.h>)
   #include <yyjson/yyjson.h>
 #elif __has_include("yyjson/yyjson.h")
@@ -43,6 +45,23 @@ static int cbm_node_exists_in_base(sqlite3 *base_db, const char *uri, char *out_
     sqlite3_finalize(stmt);
     if (step_rc == SQLITE_ROW) return 1;
     return 0;
+}
+
+static bool cbm_promotion_snapshot_current(const AdmissionGate *gate) {
+    if (!gate->expected_snapshot_id[0]) return true;
+    if (!gate->snapshot_governance || !gate->snapshot_poles || gate->snapshot_pole_count <= 0) return false;
+    const char *db_path = sqlite3_db_filename(gate->base_db, "main");
+    cbm_store_t *store = db_path ? cbm_store_open_path_query(db_path) : NULL;
+    if (!store) return false;
+    char *bundle = NULL;
+    char bundle_hash[65] = {0};
+    char snapshot[65] = {0};
+    int rc = cbm_harness_extract_bundle(store, gate->snapshot_governance, gate->project_id,
+        "promotion-guard", "behavior_change", gate->snapshot_poles, gate->snapshot_pole_count, 1,
+        0, &bundle, bundle_hash, snapshot);
+    free(bundle);
+    cbm_store_close(store);
+    return rc == 0 && strcmp(snapshot, gate->expected_snapshot_id) == 0;
 }
 
 static bool cbm_path_has_traversal(const char *p) {
@@ -729,6 +748,62 @@ int cbm_promote_horizon(AdmissionGate *gate,
                 if (relocs != stack_relocs) free(relocs);
                 return CBM_ADMISSION_ERR_CONCURRENT_CONFLICT;
             }
+
+            /* Guarded callers bind the reviewed generation and receipt to this write transaction. */
+            if (gate->expected_graph_generation[0]) {
+                const char *receipt_schema = "CREATE TABLE IF NOT EXISTS promotion_receipts ("
+                    "idempotency_key TEXT PRIMARY KEY, horizon_id TEXT NOT NULL, candidate_version_id TEXT NOT NULL, "
+                    "expected_generation TEXT NOT NULL, snapshot_id TEXT NOT NULL);";
+                sqlite3_stmt *receipt = NULL;
+                bool receipt_error = sqlite3_exec(gate->base_db, receipt_schema, NULL, NULL, NULL) != SQLITE_OK;
+                bool replay = false;
+                bool mismatch = false;
+                if (!receipt_error && sqlite3_prepare_v2(gate->base_db,
+                    "SELECT horizon_id,candidate_version_id,expected_generation,snapshot_id FROM promotion_receipts WHERE idempotency_key=?;",
+                    -1, &receipt, NULL) == SQLITE_OK) {
+                    sqlite3_bind_text(receipt, 1, gate->idempotency_key, -1, SQLITE_STATIC);
+                    int step = sqlite3_step(receipt);
+                    if (step == SQLITE_ROW) {
+                        replay = strcmp((const char *)sqlite3_column_text(receipt, 0), horizon_id) == 0 &&
+                            strcmp((const char *)sqlite3_column_text(receipt, 1), gate->candidate_version_id) == 0 &&
+                            strcmp((const char *)sqlite3_column_text(receipt, 2), gate->expected_graph_generation) == 0 &&
+                            strcmp((const char *)sqlite3_column_text(receipt, 3), gate->expected_snapshot_id) == 0;
+                        mismatch = !replay;
+                    } else if (step != SQLITE_DONE) receipt_error = true;
+                } else receipt_error = true;
+                sqlite3_finalize(receipt);
+                if (receipt_error || replay || mismatch) {
+                    sqlite3_exec(gate->base_db, "ROLLBACK;", NULL, NULL, NULL);
+                    sqlite3_exec(gate->base_db, "DETACH DATABASE h_db;", NULL, NULL, NULL);
+                    if (relocs != stack_relocs) free(relocs);
+                    if (replay) return CBM_ADMISSION_OK;
+                    if (out_error && err_sz > 0) snprintf(out_error, err_sz, "%s",
+                        mismatch ? "Idempotency key belongs to a different promotion" : "Promotion receipt lookup failed");
+                    return mismatch ? CBM_ADMISSION_ERR_INVALID_PARAMS : CBM_ADMISSION_ERR_CONSOLIDATION_FAILED;
+                }
+                char live_generation[64] = {0};
+                if (!gate->candidate_version_id[0] || !gate->idempotency_key[0] ||
+                    cbm_store_generation_read_db(gate->base_db, live_generation, sizeof(live_generation)) != CBM_STORE_OK ||
+                    strcmp(live_generation, "legacy") == 0 ||
+                    strcmp(live_generation, gate->expected_graph_generation) != 0 || !cbm_promotion_snapshot_current(gate)) {
+                    sqlite3_exec(gate->base_db, "ROLLBACK;", NULL, NULL, NULL);
+                    sqlite3_exec(gate->base_db, "DETACH DATABASE h_db;", NULL, NULL, NULL);
+                    if (out_error && err_sz > 0) snprintf(out_error, err_sz,
+                        "STALE_BASE: expected graph generation does not match the locked base");
+                    if (relocs != stack_relocs) free(relocs);
+                    return CBM_ADMISSION_ERR_CONCURRENT_CONFLICT;
+                }
+                for (size_t i = 0; i < anchor_count; i++) {
+                    bool ok = false;
+                    if (cbm_verify_two_tier_anchor(repo_root, &anchors[i], &ok, &relocs[i]) != 0 || !ok) {
+                        sqlite3_exec(gate->base_db, "ROLLBACK;", NULL, NULL, NULL);
+                        sqlite3_exec(gate->base_db, "DETACH DATABASE h_db;", NULL, NULL, NULL);
+                        if (out_error && err_sz > 0) snprintf(out_error, err_sz, "ANCHOR_DRIFT: candidate changed before consolidation");
+                        if (relocs != stack_relocs) free(relocs);
+                        return CBM_ADMISSION_ERR_ANCHOR_DRIFT;
+                    }
+                }
+            }
             
             /* TOCTOU Protection: Verify base_generation hasn't drifted while checking anchors */
             bool generation_drifted = false;
@@ -756,7 +831,7 @@ int cbm_promote_horizon(AdmissionGate *gate,
             if (step_gen == SQLITE_ROW) {
                 if (sqlite3_column_type(gen_stmt, 0) != SQLITE_NULL) {
                     uint64_t current_gen = (uint64_t)sqlite3_column_int64(gen_stmt, 0);
-                    if (current_gen > gate->base_generation) {
+                    if (!gate->expected_graph_generation[0] && current_gen > gate->base_generation) {
                         generation_drifted = true;
                     }
                 }
@@ -1498,6 +1573,31 @@ int cbm_promote_horizon(AdmissionGate *gate,
             }
 
             /* Phase 1: Native Two-Phase Commit on base_db and attached h_db */
+            bool version_recorded = cbm_promotion_snapshot_current(gate) &&
+                cbm_store_generation_advance_db(gate->base_db) == CBM_STORE_OK;
+            if (version_recorded && gate->expected_graph_generation[0]) {
+                sqlite3_stmt *receipt = NULL;
+                version_recorded = sqlite3_prepare_v2(gate->base_db,
+                    "INSERT INTO promotion_receipts(idempotency_key,horizon_id,candidate_version_id,expected_generation,snapshot_id) VALUES(?,?,?,?,?);",
+                    -1, &receipt, NULL) == SQLITE_OK;
+                if (version_recorded) {
+                    sqlite3_bind_text(receipt, 1, gate->idempotency_key, -1, SQLITE_STATIC);
+                    sqlite3_bind_text(receipt, 2, horizon_id, -1, SQLITE_STATIC);
+                    sqlite3_bind_text(receipt, 3, gate->candidate_version_id, -1, SQLITE_STATIC);
+                    sqlite3_bind_text(receipt, 4, gate->expected_graph_generation, -1, SQLITE_STATIC);
+                    sqlite3_bind_text(receipt, 5, gate->expected_snapshot_id, -1, SQLITE_STATIC);
+                    version_recorded = sqlite3_step(receipt) == SQLITE_DONE;
+                }
+                sqlite3_finalize(receipt);
+            }
+            if (!version_recorded) {
+                sqlite3_exec(gate->base_db, "ROLLBACK;", NULL, NULL, NULL);
+                sqlite3_exec(gate->base_db, "DETACH DATABASE h_db;", NULL, NULL, NULL);
+                if (out_error && err_sz > 0) snprintf(out_error, err_sz, "COMMIT_FAILED: generation or receipt persistence failed");
+                if (admitted_uris) free(admitted_uris);
+                if (relocs != stack_relocs) free(relocs);
+                return CBM_ADMISSION_ERR_COMMIT_FAILED;
+            }
             if (sqlite3_exec(gate->base_db, "COMMIT;", NULL, NULL, NULL) != SQLITE_OK) {
                 char safe_err[512] = {0};
                 snprintf(safe_err, sizeof(safe_err), "%s", sqlite3_errmsg(gate->base_db));

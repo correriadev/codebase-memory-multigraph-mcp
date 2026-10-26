@@ -1,4 +1,5 @@
 import path from "node:path";
+import { McpRemoteError } from "./mcp-transport.ts";
 import {
   validateIndependentVerdict,
   type CandidateVersionRef,
@@ -31,9 +32,12 @@ export interface McpToolCallResult {
   data?: any;
 }
 
-export interface CbmClientMock {
+export interface CbmClient {
   callTool(tool: string, args: Record<string, any>): Promise<any>;
 }
+
+/** @deprecated Use CbmClient. Kept for existing test adapters. */
+export type CbmClientMock = CbmClient;
 
 export const READ_ONLY_TOOLS = new Set([
   "read_file",
@@ -95,9 +99,9 @@ function normalizePath(p: string): string {
 }
 
 export class McpProxy {
-  private cbmClient: CbmClientMock;
+    private cbmClient: CbmClient;
 
-  constructor(cbmClient: CbmClientMock) {
+  constructor(cbmClient: CbmClient) {
     this.cbmClient = cbmClient;
   }
 
@@ -150,7 +154,7 @@ export class McpProxy {
 
       const normalizedTargetPath = normalizePath(rawPath);
       // Impede Directory Traversal escapando da raiz
-      if (normalizedTargetPath.startsWith("../") || normalizedTargetPath.includes("/../")) {
+      if (rawPath.split(/[\\/]/).includes("..") || normalizedTargetPath.startsWith("../") || normalizedTargetPath.includes("/../")) {
         return {
           allowed: false,
           status: 403,
@@ -162,7 +166,7 @@ export class McpProxy {
       const inScope = intentScope.some((scope) => {
         const normalizedScopePath = normalizePath(scope.path);
         return (
-          (normalizedScopePath === normalizedTargetPath || normalizedScopePath === "*") &&
+          normalizedScopePath === normalizedTargetPath &&
           scope.operation === mutationOp
         );
       });
@@ -244,7 +248,7 @@ export class McpProxy {
     // Verificação de frescor contra mutações concorrentes no backend pós-verificação (AD-09 / C01 / C04)
     try {
       const stateCheck = await this.cbmClient.callTool("index_status", {
-        project_id: version.projectId,
+        project: version.projectId,
         horizon_id: version.horizonId,
       });
       if (stateCheck && (stateCheck.isError === true || stateCheck.error)) {
@@ -255,6 +259,9 @@ export class McpProxy {
         };
       }
       if (stateCheck) {
+        if (!stateCheck.graphGeneration || !stateCheck.baselineDigest) {
+          return { promoted: false, status: "FAILED", reason: "Backend freshness revisions are unavailable" };
+        }
         if (stateCheck.graphGeneration !== undefined && stateCheck.graphGeneration !== version.graphGeneration) {
           return {
             promoted: false,
@@ -313,6 +320,9 @@ export class McpProxy {
       return { promoted: true, status: "CONFIRMED" };
     } catch (err: any) {
       // Falha de transporte de rede: desfecho incerto deve ser registrado como UNKNOWN (C04/C07)
+      if (err instanceof McpRemoteError) {
+        return { promoted: false, status: "FAILED", reason: `CBM refused promotion: ${err.message}` };
+      }
       return {
         promoted: false,
         status: "UNKNOWN",

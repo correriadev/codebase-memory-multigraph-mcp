@@ -6,7 +6,7 @@ export interface CandidateVersionInput {
   horizonId: string;
   artifactContent: string;
   baselineDigest: string;
-  graphGeneration: number;
+  graphGeneration: string | number;
   rulesRevision: string;
   coverageRevision: string;
   policyRevision: string;
@@ -20,7 +20,7 @@ export interface CandidateVersionRef {
   horizonId: string;
   artifactDigest: string;
   baselineDigest: string;
-  graphGeneration: number;
+  graphGeneration: string | number;
   rulesRevision: string;
   coverageRevision: string;
   policyRevision: string;
@@ -173,6 +173,9 @@ export function validateIndependentVerdict(
       };
     }
     const check = validateEvidenceAttachment(version, rec);
+    if (rec.origin !== verdict.verifierIdentity || rec.producerRole !== "adversarial") {
+      return { valid: false, canPromote: false, reason: "Evidence origin must be the independent adversarial verifier" };
+    }
     if (!check.valid || rec.status !== "PASS") {
       return {
         valid: false,
