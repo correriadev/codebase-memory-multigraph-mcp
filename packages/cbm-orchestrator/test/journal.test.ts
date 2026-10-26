@@ -57,6 +57,18 @@ test("Journal: criação de ciclo (run) e transição de estados C02", () => {
   assert.equal(updatedRun?.state, "RUNNING");
   assert.equal(updatedRun?.phase, "BUILDING");
 
+  // Transição RUNNING -> PAUSED na fase AWAITING_PLANNING (portão Stage 1)
+  journal.transitionRun("run-001", { state: "PAUSED", phase: "AWAITING_PLANNING" });
+  const pausedRun = journal.getRun("run-001");
+  assert.equal(pausedRun?.state, "PAUSED");
+  assert.equal(pausedRun?.phase, "AWAITING_PLANNING");
+
+  // Retomada PAUSED -> RUNNING de volta para BUILDING
+  journal.transitionRun("run-001", { state: "RUNNING", phase: "BUILDING" });
+  const resumedRun = journal.getRun("run-001");
+  assert.equal(resumedRun?.state, "RUNNING");
+  assert.equal(resumedRun?.phase, "BUILDING");
+
   // Transição RUNNING -> COMPLETED com motivo ACCEPTED
   journal.transitionRun("run-001", {
     state: "COMPLETED",

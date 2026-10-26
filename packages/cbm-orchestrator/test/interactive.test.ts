@@ -86,16 +86,32 @@ function createDummyApp(overrides: Partial<any> = {}): OrchestratorApplication {
       totalTokensUsed: 1250,
       totalCostUsd: 0.015,
     }),
-    runCycle: async (objective: string) => ({
-      runId: "run-interactive-exec-1",
-      status: "COMPLETED",
-      terminationReason: "ACCEPTED",
-      promoted: true,
-      candidateVersionId: "sha256:sealed-candidate-hash-xyz",
-      totalTokensUsed: 2100,
-      totalCostUsd: 0.021,
-      iterationsRun: 1,
-    }),
+    runCycle: async (
+      objective: string,
+      signal?: AbortSignal,
+      diagnostic = false,
+      onStage1Proposal?: any
+    ) => {
+      if (onStage1Proposal) {
+        await onStage1Proposal({
+          runId: "run-interactive-exec-1",
+          iteration: 1,
+          artifactContent: "export const answer = 42;",
+          usage: { totalTokens: 1200 },
+          costUsd: 0.012,
+        });
+      }
+      return {
+        runId: "run-interactive-exec-1",
+        status: "COMPLETED",
+        terminationReason: "ACCEPTED",
+        promoted: true,
+        candidateVersionId: "sha256:sealed-candidate-hash-xyz",
+        totalTokensUsed: 2100,
+        totalCostUsd: 0.021,
+        iterationsRun: 1,
+      };
+    },
     cancel: () => ({ cancellationRequested: true }),
     ...overrides,
   } as unknown as OrchestratorApplication;
@@ -171,8 +187,17 @@ test("Interactive CLI: opção 5 verifica e limpa lock pendente", async () => {
 test("Interactive CLI: opção 1 executa ciclo autônomo com pacote de decisão aprovado", async () => {
   let executedObjective = "";
   const app = createDummyApp({
-    runCycle: async (obj: string) => {
+    runCycle: async (obj: string, signal?: AbortSignal, diag?: boolean, onStage1Proposal?: any) => {
       executedObjective = obj;
+      if (onStage1Proposal) {
+        await onStage1Proposal({
+          runId: "run-cycle-approved-77",
+          iteration: 1,
+          artifactContent: "export function parseTimezone() { return 'UTC'; }",
+          usage: { totalTokens: 2000 },
+          costUsd: 0.02,
+        });
+      }
       return {
         runId: "run-cycle-approved-77",
         status: "COMPLETED",
@@ -189,7 +214,8 @@ test("Interactive CLI: opção 1 executa ciclo autônomo com pacote de decisão 
   const { startPromise, getOutput } = createMockSession([
     "1",
     "Adicionar timezone parser em date-parser.ts",
-    "s",
+    "s", // confirma alvos
+    "s", // confirma proposta Stage 1
     "0",
   ], app);
   await startPromise;
@@ -197,10 +223,54 @@ test("Interactive CLI: opção 1 executa ciclo autônomo com pacote de decisão 
   assert.equal(executedObjective, "Adicionar timezone parser em date-parser.ts");
   const text = getOutput();
   assert.match(text, /INICIAR CICLO AUTÔNOMO/);
+  assert.match(text, /ETAPA 1 CONCLUÍDA: PROPOSTA DO BUILDER GERADA/);
+  assert.match(text, /Proposta aprovada pelo operador/);
   assert.match(text, /PACOTE DE DECISÃO FINAL/);
   assert.match(text, /run-cycle-approved-77/);
   assert.match(text, /CANDIDATO APROVADO COM SUCESSO/);
   assert.match(text, /sha256:candidate-sealed-42/);
+});
+
+test("Interactive CLI: opção 1 rejeita proposta no Stage 1 e aborta ciclo", async () => {
+  let proposalRejected = false;
+  const app = createDummyApp({
+    runCycle: async (obj: string, signal?: AbortSignal, diag?: boolean, onStage1Proposal?: any) => {
+      if (onStage1Proposal) {
+        const approved = await onStage1Proposal({
+          runId: "run-cycle-rejected-88",
+          iteration: 1,
+          artifactContent: "throw new Error('evil');",
+          usage: { totalTokens: 500 },
+          costUsd: 0.005,
+        });
+        if (!approved) proposalRejected = true;
+      }
+      return {
+        runId: "run-cycle-rejected-88",
+        status: "COMPLETED",
+        terminationReason: "REJECTED",
+        promoted: false,
+        candidateVersionId: "",
+        totalTokensUsed: 500,
+        totalCostUsd: 0.005,
+        iterationsRun: 1,
+      };
+    },
+  });
+
+  const { startPromise, getOutput } = createMockSession([
+    "1",
+    "Alteração perigosa",
+    "s", // confirma alvos
+    "n", // rejeita proposta Stage 1
+    "0",
+  ], app);
+  await startPromise;
+
+  assert.equal(proposalRejected, true);
+  const text = getOutput();
+  assert.match(text, /Proposta rejeitada pelo operador/);
+  assert.match(text, /CANDIDATO NÃO APROVADO OU REQUER REVISÃO/);
 });
 
 test("Interactive CLI: opção inválida gera aviso sem quebrar sessão", async () => {

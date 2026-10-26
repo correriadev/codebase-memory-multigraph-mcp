@@ -29,7 +29,7 @@ export interface TuiHeaderMetadata {
 }
 
 export interface TuiStatusTelemetry {
-  phase: "IDLE" | "BUILDING" | "SEALING" | "VERIFYING" | "APPROVAL" | "COMPLETED" | "ERROR";
+  phase: "IDLE" | "BUILDING" | "AWAITING_PLANNING" | "SEALING" | "VERIFYING" | "APPROVAL" | "COMPLETED" | "ERROR";
   tokensUsed: number;
   costUsd: number;
   isLocked: boolean;

@@ -156,3 +156,103 @@ test("S1 Orchestrator: diagnóstico de crash pré-F05 sem retomada automática (
 
   orchestrator.close();
 });
+
+test("S1 Orchestrator: transição para AWAITING_PLANNING e aprovação da proposta no Stage 1", async () => {
+  const dbPath = getTempDbPath();
+  const mockCbm: CbmClientMock = {
+    async callTool(tool) {
+      if (tool === "index_status") return { graphGeneration: 1, baselineDigest: "digest-stage1", rulesRevision: "r1", coverageRevision: "c1" };
+      if (tool === "promote_horizon") return { success: true, promoted: true };
+      return { success: true };
+    },
+  };
+
+  const orchestrator = new CycleOrchestrator(dbPath, mockCbm, new SimulatedAgentRunner());
+  const approval = new Journal(dbPath);
+  approval.recordS0Approval("proj-stage1-approve", "fixture-only");
+  approval.close();
+
+  let stage1ProposalReceived: any = null;
+  let phaseObservedInDb: string | null = null;
+
+  const req: StartCycleRequest = {
+    projectId: "proj-stage1-approve",
+    horizonId: "horizon-stage1-approve",
+    objective: "Implementar portão Stage 1 com aprovação",
+    policy: {
+      cycleTokenCap: 60000,
+      builderReservation: 20000,
+      adversarialReservation: 10000,
+      maxIterations: 1,
+      agentTimeoutSeconds: 60,
+      cycleTimeoutSeconds: 300,
+      cycleMonetaryCapUsd: 1.0,
+    },
+    builderPrompt: "Gerar proposta de código",
+    builderIntentScope: [{ path: "src/sample.ts", operation: "write" }],
+    onStage1Proposal: async (proposal) => {
+      stage1ProposalReceived = proposal;
+      const inspectJournal = new Journal(dbPath);
+      const run = inspectJournal.getRun(proposal.runId);
+      phaseObservedInDb = run?.phase ?? null;
+      inspectJournal.close();
+      return true; // Operador aprova
+    },
+  };
+
+  const result = await orchestrator.executeCycle(req);
+  assert.equal(result.status, "COMPLETED");
+  assert.equal(result.terminationReason, "ACCEPTED");
+  assert.equal(result.promoted, true);
+  assert.ok(stage1ProposalReceived, "onStage1Proposal deve ter sido invocado");
+  assert.equal(stage1ProposalReceived.iteration, 1);
+  assert.ok(stage1ProposalReceived.artifactContent);
+  assert.equal(phaseObservedInDb, "AWAITING_PLANNING", "Fase durante confirmação deve ser AWAITING_PLANNING");
+
+  orchestrator.close();
+});
+
+test("S1 Orchestrator: transição para AWAITING_PLANNING e rejeição da proposta no Stage 1", async () => {
+  const dbPath = getTempDbPath();
+  const mockCbm: CbmClientMock = {
+    async callTool() {
+      return { success: true };
+    },
+  };
+
+  const orchestrator = new CycleOrchestrator(dbPath, mockCbm, new SimulatedAgentRunner());
+  const approval = new Journal(dbPath);
+  approval.recordS0Approval("proj-stage1-reject", "fixture-only");
+  approval.close();
+
+  let stage1ProposalReceived = false;
+
+  const req: StartCycleRequest = {
+    projectId: "proj-stage1-reject",
+    horizonId: "horizon-stage1-reject",
+    objective: "Implementar portão Stage 1 com rejeição",
+    policy: {
+      cycleTokenCap: 60000,
+      builderReservation: 20000,
+      adversarialReservation: 10000,
+      maxIterations: 1,
+      agentTimeoutSeconds: 60,
+      cycleTimeoutSeconds: 300,
+      cycleMonetaryCapUsd: 1.0,
+    },
+    builderPrompt: "Gerar proposta de código",
+    builderIntentScope: [{ path: "src/sample.ts", operation: "write" }],
+    onStage1Proposal: async () => {
+      stage1ProposalReceived = true;
+      return false; // Operador rejeita proposta
+    },
+  };
+
+  const result = await orchestrator.executeCycle(req);
+  assert.equal(result.status, "COMPLETED");
+  assert.equal(result.terminationReason, "REJECTED");
+  assert.equal(result.promoted, false);
+  assert.equal(stage1ProposalReceived, true, "onStage1Proposal deve ter sido invocado");
+
+  orchestrator.close();
+});

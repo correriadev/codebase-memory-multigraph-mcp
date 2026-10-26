@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { StdioMcpClient, type ProcessCommand } from "./mcp-transport.ts";
 import { CbmBackend, type CbmBackendConfig } from "./cbm-backend.ts";
 import { CodexAgentRunner, type CodexRunnerConfig } from "./codex-runner.ts";
-import { CycleOrchestrator, validateBudgetPolicy } from "./orchestrator.ts";
+import { CycleOrchestrator, validateBudgetPolicy, type Stage1Proposal } from "./orchestrator.ts";
 import { Journal, type BudgetPolicy } from "./journal.ts";
 import { configurationDigest, loadS0Approval } from "./s0-spike.ts";
 
@@ -73,7 +73,12 @@ export class OrchestratorApplication {
     finally { await client.close(); }
   }
 
-  async runCycle(objective: string, signal?: AbortSignal, diagnostic = false): Promise<unknown> {
+  async runCycle(
+    objective: string,
+    signal?: AbortSignal,
+    diagnostic = false,
+    onStage1Proposal?: (proposal: Stage1Proposal) => Promise<boolean>
+  ): Promise<unknown> {
     if (typeof objective !== "string" || !objective.trim()) throw new Error("A nonempty objective is required");
     if (objective.length > 32_000) throw new Error("Objective exceeds 32000 characters");
     if (!diagnostic) loadS0Approval(path.join(this.config.stateDirectory, "s0-approval.json"), this.digest);
@@ -106,9 +111,16 @@ export class OrchestratorApplication {
       if (!diagnostic) journal.recordS0Approval(this.config.knowledge.project, this.digest);
       journal.close();
       orchestrator = new CycleOrchestrator(dbPath, backend, runner, { s0Probe: diagnostic, configurationDigest: this.digest });
-      const result = await orchestrator.executeCycle({ projectId: this.config.knowledge.project, horizonId, objective,
-        builderPrompt: objective, policy: this.config.policy, signal: controller.signal,
-        builderIntentScope: this.config.knowledge.targets.map((target) => ({ path: target.path, operation: "write" })) });
+      const result = await orchestrator.executeCycle({
+        projectId: this.config.knowledge.project,
+        horizonId,
+        objective,
+        builderPrompt: objective,
+        policy: this.config.policy,
+        signal: controller.signal,
+        builderIntentScope: this.config.knowledge.targets.map((target) => ({ path: target.path, operation: "write" })),
+        onStage1Proposal,
+      });
       accepted = result.promoted;
       recoveryRequired = result.effects.some((effect) => effect.status === "PENDING" || effect.status === "UNKNOWN");
       const telemetry = orchestrator.queryTelemetry({ runId: result.runId });

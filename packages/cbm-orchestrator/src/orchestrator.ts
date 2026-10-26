@@ -46,6 +46,14 @@ export interface AgentRunner {
   invokeAgent(options: AgentInvocationOptions): Promise<AgentInvocationResult>;
 }
 
+export interface Stage1Proposal {
+  runId: string;
+  iteration: number;
+  artifactContent: string;
+  usage: CodexUsage | null;
+  costUsd: number | null;
+}
+
 export interface StartCycleRequest {
   projectId: string;
   horizonId: string;
@@ -54,6 +62,7 @@ export interface StartCycleRequest {
   builderPrompt: string;
   builderIntentScope: IntentScopePair[];
   signal?: AbortSignal;
+  onStage1Proposal?: (proposal: Stage1Proposal) => Promise<boolean>;
 }
 
 export interface CycleExecutionResult {
@@ -240,6 +249,26 @@ export class CycleOrchestrator {
       ) {
         terminationReason = "BUDGET_EXHAUSTED";
         break;
+      }
+
+      // Etapa 1 concluída: proposta gerada pelo Builder.
+      // Se gancho de confirmação humana estiver configurado, transiciona para AWAITING_PLANNING.
+      if (request.onStage1Proposal) {
+        this.journal.transitionRun(runId, { state: "PAUSED", phase: "AWAITING_PLANNING" });
+        const approved = await request.onStage1Proposal({
+          runId,
+          iteration: i,
+          artifactContent: builderOutput.artifactContent,
+          usage: builderOutput.usage,
+          costUsd: builderOutput.costUsd,
+        });
+
+        if (!approved || request.signal?.aborted) {
+          terminationReason = request.signal?.aborted ? "CANCELLED" : "REJECTED";
+          break;
+        }
+
+        this.journal.transitionRun(runId, { state: "RUNNING", phase: "BUILDING" });
       }
 
       // Consulta estado e frescor do backend de forma limitada pelo deadline do ciclo

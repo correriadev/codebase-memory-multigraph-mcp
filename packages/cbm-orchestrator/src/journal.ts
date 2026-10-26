@@ -5,6 +5,7 @@ export type RunState = "CREATED" | "RUNNING" | "PAUSED" | "COMPLETED";
 export type RunPhase =
   | "PLANNING"
   | "BUILDING"
+  | "AWAITING_PLANNING"
   | "VERIFYING"
   | "AWAITING_DECISION"
   | "PROMOTING"

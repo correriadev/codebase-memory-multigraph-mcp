@@ -39,7 +39,7 @@ function runSessionWithInputs(app: OrchestratorApplication, inputs: string[], di
   const output = new PassThrough();
   const queue = [...inputs];
 
-  const promptRegex = /(Selecione uma opção|Opção de|Digite o objetivo|Confirmar alvos|Digite um Run ID|Deseja remover|Selecione um provedor|Selecione o modelo|identificador do modelo|Salvar esta configuração|Deseja salvar|Deseja assinar).*[:?]\s*$/i;
+  const promptRegex = /(Selecione uma opção|Opção de|Digite o objetivo|Confirmar alvos|Confirmar proposta|Digite um Run ID|Deseja remover|Selecione um provedor|Selecione o modelo|identificador do modelo|Salvar esta configuração|Deseja salvar|Deseja assinar).*[:?]\s*$/i;
 
   output.on("data", (chunk) => {
     outputBuffer += chunk.toString();
@@ -230,8 +230,10 @@ test("Smoke 09 - CLI Direct: Assinatura Formal do Portão S0 com Digest de Confi
 test("Smoke 10 - Menu [1]: Execução Completa do Ciclo Autônomo com Pacote de Decisão", async () => {
   const { app } = getSandboxApp();
   app.unlock();
-  const out = await runSessionWithInputs(app, ["1", "Refatorar sanitização de input", "s", "0"]);
+  const out = await runSessionWithInputs(app, ["1", "Refatorar sanitização de input", "s", "s", "0"]);
   assert.match(out, /INICIAR CICLO AUTÔNOMO/);
+  assert.match(out, /ETAPA 1 CONCLUÍDA: PROPOSTA DO BUILDER GERADA/);
+  assert.match(out, /Proposta aprovada pelo operador/);
   assert.match(out, /PACOTE DE DECISÃO FINAL/);
   assert.match(out, /Run ID:/);
 });

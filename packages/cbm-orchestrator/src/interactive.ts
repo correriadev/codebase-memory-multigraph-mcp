@@ -13,6 +13,7 @@ import {
   type ProviderCatalog,
 } from "./provider-discovery.ts";
 import { TerminalTui } from "./terminal-tui.ts";
+import type { Stage1Proposal } from "./orchestrator.ts";
 
 // ANSI Styling Helpers (graceful fallback)
 const isColorSupported = Boolean(process.stdout.isTTY && !process.env.NO_COLOR);
@@ -250,12 +251,61 @@ export class InteractiveSession {
     try {
       this.tui.setTelemetry({ phase: "BUILDING", isLocked: true });
       this.write(style.dim(" [1/3] 🔨 Fase BUILDING: instanciando Builder sob proxy CBM..."));
-      this.tui.setTelemetry({ phase: "SEALING" });
-      this.write(style.dim(" [2/3] 🔒 Fase SEALING: calculando hash canônico da candidata..."));
-      this.tui.setTelemetry({ phase: "VERIFYING" });
-      this.write(style.dim(" [3/3] 🛡️  Fase VERIFYING: verificador adversarial independente analisando..."));
 
-      const result = (await this.app.runCycle(objective, controller.signal)) as any;
+      const onStage1Proposal = async (proposal: Stage1Proposal): Promise<boolean> => {
+        this.tui.setTelemetry({
+          phase: "AWAITING_PLANNING",
+          tokensUsed: proposal.usage?.totalTokens || 0,
+          costUsd: proposal.costUsd || 0,
+        });
+        this.write("");
+        this.write(style.bold("╔══════════════════════════════════════════════════════════════════╗"));
+        this.write(style.bold("║         ETAPA 1 CONCLUÍDA: PROPOSTA DO BUILDER GERADA           ║"));
+        this.write(style.bold("╚══════════════════════════════════════════════════════════════════╝"));
+        this.write(`${style.bold("Iteração:")}       ${proposal.iteration}`);
+        this.write(`${style.bold("Tokens Usados:")}  ${(proposal.usage?.totalTokens || 0).toLocaleString()} tokens`);
+        this.write(`${style.bold("Custo Parcial:")}  $${(proposal.costUsd || 0).toFixed(4)} USD`);
+        this.write("");
+        this.write(style.bold("─── Resumo da Proposta (Artifact Content) ───────────────────────────"));
+
+        const lines = (proposal.artifactContent || "").trim().split("\n");
+        const preview = lines.slice(0, 15);
+        for (const line of preview) {
+          this.write(style.dim("│ ") + line);
+        }
+        if (lines.length > 15) {
+          this.write(style.dim(`│ ... (${lines.length - 15} linhas omitidas)`));
+        }
+        this.write(style.bold("───────────────────────────────────────────────────────────────────"));
+
+        let answer = "";
+        try {
+          answer = (
+            await this.rl.question(
+              `\n${style.bold("Confirmar proposta da Etapa 1 e prosseguir para selagem e verificação? [S/n]: ")}`
+            )
+          )
+            .trim()
+            .toLowerCase();
+        } catch {
+          return false;
+        }
+
+        const approved = answer === "" || answer === "s" || answer === "sim" || answer === "y" || answer === "yes";
+        if (approved) {
+          this.write(style.green("\n✓ Proposta aprovada pelo operador. Avançando para selagem e verificação..."));
+          this.tui.setTelemetry({ phase: "SEALING" });
+          this.write(style.dim(" [2/3] 🔒 Fase SEALING: calculando hash canônico da candidata..."));
+          this.tui.setTelemetry({ phase: "VERIFYING" });
+          this.write(style.dim(" [3/3] 🛡️  Fase VERIFYING: verificador adversarial independente analisando..."));
+          return true;
+        } else {
+          this.write(style.yellow("\n⚠️ Proposta rejeitada pelo operador. Abortando ciclo antes da selagem."));
+          return false;
+        }
+      };
+
+      const result = (await this.app.runCycle(objective, controller.signal, false, onStage1Proposal)) as any;
       this.tui.setTelemetry({
         phase: "COMPLETED",
         tokensUsed: result.totalTokensUsed || 0,
