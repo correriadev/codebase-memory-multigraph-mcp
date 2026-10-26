@@ -256,3 +256,170 @@ test("S1 Orchestrator: transição para AWAITING_PLANNING e rejeição da propos
 
   orchestrator.close();
 });
+
+test("S1 Orchestrator: operador interage com Builder no Stage 1 via STEER para corrigir desvio", async () => {
+  const dbPath = getTempDbPath();
+  const mockCbm: CbmClientMock = {
+    async callTool(tool) {
+      if (tool === "index_status") return { graphGeneration: 1, baselineDigest: "digest-steer", rulesRevision: "r1", coverageRevision: "c1" };
+      if (tool === "promote_horizon") return { success: true, promoted: true };
+      return { success: true };
+    },
+  };
+
+  const capturedPrompts: string[] = [];
+  const customRunner = new SimulatedAgentRunner();
+  const origInvoke = customRunner.invokeAgent.bind(customRunner);
+  customRunner.invokeAgent = async (opts) => {
+    capturedPrompts.push(opts.prompt);
+    return origInvoke(opts);
+  };
+
+  const orchestrator = new CycleOrchestrator(dbPath, mockCbm, customRunner);
+  const approval = new Journal(dbPath);
+  approval.recordS0Approval("proj-steer-stage1", "fixture-only");
+  approval.close();
+
+  let proposalCount = 0;
+
+  const req: StartCycleRequest = {
+    projectId: "proj-steer-stage1",
+    horizonId: "horizon-steer-stage1",
+    objective: "Implementar feature com correção iterativa no Stage 1",
+    policy: {
+      cycleTokenCap: 60000,
+      builderReservation: 10000,
+      adversarialReservation: 5000,
+      maxIterations: 3,
+      agentTimeoutSeconds: 60,
+      cycleTimeoutSeconds: 300,
+      cycleMonetaryCapUsd: 1.0,
+    },
+    builderPrompt: "Prompt inicial do Builder",
+    builderIntentScope: [{ path: "src/sample.ts", operation: "write" }],
+    onStage1Proposal: async (proposal) => {
+      proposalCount++;
+      if (proposalCount === 1) {
+        // Operador intervém e instrui o Builder a corrigir um desvio
+        return { action: "STEER", guidance: "Ajuste o retorno para incluir campo version" };
+      }
+      return { action: "APPROVE" };
+    },
+  };
+
+  const result = await orchestrator.executeCycle(req);
+  assert.equal(result.status, "COMPLETED");
+  assert.equal(result.terminationReason, "ACCEPTED");
+  assert.equal(result.promoted, true);
+  assert.equal(proposalCount, 2, "Builder deve ter sido re-executado após orientação do operador");
+  assert.ok(
+    capturedPrompts.some((p) => p.includes("Ajuste o retorno para incluir campo version")),
+    "Prompt do Builder deve conter a instrução de correção enviada pelo operador"
+  );
+
+  orchestrator.close();
+});
+
+test("S1 Orchestrator: pausa sob demanda durante VERIFYING com interação para corrigir desvio", async () => {
+  const dbPath = getTempDbPath();
+  const mockCbm: CbmClientMock = {
+    async callTool(tool) {
+      if (tool === "index_status") return { graphGeneration: 1, baselineDigest: "digest-pause", rulesRevision: "r1", coverageRevision: "c1" };
+      if (tool === "promote_horizon") return { success: true, promoted: true };
+      return { success: true };
+    },
+  };
+
+  const customRunner = new SimulatedAgentRunner({ simulateAlwaysRed: false });
+  const orchestrator = new CycleOrchestrator(dbPath, mockCbm, customRunner);
+  const approval = new Journal(dbPath);
+  approval.recordS0Approval("proj-pause-demand", "fixture-only");
+  approval.close();
+
+  let pauseTriggered = false;
+  let pauseObservedPhase: string | null = null;
+  let pauseCount = 0;
+
+  const req: StartCycleRequest = {
+    projectId: "proj-pause-demand",
+    horizonId: "horizon-pause-demand",
+    objective: "Implementar pausa dinâmica em outros steps",
+    policy: {
+      cycleTokenCap: 60000,
+      builderReservation: 10000,
+      adversarialReservation: 5000,
+      maxIterations: 2,
+      agentTimeoutSeconds: 60,
+      cycleTimeoutSeconds: 300,
+      cycleMonetaryCapUsd: 1.0,
+    },
+    builderPrompt: "Prompt inicial",
+    builderIntentScope: [{ path: "src/sample.ts", operation: "write" }],
+    shouldPause: () => {
+      // Simula operador solicitando pausa sob demanda durante o ciclo
+      return !pauseTriggered;
+    },
+    onPause: async (ctx) => {
+      pauseTriggered = true;
+      pauseCount++;
+      pauseObservedPhase = ctx.phase;
+      // Operador interage e orienta a continuar
+      return { action: "APPROVE" };
+    },
+  };
+
+  const result = await orchestrator.executeCycle(req);
+  assert.equal(result.status, "COMPLETED");
+  assert.equal(result.terminationReason, "ACCEPTED");
+  assert.equal(pauseCount, 1, "onPause deve ter sido chamado exatamente uma vez");
+  assert.ok(pauseObservedPhase, "Fase deve ter sido registrada no contexto de pausa");
+
+  orchestrator.close();
+});
+
+test("S1 Orchestrator: pausa sob demanda com decisão de abortar pelo operador", async () => {
+  const dbPath = getTempDbPath();
+  const mockCbm: CbmClientMock = {
+    async callTool(tool) {
+      if (tool === "index_status") return { graphGeneration: 1, baselineDigest: "digest-abort", rulesRevision: "r1", coverageRevision: "c1" };
+      return { success: true };
+    },
+  };
+
+  const orchestrator = new CycleOrchestrator(dbPath, mockCbm, new SimulatedAgentRunner());
+  const approval = new Journal(dbPath);
+  approval.recordS0Approval("proj-pause-abort", "fixture-only");
+  approval.close();
+
+  let pauseCount = 0;
+
+  const req: StartCycleRequest = {
+    projectId: "proj-pause-abort",
+    horizonId: "horizon-pause-abort",
+    objective: "Ciclo que é pausado e abortado pelo operador",
+    policy: {
+      cycleTokenCap: 60000,
+      builderReservation: 10000,
+      adversarialReservation: 5000,
+      maxIterations: 2,
+      agentTimeoutSeconds: 60,
+      cycleTimeoutSeconds: 300,
+      cycleMonetaryCapUsd: 1.0,
+    },
+    builderPrompt: "Prompt inicial",
+    builderIntentScope: [{ path: "src/sample.ts", operation: "write" }],
+    shouldPause: () => true,
+    onPause: async () => {
+      pauseCount++;
+      return { action: "REJECT" };
+    },
+  };
+
+  const result = await orchestrator.executeCycle(req);
+  assert.equal(result.status, "COMPLETED");
+  assert.equal(result.terminationReason, "REJECTED");
+  assert.equal(result.promoted, false);
+  assert.equal(pauseCount, 1);
+
+  orchestrator.close();
+});

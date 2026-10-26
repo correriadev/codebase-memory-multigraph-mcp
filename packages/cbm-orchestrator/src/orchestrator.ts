@@ -46,12 +46,31 @@ export interface AgentRunner {
   invokeAgent(options: AgentInvocationOptions): Promise<AgentInvocationResult>;
 }
 
+export type OperatorAction = "APPROVE" | "REJECT" | "STEER";
+
+export interface OperatorDecision {
+  action: OperatorAction;
+  guidance?: string;
+  targetRole?: "builder" | "adversarial";
+}
+
+export type Stage1Decision = boolean | OperatorDecision;
+
 export interface Stage1Proposal {
   runId: string;
   iteration: number;
   artifactContent: string;
   usage: CodexUsage | null;
   costUsd: number | null;
+}
+
+export interface PauseContext {
+  runId: string;
+  phase: RunPhase;
+  iteration: number;
+  lastArtifactContent?: string;
+  lastAdvVerdict?: string;
+  reason?: string;
 }
 
 export interface StartCycleRequest {
@@ -62,7 +81,9 @@ export interface StartCycleRequest {
   builderPrompt: string;
   builderIntentScope: IntentScopePair[];
   signal?: AbortSignal;
-  onStage1Proposal?: (proposal: Stage1Proposal) => Promise<boolean>;
+  onStage1Proposal?: (proposal: Stage1Proposal) => Promise<Stage1Decision>;
+  shouldPause?: () => boolean;
+  onPause?: (context: PauseContext) => Promise<OperatorDecision>;
 }
 
 export interface CycleExecutionResult {
@@ -180,6 +201,34 @@ export class CycleOrchestrator {
       if (request.signal?.aborted) { terminationReason = "CANCELLED"; break; }
       iteration = i;
 
+      const checkOnDemandPause = async (phase: RunPhase): Promise<boolean> => {
+        if (!request.shouldPause?.()) return true;
+        this.journal.transitionRun(runId, { state: "PAUSED", phase: "AWAITING_DECISION" });
+        if (request.onPause) {
+          const decision = await request.onPause({
+            runId,
+            phase,
+            iteration: i,
+            lastArtifactContent: latestVersion?.artifactContent,
+            reason: "OPERATOR_PAUSE_REQUESTED",
+          });
+          if (decision.action === "REJECT" || request.signal?.aborted) {
+            terminationReason = request.signal?.aborted ? "CANCELLED" : "REJECTED";
+            return false;
+          }
+          if (decision.action === "STEER" && decision.guidance) {
+            request = {
+              ...request,
+              builderPrompt: `${request.builderPrompt}\n[Instrução do Operador]: ${decision.guidance}`,
+            };
+          }
+        }
+        this.journal.transitionRun(runId, { state: "RUNNING", phase });
+        return true;
+      };
+
+      if (!(await checkOnDemandPause("BUILDING"))) break;
+
       // Verificação do timeout global do ciclo (C03)
       if (performance.now() - cycleStartTime >= cycleTimeoutMs) {
         terminationReason = "BUDGET_EXHAUSTED";
@@ -251,24 +300,86 @@ export class CycleOrchestrator {
         break;
       }
 
-      // Etapa 1 concluída: proposta gerada pelo Builder.
-      // Se gancho de confirmação humana estiver configurado, transiciona para AWAITING_PLANNING.
+      // Etapa 1: confirmação e steering com o Builder
       if (request.onStage1Proposal) {
-        this.journal.transitionRun(runId, { state: "PAUSED", phase: "AWAITING_PLANNING" });
-        const approved = await request.onStage1Proposal({
-          runId,
-          iteration: i,
-          artifactContent: builderOutput.artifactContent,
-          usage: builderOutput.usage,
-          costUsd: builderOutput.costUsd,
-        });
+        let stage1Resolved = false;
+        while (!stage1Resolved) {
+          this.journal.transitionRun(runId, { state: "PAUSED", phase: "AWAITING_PLANNING" });
+          const rawDecision = await request.onStage1Proposal({
+            runId,
+            iteration: i,
+            artifactContent: builderOutput.artifactContent!,
+            usage: builderOutput.usage,
+            costUsd: builderOutput.costUsd,
+          });
 
-        if (!approved || request.signal?.aborted) {
-          terminationReason = request.signal?.aborted ? "CANCELLED" : "REJECTED";
-          break;
+          const decision: OperatorDecision =
+            typeof rawDecision === "boolean"
+              ? rawDecision ? { action: "APPROVE" } : { action: "REJECT" }
+              : rawDecision;
+
+          if (decision.action === "REJECT" || request.signal?.aborted) {
+            terminationReason = request.signal?.aborted ? "CANCELLED" : "REJECTED";
+            break;
+          }
+
+          if (decision.action === "STEER" && decision.guidance) {
+            this.journal.transitionRun(runId, { state: "RUNNING", phase: "BUILDING" });
+            request = {
+              ...request,
+              builderPrompt: `${request.builderPrompt}\n[Instrução do Operador]: ${decision.guidance}`,
+            };
+
+            const steerRes = this.journal.reserveBudget(runId, "builder", request.policy.builderReservation);
+            if (!steerRes.success || !steerRes.reservationId) {
+              terminationReason = "BUDGET_EXHAUSTED";
+              break;
+            }
+
+            try {
+              builderOutput = await invokeWithTimeout(
+                {
+                  role: "builder",
+                  agentId: `${builderAgentId}-steer`,
+                  prompt: request.builderPrompt,
+                  intentScope: request.builderIntentScope,
+                  timeoutSeconds: Math.floor(builderTimeoutMs / 1000),
+                },
+                builderTimeoutMs
+              );
+            } catch (err: any) {
+              this.journal.reconcileBudget({
+                runId,
+                reservationId: steerRes.reservationId,
+                actualTokens: null,
+                costUsd: null,
+                status: "UNKNOWN",
+              });
+              terminationReason = request.signal?.aborted ? "CANCELLED" : "FAILED";
+              break;
+            }
+
+            this.journal.reconcileBudget({
+              runId,
+              reservationId: steerRes.reservationId,
+              actualTokens: builderOutput.usage?.totalTokens ?? null,
+              costUsd: builderOutput.costUsd,
+              status: builderOutput.usage && builderOutput.costUsd !== null ? "MEASURED" : "UNKNOWN",
+            });
+
+            if (builderOutput.error || !builderOutput.usage || builderOutput.costUsd === null || !builderOutput.artifactContent) {
+              terminationReason = request.signal?.aborted ? "CANCELLED" : "FAILED";
+              break;
+            }
+
+            continue;
+          }
+
+          this.journal.transitionRun(runId, { state: "RUNNING", phase: "BUILDING" });
+          stage1Resolved = true;
         }
 
-        this.journal.transitionRun(runId, { state: "RUNNING", phase: "BUILDING" });
+        if (terminationReason) break;
       }
 
       // Consulta estado e frescor do backend de forma limitada pelo deadline do ciclo
@@ -340,6 +451,7 @@ export class CycleOrchestrator {
       this.journal.recordEvent(runId, "CANDIDATE_SEALED", latestVersion);
 
       // 2. Fase VERIFYING: reserva orçamento para o Adversarial
+      if (!(await checkOnDemandPause("VERIFYING"))) break;
       this.journal.transitionRun(runId, { phase: "VERIFYING" });
       const advAgentId = `agent-adv-${runId}-iter-${i}`;
       const advRes = this.journal.reserveBudget(
@@ -436,6 +548,7 @@ export class CycleOrchestrator {
       this.journal.recordEvent(runId, "INDEPENDENT_VERDICT", { verdict, evidenceRecords });
 
       if (verdict.status === "GREEN") {
+        if (!(await checkOnDemandPause("PROMOTING"))) break;
         if (request.signal?.aborted) { terminationReason = "CANCELLED"; break; }
         this.journal.transitionRun(runId, { phase: "PROMOTING" });
         const gatekeeperSession: AgentSessionContext = {

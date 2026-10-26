@@ -4,7 +4,14 @@ import { randomUUID } from "node:crypto";
 import { StdioMcpClient, type ProcessCommand } from "./mcp-transport.ts";
 import { CbmBackend, type CbmBackendConfig } from "./cbm-backend.ts";
 import { CodexAgentRunner, type CodexRunnerConfig } from "./codex-runner.ts";
-import { CycleOrchestrator, validateBudgetPolicy, type Stage1Proposal } from "./orchestrator.ts";
+import {
+  CycleOrchestrator,
+  validateBudgetPolicy,
+  type Stage1Proposal,
+  type Stage1Decision,
+  type PauseContext,
+  type OperatorDecision,
+} from "./orchestrator.ts";
 import { Journal, type BudgetPolicy } from "./journal.ts";
 import { configurationDigest, loadS0Approval } from "./s0-spike.ts";
 
@@ -77,7 +84,11 @@ export class OrchestratorApplication {
     objective: string,
     signal?: AbortSignal,
     diagnostic = false,
-    onStage1Proposal?: (proposal: Stage1Proposal) => Promise<boolean>
+    onStage1Proposal?: (proposal: Stage1Proposal) => Promise<Stage1Decision>,
+    options?: {
+      shouldPause?: () => boolean;
+      onPause?: (context: PauseContext) => Promise<OperatorDecision>;
+    }
   ): Promise<unknown> {
     if (typeof objective !== "string" || !objective.trim()) throw new Error("A nonempty objective is required");
     if (objective.length > 32_000) throw new Error("Objective exceeds 32000 characters");
@@ -120,6 +131,8 @@ export class OrchestratorApplication {
         signal: controller.signal,
         builderIntentScope: this.config.knowledge.targets.map((target) => ({ path: target.path, operation: "write" })),
         onStage1Proposal,
+        shouldPause: options?.shouldPause,
+        onPause: options?.onPause,
       });
       accepted = result.promoted;
       recoveryRequired = result.effects.some((effect) => effect.status === "PENDING" || effect.status === "UNKNOWN");

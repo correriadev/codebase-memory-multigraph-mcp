@@ -13,17 +13,24 @@ function createMockSession(inputs: string[], app: OrchestratorApplication, disco
   const output = new PassThrough();
   const queue = [...inputs];
 
+  const promptRegex = /(Selecione uma opção|Opção de|Digite o objetivo|Confirmar alvos|Confirmar proposta|Digite a instrução|Selecione uma ação|Digite um Run ID|Deseja remover|Selecione um provedor|Selecione o modelo|identificador do modelo|Salvar esta configuração|Deseja salvar|Deseja assinar).*[:?]\s*$/i;
+
   output.on("data", (chunk) => {
     outputBuffer += chunk.toString();
-    if (queue.length > 0) {
+    const clean = outputBuffer.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "").trimEnd();
+    if (queue.length > 0 && promptRegex.test(clean)) {
       const next = queue.shift()!;
-      setTimeout(() => input.write(next + "\n"), 5);
+      setTimeout(() => {
+        if (!input.writableEnded) {
+          input.write(next + "\n");
+        }
+      }, 5);
     }
   });
 
   const session = new InteractiveSession(app, input, output, undefined, discoverFn);
   const startPromise = session.start().finally(() => {
-    input.end();
+    if (!input.writableEnded) input.end();
   });
 
   return {
@@ -271,6 +278,94 @@ test("Interactive CLI: opção 1 rejeita proposta no Stage 1 e aborta ciclo", as
   const text = getOutput();
   assert.match(text, /Proposta rejeitada pelo operador/);
   assert.match(text, /CANDIDATO NÃO APROVADO OU REQUER REVISÃO/);
+});
+
+test("Interactive CLI: opção 1 interage com Builder via opção c (corrigir) no Stage 1", async () => {
+  let steerReceived: string | null = null;
+  const app = createDummyApp({
+    runCycle: async (obj: string, signal?: AbortSignal, diag?: boolean, onStage1Proposal?: any) => {
+      if (onStage1Proposal) {
+        const dec1 = await onStage1Proposal({
+          runId: "run-steer-cli",
+          iteration: 1,
+          artifactContent: "initial imperfect code",
+          usage: { totalTokens: 100 },
+          costUsd: 0.001,
+        });
+        if (dec1 && typeof dec1 === "object" && dec1.action === "STEER") {
+          steerReceived = dec1.guidance;
+        }
+      }
+      return {
+        runId: "run-steer-cli",
+        status: "COMPLETED",
+        terminationReason: "ACCEPTED",
+        promoted: true,
+        candidateVersionId: "sha256:steered-ok",
+        totalTokensUsed: 200,
+        totalCostUsd: 0.002,
+        iterationsRun: 2,
+      };
+    },
+  });
+
+  const { startPromise, getOutput } = createMockSession([
+    "1",
+    "Ajuste com instrução",
+    "s", // confirma alvos
+    "c", // escolhe corrigir no Stage 1
+    "Adicione tipagem estrita", // digita instrução
+    "0",
+  ], app);
+  await startPromise;
+
+  assert.equal(steerReceived, "Adicione tipagem estrita");
+  const text = getOutput();
+  assert.match(text, /Enviando instrução ao Builder/);
+});
+
+test("Interactive CLI: interage com agente em pausa sob demanda via opção 2", async () => {
+  let pauseSteerReceived: string | null = null;
+  const app = createDummyApp({
+    runCycle: async (obj: string, signal?: AbortSignal, diag?: boolean, onStage1?: any, options?: any) => {
+      if (options?.onPause) {
+        const dec = await options.onPause({
+          runId: "run-pause-cli",
+          phase: "VERIFYING",
+          iteration: 1,
+          reason: "OPERATOR_PAUSE_REQUESTED",
+        });
+        if (dec && dec.action === "STEER") {
+          pauseSteerReceived = dec.guidance;
+        }
+      }
+      return {
+        runId: "run-pause-cli",
+        status: "COMPLETED",
+        terminationReason: "ACCEPTED",
+        promoted: true,
+        candidateVersionId: "sha256:paused-ok",
+        totalTokensUsed: 300,
+        totalCostUsd: 0.003,
+        iterationsRun: 1,
+      };
+    },
+  });
+
+  const { startPromise, getOutput } = createMockSession([
+    "1",
+    "Ajuste com pausa",
+    "s", // confirma alvos
+    "2", // escolhe interagir com agente na pausa
+    "Ignore testes legados", // instrução de correção
+    "0",
+  ], app);
+  await startPromise;
+
+  assert.equal(pauseSteerReceived, "Ignore testes legados");
+  const text = getOutput();
+  assert.match(text, /PAUSA DO CICLO \/ INTERVENÇÃO HUMANA/);
+  assert.match(text, /Instrução enviada ao agente/);
 });
 
 test("Interactive CLI: opção inválida gera aviso sem quebrar sessão", async () => {

@@ -13,7 +13,12 @@ import {
   type ProviderCatalog,
 } from "./provider-discovery.ts";
 import { TerminalTui } from "./terminal-tui.ts";
-import type { Stage1Proposal } from "./orchestrator.ts";
+import type {
+  Stage1Proposal,
+  Stage1Decision,
+  PauseContext,
+  OperatorDecision,
+} from "./orchestrator.ts";
 
 // ANSI Styling Helpers (graceful fallback)
 const isColorSupported = Boolean(process.stdout.isTTY && !process.env.NO_COLOR);
@@ -282,13 +287,28 @@ export class InteractiveSession {
         try {
           answer = (
             await this.rl.question(
-              `\n${style.bold("Confirmar proposta da Etapa 1 e prosseguir para selagem e verificação? [S/n]: ")}`
+              `\n${style.bold("Confirmar proposta da Etapa 1? [S=Aprovar / n=Rejeitar / c=Corrigir]: ")}`
             )
           )
             .trim()
             .toLowerCase();
         } catch {
           return false;
+        }
+
+        if (answer === "c" || answer === "corrigir") {
+          let guidance = "";
+          try {
+            guidance = (
+              await this.rl.question(
+                `\n${style.bold("Digite a instrução de correção para o Builder: ")}`
+              )
+            ).trim();
+          } catch {
+            return false;
+          }
+          this.write(style.yellow(`\n↺ Enviando instrução ao Builder: "${guidance}"...`));
+          return { action: "STEER", guidance };
         }
 
         const approved = answer === "" || answer === "s" || answer === "sim" || answer === "y" || answer === "yes";
@@ -305,7 +325,49 @@ export class InteractiveSession {
         }
       };
 
-      const result = (await this.app.runCycle(objective, controller.signal, false, onStage1Proposal)) as any;
+      const onPause = async (ctx: PauseContext): Promise<OperatorDecision> => {
+        this.tui.setTelemetry({ phase: "AWAITING_DECISION" });
+        this.write("");
+        this.write(style.bold("╔══════════════════════════════════════════════════════════════════╗"));
+        this.write(style.bold("║                PAUSA DO CICLO / INTERVENÇÃO HUMANA               ║"));
+        this.write(style.bold("╚══════════════════════════════════════════════════════════════════╝"));
+        this.write(`${style.bold("Fase atual:")}   ${ctx.phase}`);
+        this.write(`${style.bold("Iteração:")}     ${ctx.iteration}`);
+        this.write("");
+        this.write(`  ${style.cyan("[1]")} ${style.bold("Retomar execução")}               ${style.dim("(Aprovar e prosseguir)")}`);
+        this.write(`  ${style.cyan("[2]")} ${style.bold("Interagir com o agente")}         ${style.dim("(Enviar instrução de correção)")}`);
+        this.write(`  ${style.cyan("[3]")} ${style.yellow("Abortar ciclo")}              ${style.dim("(Encerrar com REJECTED)")}`);
+
+        let choice = "";
+        try {
+          choice = (await this.rl.question(`\n${style.bold("Selecione uma ação [1-3]: ")}`)).trim();
+        } catch {
+          return { action: "REJECT" };
+        }
+
+        if (choice === "2") {
+          let guidance = "";
+          try {
+            guidance = (await this.rl.question(`\n${style.bold("Digite a instrução para o agente: ")}`)).trim();
+          } catch {
+            return { action: "REJECT" };
+          }
+          this.write(style.yellow(`\n↺ Instrução enviada ao agente: "${guidance}". Retomando...`));
+          return { action: "STEER", guidance };
+        }
+
+        if (choice === "3") {
+          this.write(style.yellow("\n⚠️ Ciclo cancelado pelo operador na pausa."));
+          return { action: "REJECT" };
+        }
+
+        this.write(style.green("\n✓ Retomando execução do ciclo..."));
+        return { action: "APPROVE" };
+      };
+
+      const result = (await this.app.runCycle(objective, controller.signal, false, onStage1Proposal, {
+        onPause,
+      })) as any;
       this.tui.setTelemetry({
         phase: "COMPLETED",
         tokensUsed: result.totalTokensUsed || 0,

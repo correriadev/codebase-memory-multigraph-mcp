@@ -39,7 +39,7 @@ function runSessionWithInputs(app: OrchestratorApplication, inputs: string[], di
   const output = new PassThrough();
   const queue = [...inputs];
 
-  const promptRegex = /(Selecione uma opção|Opção de|Digite o objetivo|Confirmar alvos|Confirmar proposta|Digite um Run ID|Deseja remover|Selecione um provedor|Selecione o modelo|identificador do modelo|Salvar esta configuração|Deseja salvar|Deseja assinar).*[:?]\s*$/i;
+  const promptRegex = /(Selecione uma opção|Opção de|Digite o objetivo|Confirmar alvos|Confirmar proposta|Digite a instrução|Selecione uma ação|Digite um Run ID|Deseja remover|Selecione um provedor|Selecione o modelo|identificador do modelo|Salvar esta configuração|Deseja salvar|Deseja assinar).*[:?]\s*$/i;
 
   output.on("data", (chunk) => {
     outputBuffer += chunk.toString();
