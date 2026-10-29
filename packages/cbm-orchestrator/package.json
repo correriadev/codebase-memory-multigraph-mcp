@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "description": "CBM System Intelligence Engine Orchestrator",
   "type": "module",
+  "bin": {
+    "cbm": "./src/cli.ts"
+  },
   "scripts": {
+    "build": "node --check src/cli.ts",
+    "deploy:local": "powershell -ExecutionPolicy Bypass -File ../../scripts/deploy-local.ps1",
     "test": "node --test --test-concurrency=1 --test-timeout=20000 test/**/*.test.ts",
     "test:live-mcp": "node --test integration/real-mcp.test.ts",
     "start": "node src/cli.ts serve",

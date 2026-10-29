@@ -601,3 +601,55 @@ export function updateProviderTuple(
   }
   return createInitialTuple(newProvider, newCatalog);
 }
+
+export const SUPPORTED_PROVIDERS: ProviderId[] = ["codex", "antigravity", "opencode", "claude"];
+
+export async function getAllProviderCatalogs(
+  options: {
+    stateDir?: string;
+    forceRefresh?: boolean;
+  } = {}
+): Promise<ProviderCatalog[]> {
+  const catalogs: ProviderCatalog[] = [];
+  for (const p of SUPPORTED_PROVIDERS) {
+    const cat = await discoverProvider(p, options);
+    catalogs.push(cat);
+  }
+  return catalogs;
+}
+
+export function formatModelsTable(catalogs: ProviderCatalog[]): string {
+  const lines: string[] = [];
+  lines.push("┌─────────────┬────────────────────┬─────────────────────────────┬────────────────────────────────────────┐");
+  lines.push("│ PROVEDOR    │ STATUS             │ MODELO                      │ ESFORÇOS                               │");
+  lines.push("├─────────────┼────────────────────┼─────────────────────────────┼────────────────────────────────────────┤");
+
+  for (const cat of catalogs) {
+    const provName = cat.provider.toUpperCase().padEnd(11);
+    const statusStr = cat.status.padEnd(18);
+
+    if (cat.models && cat.models.length > 0) {
+      for (const [idx, m] of cat.models.entries()) {
+        const pCol = idx === 0 ? provName : " ".repeat(11);
+        const sCol = idx === 0 ? statusStr : " ".repeat(18);
+        const isDefault = m.id === cat.defaultModelId ? " *" : "";
+        const modelStr = (m.id + isDefault).slice(0, 27).padEnd(27);
+        const efforts =
+          m.reasoningLevels && m.reasoningLevels.length > 0
+            ? m.reasoningLevels.join(", ")
+            : m.defaultReasoningLevel || "default";
+        const effortStr = efforts.slice(0, 38).padEnd(38);
+        lines.push(`│ ${pCol} │ ${sCol} │ ${modelStr} │ ${effortStr} │`);
+      }
+    } else {
+      const modelStr = (cat.error || "-").slice(0, 27).padEnd(27);
+      const effortStr = "-".padEnd(38);
+      lines.push(`│ ${provName} │ ${statusStr} │ ${modelStr} │ ${effortStr} │`);
+    }
+  }
+
+  lines.push("└─────────────┴────────────────────┴─────────────────────────────┴────────────────────────────────────────┘");
+  lines.push("(* = modelo padrão do provedor)");
+  return lines.join("\n");
+}
+

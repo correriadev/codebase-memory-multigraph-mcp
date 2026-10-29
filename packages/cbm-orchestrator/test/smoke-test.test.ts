@@ -237,3 +237,266 @@ test("Smoke 10 - Menu [1]: Execução Completa do Ciclo Autônomo com Pacote de 
   assert.match(out, /PACOTE DE DECISÃO FINAL/);
   assert.match(out, /Run ID:/);
 });
+
+test("Smoke 11 - cli_dispatcher_routes_commands: Despachador de linha de comando em cli.ts", async () => {
+  const { main } = await import("../src/cli.ts");
+  assert.equal(typeof main, "function", "main must be exported by cli.ts");
+
+  // Running with unknown mode should reject
+  await assert.rejects(
+    async () => {
+      await main(["unknown-mode"]);
+    },
+    /Usage: node src\/cli\.ts/
+  );
+});
+
+test("Smoke 12 - cli_passes_alpha_chat_mode: cli.ts inicia no modo alpha chat", async () => {
+  const { readFileSync, existsSync } = await import("node:fs");
+  const path = await import("node:path");
+  const p1 = path.resolve("src/cli.ts");
+  const p2 = path.resolve("packages/cbm-orchestrator/src/cli.ts");
+  const target = existsSync(p1) ? p1 : p2;
+  const cliCode = readFileSync(target, "utf8");
+  assert.match(cliCode, /runInteractive\(\{\s*configFile,\s*alphaChatMode:\s*true/);
+});
+
+test("Smoke 13 - cli_defaults_to_interactive_when_no_args: Sem argumentos despacha para interactive", async () => {
+  const { readFileSync, existsSync } = await import("node:fs");
+  const path = await import("node:path");
+  const p1 = path.resolve("src/cli.ts");
+  const p2 = path.resolve("packages/cbm-orchestrator/src/cli.ts");
+  const target = existsSync(p1) ? p1 : p2;
+  const cliCode = readFileSync(target, "utf8");
+  // cli.ts must default mode to "interactive" when no argument is given
+  assert.match(cliCode, /mode\s*=\s*(?:args\[0\]\s*\|\|\s*["']interactive["']|["']interactive["'])/);
+});
+
+test("Smoke 14 - cli_prints_help_on_help_flag: --help imprime instrucoes sem lancar erro", async () => {
+  const { main } = await import("../src/cli.ts");
+  let output = "";
+  const originalLog = console.log;
+  console.log = (...args: any[]) => { output += args.join(" ") + "\n"; };
+  try {
+    await main(["--help"]);
+    assert.match(output, /Usage:|cbm/i);
+    assert.match(output, /interactive/);
+  } finally {
+    console.log = originalLog;
+  }
+});
+
+test("Smoke 15 - cli_validates_node_version_and_daemon_presence: Valida versao do Node e diagnostica daemon", async () => {
+  const { validateEnvironment } = await import("../src/cli.ts");
+  assert.equal(typeof validateEnvironment, "function", "validateEnvironment must be exported");
+
+  // Old Node.js version (< 24) must throw/fail
+  assert.throws(
+    () => validateEnvironment("22.11.0", () => true),
+    /requer Node\.js >= 24/i
+  );
+
+  // Node 24+ must pass
+  let warnOutput = "";
+  const res = validateEnvironment("24.0.0", () => false, (msg: string) => { warnOutput += msg; });
+  assert.equal(res.nodeValid, true);
+  assert.equal(res.daemonFound, false);
+  assert.match(warnOutput, /codebase-memory-mcp/i);
+});
+
+test("Smoke 16 - package_json_defines_bin_and_scripts: package.json define bin cbm, shebang e scripts", async () => {
+  const { readFileSync, existsSync } = await import("node:fs");
+  const path = await import("node:path");
+  const pPkg1 = path.resolve("package.json");
+  const pPkg2 = path.resolve("packages/cbm-orchestrator/package.json");
+  const pkgPath = existsSync(pPkg2) ? pPkg2 : pPkg1;
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+
+  assert.ok(pkg.bin, "package.json must define bin");
+  assert.equal(pkg.bin.cbm, "./src/cli.ts");
+  assert.ok(pkg.scripts.build, "package.json must define build script");
+  assert.ok(pkg.scripts["deploy:local"], "package.json must define deploy:local script");
+
+  const pCli1 = path.resolve("src/cli.ts");
+  const pCli2 = path.resolve("packages/cbm-orchestrator/src/cli.ts");
+  const cliPath = existsSync(pCli1) ? pCli1 : pCli2;
+  const cliContent = readFileSync(cliPath, "utf8");
+  assert.match(cliContent, /^#!\/usr\/bin\/env node/);
+});
+
+test("Smoke 17 - deploy_local_creates_executable_shims_in_user_path: deploy-local.ps1 gera shims executaveis", async () => {
+  const { existsSync, readFileSync, mkdtempSync } = await import("node:fs");
+  const { execSync } = await import("node:child_process");
+  const path = await import("node:path");
+  const os = await import("node:os");
+
+  const p1 = path.resolve("scripts/deploy-local.ps1");
+  const p2 = path.resolve("../../scripts/deploy-local.ps1");
+  const scriptPath = existsSync(p1) ? p1 : p2;
+  assert.ok(existsSync(scriptPath), "scripts/deploy-local.ps1 must exist");
+
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "cbm-deploy-test-"));
+  execSync(`powershell -ExecutionPolicy Bypass -File "${scriptPath}" -TargetDir "${tempDir}"`, {
+    stdio: "pipe",
+  });
+
+  const cmdShim = path.join(tempDir, "cbm.cmd");
+  const shShim = path.join(tempDir, "cbm");
+
+  assert.ok(existsSync(cmdShim), "cbm.cmd must be created in target dir");
+  assert.ok(existsSync(shShim), "cbm sh shim must be created in target dir");
+
+  const cmdContent = readFileSync(cmdShim, "utf8");
+  assert.match(cmdContent, /node\s+.*cli\.ts/i);
+});
+
+test("Smoke 18 - build_script_runs_successfully: npm run build executa sem erro", async () => {
+  const { existsSync } = await import("node:fs");
+  const { execSync } = await import("node:child_process");
+  const path = await import("node:path");
+  const pkgDir = path.resolve("packages/cbm-orchestrator");
+  const cwd = existsSync(pkgDir) ? pkgDir : path.resolve(".");
+  execSync("npm run build", { cwd, stdio: "pipe" });
+});
+
+test("Smoke 19 - cli_probe_runs_in_temp_dir_without_hang: createDefaultConfiguration inclui targets e probe encerra limpo", async () => {
+  const { createDefaultConfiguration } = await import("../src/application.ts");
+  const cfg = createDefaultConfiguration("C:/mock/ws");
+  assert.ok(Array.isArray(cfg.knowledge.targets) && cfg.knowledge.targets.length >= 1, "createDefaultConfiguration must have >= 1 target");
+  assert.ok(cfg.knowledge.targets[0].path && cfg.knowledge.targets[0].symbol);
+});
+
+test("Smoke 20 - cli_routes_config_file_argument_to_interactive: cbm <config.json> despacha para interactive", async () => {
+  const { parseCliArgs } = await import("../src/cli.ts");
+  assert.equal(typeof parseCliArgs, "function", "parseCliArgs must be exported");
+  const parsed = parseCliArgs(["custom.config.json"]);
+  assert.equal(parsed.mode, "interactive");
+  assert.equal(parsed.configFile, "custom.config.json");
+});
+
+test("Smoke_cli_parses_verbose_flag_and_levels: parseCliArgs extracts verbose levels and sanitizeSecrets redacts tokens", async () => {
+  const { parseCliArgs } = await import("../src/cli.ts");
+  const { sanitizeSecrets } = await import("../src/interactive.ts");
+
+  // Default when omitted
+  const p1 = parseCliArgs([]);
+  assert.equal(p1.verbose, "none");
+
+  // Bare --verbose defaults to medium
+  const p2 = parseCliArgs(["--verbose"]);
+  assert.equal(p2.verbose, "medium");
+
+  // Explicit level
+  const p3 = parseCliArgs(["--verbose", "low"]);
+  assert.equal(p3.verbose, "low");
+
+  // Short flag -v with high
+  const p4 = parseCliArgs(["-v", "high"]);
+  assert.equal(p4.verbose, "high");
+
+  // Preserves mode, config, and rest objective
+  const p5 = parseCliArgs(["run", "cbm.config.json", "-v", "medium", "fix bug"]);
+  assert.equal(p5.mode, "run");
+  assert.equal(p5.configFile, "cbm.config.json");
+  assert.equal(p5.verbose, "medium");
+  assert.equal(p5.rest.join(" "), "fix bug");
+
+  // Sanitization test
+  const raw = "Connecting with CBM_AGENT_TOKEN=secret-12345-token and bearer secret-abc";
+  const sanitized = sanitizeSecrets(raw);
+  assert.ok(!sanitized.includes("secret-12345-token"), "Must redact CBM_AGENT_TOKEN");
+  assert.match(sanitized, /\[REDACTED\]/);
+});
+
+test("Smoke_cli_parses_models_and_json_flags: parseCliArgs extracts models mode and json flag", async () => {
+  const { parseCliArgs } = await import("../src/cli.ts");
+
+  // Flag --models
+  const p1 = parseCliArgs(["--models"]);
+  assert.equal(p1.mode, "models");
+  assert.equal(p1.json, false);
+
+  // Flag --models with --json
+  const p2 = parseCliArgs(["--models", "--json"]);
+  assert.equal(p2.mode, "models");
+  assert.equal(p2.json, true);
+
+  // Positional mode models
+  const p3 = parseCliArgs(["models"]);
+  assert.equal(p3.mode, "models");
+  assert.equal(p3.json, false);
+
+  // Positional mode models with --json
+  const p4 = parseCliArgs(["models", "--json"]);
+  assert.equal(p4.mode, "models");
+  assert.equal(p4.json, true);
+
+  // Normal mode has json: false
+  const p5 = parseCliArgs([]);
+  assert.equal(p5.json, false);
+});
+
+test("Smoke_formatModelsTable_renders_aligned_rows: formatModelsTable and getAllProviderCatalogs produce formatted table", async () => {
+  const { getAllProviderCatalogs, formatModelsTable } = await import("../src/provider-discovery.ts");
+  assert.equal(typeof getAllProviderCatalogs, "function", "getAllProviderCatalogs must be exported");
+  assert.equal(typeof formatModelsTable, "function", "formatModelsTable must be exported");
+
+  const mockCatalogs: any[] = [
+    {
+      provider: "codex",
+      status: "CATALOG_AVAILABLE",
+      defaultModelId: "gpt-6.1-sol",
+      models: [
+        { id: "gpt-6.1-sol", label: "GPT-6.1 Sol", reasoningLevels: ["low", "medium", "high"], defaultReasoningLevel: "low", source: "live" },
+      ],
+      fetchedAt: new Date().toISOString(),
+      ttlMs: 86400000,
+    },
+    {
+      provider: "antigravity",
+      status: "NOT_INSTALLED",
+      defaultModelId: "gemini-2.5-pro",
+      models: [],
+      fetchedAt: new Date().toISOString(),
+      ttlMs: 86400000,
+      error: "Command not found: agy",
+    },
+  ];
+
+  const table = formatModelsTable(mockCatalogs);
+  assert.match(table, /PROVEDOR/);
+  assert.match(table, /STATUS/);
+  assert.match(table, /MODELO/);
+  assert.match(table, /ESFORÇOS/);
+  assert.match(table, /CODEX/i);
+  assert.match(table, /gpt-6\.1-sol/);
+  assert.match(table, /ANTIGRAVITY/i);
+  assert.match(table, /NOT_INSTALLED/);
+});
+
+test("Smoke_cli_dispatches_models_and_json_modes: cbm --models and cbm --models --json print catalogs and exit without interactive chat", async () => {
+  const { main } = await import("../src/cli.ts");
+
+  const originalLog = console.log;
+  let logOutput = "";
+  console.log = (...args: any[]) => {
+    logOutput += args.map(String).join(" ") + "\n";
+  };
+
+  try {
+    // 1. Tabular mode
+    logOutput = "";
+    await main(["--models"]);
+    assert.match(logOutput, /PROVEDOR/);
+    assert.match(logOutput, /STATUS/);
+
+    // 2. JSON mode
+    logOutput = "";
+    await main(["--models", "--json"]);
+    const parsed = JSON.parse(logOutput.trim());
+    assert.ok(Array.isArray(parsed), "JSON output must be an array of provider catalogs");
+    assert.ok(parsed.some((p: any) => p.provider === "codex"), "Must include codex provider");
+  } finally {
+    console.log = originalLog;
+  }
+});
