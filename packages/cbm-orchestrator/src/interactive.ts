@@ -1,8 +1,9 @@
 import path from "node:path";
+import os from "node:os";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import readline from "node:readline/promises";
 import { stdin as defaultInput, stdout as defaultOutput } from "node:process";
-import { OrchestratorApplication, readConfiguration, type OrchestratorConfig } from "./application.ts";
+import { OrchestratorApplication, readConfiguration, createDefaultConfiguration, type OrchestratorConfig } from "./application.ts";
 import { approveS0 } from "./s0-spike.ts";
 import {
   discoverProvider,
@@ -13,6 +14,7 @@ import {
   type ProviderCatalog,
 } from "./provider-discovery.ts";
 import { TerminalTui } from "./terminal-tui.ts";
+import type { KnowledgeTarget } from "./cbm-backend.ts";
 import type {
   Stage1Proposal,
   Stage1Decision,
@@ -32,6 +34,84 @@ const style = {
   magenta: (t: string) => (isColorSupported ? `\x1b[35m${t}\x1b[0m` : t),
 };
 
+export type VerboseLevel = "none" | "low" | "medium" | "high";
+
+export function sanitizeSecrets(text: string): string {
+  if (!text || typeof text !== "string") return "";
+  let result = text
+    .replace(/(CBM_AGENT_TOKEN=)(["']?)[^\s"']+(["']?)/gi, "$1$2[REDACTED]$3")
+    .replace(/(Bearer\s+)[^\s"']+/gi, "$1[REDACTED]")
+    .replace(/(token["']?\s*[:=]\s*["']?)[^\s"',}]+/gi, "$1[REDACTED]");
+  if (process.env.CBM_AGENT_TOKEN && process.env.CBM_AGENT_TOKEN.length > 3) {
+    result = result.replaceAll(process.env.CBM_AGENT_TOKEN, "[REDACTED]");
+  }
+  return result;
+}
+
+export interface PbbProposal {
+  problem: string;
+  targets: string[];
+  acceptanceCriteria: string[];
+}
+
+export function enrichBuilderPrompt(objective: string, proposal: PbbProposal): string {
+  const criteriaText = proposal.acceptanceCriteria.map((c) => ` • ${c}`).join("\n");
+  return `${objective}\n\n[Especificação PBB Aprovada]\nProblema: ${proposal.problem}\nAlvos: ${proposal.targets.join(", ")}\nCritérios de Aceite:\n${criteriaText}`;
+}
+
+export function normalizePbbTargets(targets: string[]): KnowledgeTarget[] {
+  if (!Array.isArray(targets) || targets.length === 0) {
+    throw new Error("PBB proposal must contain at least one target file");
+  }
+  const result: KnowledgeTarget[] = [];
+  for (const raw of targets) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const clean = raw.trim().replace(/\\/g, "/");
+    if (
+      path.posix.isAbsolute(clean) ||
+      path.win32.isAbsolute(raw.trim()) ||
+      clean.startsWith("/") ||
+      clean.startsWith("//") ||
+      /^[a-zA-Z]:/.test(clean)
+    ) {
+      throw new Error(`Absolute or UNC paths denied in target path: ${raw}`);
+    }
+    const parts = clean.split("/").filter((p) => p !== "" && p !== ".");
+    if (parts.some((p) => p === "..")) {
+      throw new Error(`Path traversal denied in target path: ${raw}`);
+    }
+    const normalized = parts.join("/");
+    result.push({ path: normalized, symbol: "main" });
+  }
+  if (result.length === 0) {
+    throw new Error("No valid target paths after normalization");
+  }
+  return result;
+}
+
+export function isControlCommand(input: string): boolean {
+  const normalized = (input || "").trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized === "q" ||
+    normalized === "0" ||
+    normalized === "sair" ||
+    normalized === "exit" ||
+    normalized === ":help" ||
+    normalized === "--help" ||
+    normalized.startsWith(":verbose")
+  );
+}
+
+export interface SessionOptions {
+  alphaChatMode?: boolean;
+  verbose?: VerboseLevel;
+  discoveryRunner?: (
+    messages: Array<{ role: string; content: string }>,
+    signal?: AbortSignal
+  ) => Promise<{ text: string; proposal?: PbbProposal }>;
+}
+
 export interface InteractiveOptions {
   configFile?: string;
   app?: OrchestratorApplication;
@@ -39,15 +119,23 @@ export interface InteractiveOptions {
   output?: NodeJS.WritableStream;
   discoverFn?: typeof discoverProvider;
   tui?: TerminalTui;
+  alphaChatMode?: boolean;
+  verbose?: VerboseLevel;
+  discoveryRunner?: (
+    messages: Array<{ role: string; content: string }>,
+    signal?: AbortSignal
+  ) => Promise<{ text: string; proposal?: PbbProposal }>;
 }
 
 export function findDefaultConfig(): string | null {
   const candidates = [
     path.resolve("orchestrator.config.json"),
     path.resolve("cbm.config.json"),
-    path.resolve("spike.config.json"),
-    path.resolve("packages/cbm-orchestrator/spike.config.json"),
-    path.resolve("../spike.config.json"),
+    path.resolve("cbm.sandbox.config.json"),
+    path.resolve("packages/cbm-orchestrator/cbm.sandbox.config.json"),
+    path.resolve("../cbm.config.json"),
+    path.resolve("../cbm.sandbox.config.json"),
+    path.join(os.homedir(), ".cbm", "cbm.config.json"),
   ];
   for (const c of candidates) {
     if (existsSync(c)) return c;
@@ -63,6 +151,15 @@ export class InteractiveSession {
   private activeController: AbortController | null = null;
   private discoverFn?: typeof discoverProvider;
   private tui: TerminalTui;
+  private alphaChatMode: boolean;
+  private verbose: VerboseLevel;
+  private discoveryRunner?: (
+    messages: Array<{ role: string; content: string }>,
+    signal?: AbortSignal
+  ) => Promise<{ text: string; proposal?: PbbProposal }>;
+  private conversationHistory: Array<{ role: string; content: string }> = [];
+  private isExecutingCycle: boolean = false;
+  private shouldPauseFlag: boolean = false;
 
   constructor(
     app: OrchestratorApplication,
@@ -70,28 +167,51 @@ export class InteractiveSession {
     output: NodeJS.WritableStream,
     configFile?: string,
     discoverFn?: typeof discoverProvider,
-    tui?: TerminalTui
+    tui?: TerminalTui,
+    options: SessionOptions = {}
   ) {
     this.app = app;
-    this.output = output;
+    const originalWrite = output.write.bind(output);
+    const sanitizedOutput = new Proxy(output, {
+      get(target, prop, receiver) {
+        if (prop === "write") {
+          return (chunk: any, encoding?: any, cb?: any) => {
+            if (typeof chunk === "string") {
+              return originalWrite(sanitizeSecrets(chunk), encoding, cb);
+            }
+            if (Buffer.isBuffer(chunk)) {
+              return originalWrite(Buffer.from(sanitizeSecrets(chunk.toString("utf8"))), encoding, cb);
+            }
+            return originalWrite(chunk, encoding, cb);
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    this.output = sanitizedOutput;
     this.configFile = configFile;
     this.discoverFn = discoverFn;
-    this.tui = tui ?? new TerminalTui({ stdout: output as any, stdin: input as any });
-    this.rl = readline.createInterface({ input, output });
+    this.alphaChatMode = Boolean(options.alphaChatMode);
+    this.verbose = options.verbose || "none";
+    this.discoveryRunner = options.discoveryRunner;
+    this.tui = tui ?? new TerminalTui({ stdout: sanitizedOutput as any, stdin: input as any });
+    this.rl = readline.createInterface({ input, output: sanitizedOutput });
 
-    this.tui.setHeader({
-      project: app.config.knowledge.project,
-      workspace: app.config.knowledge.workspace,
-      provider: (app.config.codex.provider || "codex").toUpperCase(),
-      model: app.config.codex.model,
-      effort: app.config.codex.effort,
-      tokenCap: app.config.policy.cycleTokenCap,
-      costCapUsd: app.config.policy.cycleMonetaryCapUsd,
-    });
+    if (!this.alphaChatMode) {
+      this.tui.setHeader({
+        project: app.config.knowledge.project,
+        workspace: app.config.knowledge.workspace,
+        provider: (app.config.codex.provider || "codex").toUpperCase(),
+        model: app.config.codex.model,
+        effort: app.config.codex.effort,
+        tokenCap: app.config.policy.cycleTokenCap,
+        costCapUsd: app.config.policy.cycleMonetaryCapUsd,
+      });
+    }
   }
 
   private write(text: string): void {
-    if (this.tui.isInteractive()) {
+    if (!this.alphaChatMode && this.tui.isInteractive()) {
       this.tui.addMessage(text);
       this.tui.draw();
     } else {
@@ -131,20 +251,37 @@ export class InteractiveSession {
 
   public async start(): Promise<void> {
     const onSigInt = () => {
-      if (this.activeController) {
-        this.activeController.abort();
+      if (this.alphaChatMode) {
+        if (this.isExecutingCycle) {
+          this.shouldPauseFlag = true;
+          this.output.write("\n" + style.yellow("[SINAL] Solicitando pausa da execução ao orquestrador...") + "\n");
+        } else {
+          this.rl.close();
+          process.exit(0);
+        }
       } else {
-        this.tui.exitAlternateBuffer();
-        process.exit(0);
+        if (this.activeController) {
+          this.activeController.abort();
+        } else {
+          this.tui.exitAlternateBuffer();
+          process.exit(0);
+        }
       }
     };
     const onExit = () => {
-      this.tui.exitAlternateBuffer();
+      if (!this.alphaChatMode) {
+        this.tui.exitAlternateBuffer();
+      }
     };
     process.on("SIGINT", onSigInt);
     process.on("exit", onExit);
 
     try {
+      if (this.alphaChatMode) {
+        await this.startAlphaChat();
+        return;
+      }
+
       this.tui.enterAlternateBuffer();
       this.printBanner();
 
@@ -197,8 +334,285 @@ export class InteractiveSession {
     } finally {
       process.off("SIGINT", onSigInt);
       process.off("exit", onExit);
-      this.tui.exitAlternateBuffer();
+      if (!this.alphaChatMode) {
+        this.tui.exitAlternateBuffer();
+      }
       this.rl.close();
+    }
+  }
+
+  private formatLog(subsystem: string, message: string): string {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+    const ts = `[${hh}:${mm}:${ss}]`;
+    return sanitizeSecrets(`${style.dim(ts)} [${style.cyan(subsystem.toUpperCase())}] ${message}`);
+  }
+
+  private async startAlphaChat(): Promise<void> {
+    this.output.write("\n" + style.cyan("╔══════════════════════════════════════════════════════════════════╗") + "\n");
+    this.output.write(style.cyan("║") + style.bold("           CBM SYSTEM INTELLIGENCE ENGINE · Alpha Chat            ") + style.cyan("║") + "\n");
+    this.output.write(style.cyan("╚══════════════════════════════════════════════════════════════════╗") + "\n");
+    this.output.write(`${style.bold("Projeto:")}     ${style.green(this.app.config.knowledge.project)}\n`);
+    const provider = this.app.config.codex.provider || "codex";
+    this.output.write(`${style.bold("Provedor:")}    ${style.cyan(provider.toUpperCase())} · ${style.bold(this.app.config.codex.model)}\n`);
+    this.output.write(`${style.dim("Digite seu objetivo ou 'q' para sair.")}\n\n`);
+
+    let running = true;
+    while (running) {
+      let input = "";
+      try {
+        input = (await this.rl.question(style.bold("CBM> "))).trim();
+      } catch {
+        break;
+      }
+      if (!input || input === "q" || input === "0" || input === "sair" || input === "exit") {
+        this.output.write(style.dim("\nSessão encerrada.\n"));
+        break;
+      }
+
+      if (input.startsWith(":verbose")) {
+        const parts = input.split(/\s+/);
+        if (parts[1] && ["none", "low", "medium", "high"].includes(parts[1].toLowerCase())) {
+          this.verbose = parts[1].toLowerCase() as VerboseLevel;
+          this.output.write(style.green(`[OBSERVABILIDADE] Nível alterado para: ${this.verbose}\n`));
+        } else {
+          this.output.write(style.yellow(`[OBSERVABILIDADE] Nível atual: ${this.verbose}. Opções: none, low, medium, high\n`));
+        }
+        continue;
+      }
+
+      if (input === ":help" || input === "--help") {
+        this.output.write(style.cyan("Comandos: :verbose <none|low|medium|high>, :help, q (sair)\n"));
+        continue;
+      }
+
+      if (this.discoveryRunner) {
+        const proposal = await this.handleAlphaDiscovery(input);
+        if (proposal) {
+          const decision = await this.confirmPbbGate(proposal);
+          if (decision.action === "APPROVE") {
+            const runTargets = normalizePbbTargets(proposal.targets);
+            const enrichedPrompt = enrichBuilderPrompt(input, proposal);
+            await this.handleAlphaCycle(input, runTargets, enrichedPrompt);
+          } else if (decision.action === "STEER" && decision.guidance) {
+            this.conversationHistory.push({ role: "user", content: `[Correção do PBB]: ${decision.guidance}` });
+          } else {
+            this.output.write(style.yellow("\n[PBB GATE] Execução cancelada pelo operador. Retornando ao chat.\n\n"));
+          }
+        }
+        continue;
+      }
+
+      await this.handleAlphaCycle(input);
+    }
+  }
+
+  public async confirmPbbGate(proposal: PbbProposal): Promise<OperatorDecision> {
+    this.output.write("\n" + style.bold("╔══════════════════════════════════════════════════════════════════╗") + "\n");
+    this.output.write(style.bold("║                 PROPOSTA PBB CONVERGIDA (STAGE 0)                ║") + "\n");
+    this.output.write(style.bold("╚══════════════════════════════════════════════════════════════════╝") + "\n");
+    this.output.write(`${style.bold("Problema:")}  ${proposal.problem}\n`);
+    this.output.write(`${style.bold("Alvos:")}     ${proposal.targets.join(", ")}\n`);
+    this.output.write(`${style.bold("Critérios:")}\n`);
+    for (const crit of proposal.acceptanceCriteria) {
+      this.output.write(` • ${crit}\n`);
+    }
+    this.output.write(style.bold("───────────────────────────────────────────────────────────────────") + "\n");
+
+    let answer = "";
+    try {
+      answer = (
+        await this.rl.question(
+          `\n${style.bold("Confirmar e executar especificação PBB? [s=Aprovar / c=Corrigir / q=Cancelar]: ")}`
+        )
+      ).trim().toLowerCase();
+    } catch {
+      return { action: "REJECT" };
+    }
+
+    if (answer === "c" || answer === "corrigir") {
+      let guidance = "";
+      try {
+        guidance = (
+          await this.rl.question(
+            `\n${style.bold("Digite a instrução de correção para o PBB: ")}`
+          )
+        ).trim();
+      } catch {
+        return { action: "REJECT" };
+      }
+      return { action: "STEER", guidance };
+    }
+
+    if (answer === "s" || answer === "sim" || answer === "y" || answer === "yes" || answer === "") {
+      return { action: "APPROVE" };
+    }
+
+    return { action: "REJECT" };
+  }
+
+  public async handleAlphaDiscovery(objective: string): Promise<PbbProposal | null> {
+    if (!this.discoveryRunner) return null;
+    this.conversationHistory.push({ role: "user", content: objective });
+    this.output.write(this.formatLog("DISCOVERY", `Consultando agente de descoberta...`) + "\n");
+
+    const controller = new AbortController();
+    this.activeController = controller;
+    try {
+      const res = await this.discoveryRunner(this.conversationHistory, controller.signal);
+      if (res.text) {
+        this.conversationHistory.push({ role: "assistant", content: res.text });
+        this.output.write(`\n${style.cyan("[DISCOVERY]")} ${res.text}\n\n`);
+      }
+      return res.proposal || null;
+    } finally {
+      this.activeController = null;
+    }
+  }
+
+  private async handleAlphaCycle(objective: string, runTargets?: KnowledgeTarget[], enrichedPrompt?: string): Promise<void> {
+    const lockStatus = this.app.isLocked();
+    if (lockStatus.locked) {
+      this.output.write(style.red("\n❌ Bloqueado: Já existe um ciclo ativo ou lock pendente.\n"));
+      return;
+    }
+
+    this.output.write(this.formatLog("PLANNER", `Analisando objetivo: "${objective}"...`) + "\n");
+
+    const controller = new AbortController();
+    this.activeController = controller;
+    this.isExecutingCycle = true;
+    this.shouldPauseFlag = false;
+
+    const onStage1Proposal = async (proposal: Stage1Proposal): Promise<Stage1Decision> => {
+      this.output.write("\n" + style.bold("─── PROPOSTA DA ETAPA 1 (BUILDER) ──────────────────────────────────") + "\n");
+      const lines = (proposal.artifactContent || "").trim().split("\n");
+      for (const line of lines.slice(0, 10)) {
+        this.output.write(style.dim("│ ") + line + "\n");
+      }
+      if (lines.length > 10) {
+        this.output.write(style.dim(`│ ... (${lines.length - 10} linhas omitidas)\n`));
+      }
+      this.output.write(style.bold("───────────────────────────────────────────────────────────────────") + "\n");
+
+      let answer = "";
+      try {
+        answer = (
+          await this.rl.question(
+            `\n${style.bold("Confirmar proposta da Etapa 1? [s=Aprovar / n=Rejeitar / c=Corrigir]: ")}`
+          )
+        ).trim().toLowerCase();
+      } catch {
+        return false;
+      }
+
+      if (answer === "c" || answer === "corrigir") {
+        let guidance = "";
+        try {
+          guidance = (
+            await this.rl.question(
+              `\n${style.bold("Digite a instrução de correção para o Builder: ")}`
+            )
+          ).trim();
+        } catch {
+          return false;
+        }
+        this.output.write(this.formatLog("OPERATOR", `Enviando correção: "${guidance}"`) + "\n");
+        return { action: "STEER", guidance };
+      }
+
+      const approved = answer === "s" || answer === "sim" || answer === "y" || answer === "yes";
+      if (approved) {
+        this.output.write(this.formatLog("OPERATOR", "Proposta aprovada pelo operador.") + "\n");
+        this.output.write("\n" + style.cyan("=== INÍCIO DA EXECUÇÃO (STREAMING DE LOGS) ===") + "\n");
+        this.output.write(this.formatLog("BUILDER", "Gerando modificações e artefatos de código...") + "\n");
+        return true;
+      }
+
+      this.output.write(this.formatLog("OPERATOR", "Proposta rejeitada pelo operador.") + "\n");
+      return false;
+    };
+
+    const shouldPause = () => this.shouldPauseFlag;
+    const onPause = async (context: PauseContext): Promise<OperatorDecision> => {
+      this.shouldPauseFlag = false;
+      this.output.write("\n" + style.yellow(`[PAUSA] Execução congelada na fase ${context.phase}.`) + "\n");
+      let choice = "";
+      try {
+        choice = (
+          await this.rl.question(
+            style.bold("Opção de pausa [1=Continuar / 2=Corrigir / 3=Abortar]: ")
+          )
+        ).trim();
+      } catch {
+        return { action: "REJECT" };
+      }
+      if (choice === "2") {
+        const guidance = (await this.rl.question("Digite a instrução corretiva: ")).trim();
+        return { action: "STEER", guidance };
+      }
+      if (choice === "3" || choice === "a") {
+        return { action: "REJECT" };
+      }
+      return { action: "APPROVE" };
+    };
+
+    try {
+      const s0Path = path.join(this.app.config.stateDirectory, "s0-approval.json");
+      const isDiagnostic = !existsSync(s0Path);
+      const result: any = await this.app.runCycle(
+        objective,
+        controller.signal,
+        isDiagnostic,
+        onStage1Proposal,
+        {
+          shouldPause,
+          onPause,
+        },
+        runTargets,
+        enrichedPrompt
+      );
+
+      const filesModified = result?.effects?.map((e: any) => e.target).filter(Boolean) || this.app.config.knowledge.targets.map((t: any) => t.path);
+      this.output.write("\n" + style.bold("─── RESUMO OPERACIONAL DE CONCLUSÃO ────────────────────────────────") + "\n");
+      this.output.write(`${style.bold("Status:")}             ${result?.promoted ? style.green("✔ SUCESSO (PROMOVIDO)") : style.red("❌ RECUSADO")}\n`);
+      if (result?.failureReason) {
+        this.output.write(`${style.bold("Motivo da Recusa:")}   ${style.yellow(result.failureReason)}\n`);
+      }
+      if (result?.runId) this.output.write(`${style.bold("Run ID:")}             ${result.runId}\n`);
+      if (this.verbose !== "none" && this.app.config.stateDirectory && result?.runId) {
+        const evidenceFile = path.join(this.app.config.stateDirectory, `${result.runId}.json`);
+        this.output.write(`${style.bold("Evidência:")}          ${style.dim(evidenceFile)}\n`);
+      }
+      if (filesModified && filesModified.length > 0) {
+        this.output.write(`${style.bold("Arquivos Alterados:")}\n`);
+        for (const f of filesModified) {
+          this.output.write(` • ${style.cyan(f)}\n`);
+        }
+      }
+      if (result?.iterationsRun !== undefined) this.output.write(`${style.bold("Iterações:")}          ${result.iterationsRun}\n`);
+      if (result?.totalTokensUsed !== undefined) this.output.write(`${style.bold("Tokens:")}             ${result.totalTokensUsed.toLocaleString()} tk\n`);
+      if (result?.totalCostUsd !== undefined) this.output.write(`${style.bold("Custo Total:")}        $${result.totalCostUsd.toFixed(4)} USD\n`);
+      this.output.write(style.bold("───────────────────────────────────────────────────────────────────\n"));
+
+      if (!result?.promoted && !process.env.NODE_TEST_CONTEXT) {
+        process.exitCode = 1;
+      }
+    } catch (err: any) {
+      if (!process.env.NODE_TEST_CONTEXT) {
+        process.exitCode = 1;
+      }
+      if (controller.signal.aborted) {
+        this.output.write(style.yellow("\n⚠️ Ciclo cancelado pelo operador.\n"));
+      } else {
+        this.output.write(style.red(`\n❌ Erro durante a execução: ${err.message}\n`));
+      }
+    } finally {
+      this.activeController = null;
+      this.isExecutingCycle = false;
+      this.shouldPauseFlag = false;
     }
   }
 
@@ -728,6 +1142,38 @@ export class InteractiveSession {
   }
 }
 
+export function createDefaultDiscoveryRunner(app: any): (
+  messages: Array<{ role: string; content: string }>,
+  signal?: AbortSignal
+) => Promise<{ text: string; proposal?: PbbProposal }> {
+  return async (messages: Array<{ role: string; content: string }>, signal?: AbortSignal) => {
+    if (app?.config?.codex?.command) {
+      try {
+        const { CodexAgentRunner } = await import("./codex-runner.ts");
+        const runner = new CodexAgentRunner(app.config.codex, {
+          directory: app.config.knowledge?.workspace || process.cwd(),
+        } as any);
+        return await runner.converse(messages, signal);
+      } catch {
+        // fallback
+      }
+    }
+    const lastMsg = messages.filter((m) => m.role === "user").pop()?.content || "";
+    const defaultTargets =
+      app?.config?.knowledge?.targets && app.config.knowledge.targets.length > 0
+        ? app.config.knowledge.targets.map((t: any) => t.path)
+        : ["README.md"];
+    return {
+      text: `Especificação preliminar formulada para: "${lastMsg}".`,
+      proposal: {
+        problem: lastMsg,
+        targets: defaultTargets,
+        acceptanceCriteria: [`Executar "${lastMsg}" garantindo validação e integridade`],
+      },
+    };
+  };
+}
+
 export async function runInteractive(options: InteractiveOptions = {}): Promise<void> {
   let app = options.app;
   let cfgFile = options.configFile;
@@ -736,14 +1182,20 @@ export async function runInteractive(options: InteractiveOptions = {}): Promise<
     if (!cfgFile) {
       cfgFile = findDefaultConfig() || undefined;
     }
+    let config: OrchestratorConfig;
     if (!cfgFile) {
-      throw new Error(
-        "Nenhum arquivo de configuração especificado ou encontrado. Crie um 'cbm.config.json' ou execute com: node src/cli.ts interactive <config.json>"
-      );
+      const out = options.output || defaultOutput;
+      out.write("\x1b[33m[AVISO] Nenhum 'cbm.config.json' encontrado. Inicializando com configuração padrão para: " + process.cwd() + "\x1b[0m\n");
+      config = createDefaultConfiguration(process.cwd());
+    } else {
+      config = readConfiguration(cfgFile);
     }
-    const config = readConfiguration(cfgFile);
     app = new OrchestratorApplication(config);
   }
+
+  const discoveryRunner =
+    options.discoveryRunner ||
+    (options.alphaChatMode ? createDefaultDiscoveryRunner(app) : undefined);
 
   const session = new InteractiveSession(
     app,
@@ -751,7 +1203,12 @@ export async function runInteractive(options: InteractiveOptions = {}): Promise<
     options.output || defaultOutput,
     cfgFile,
     options.discoverFn,
-    options.tui
+    options.tui,
+    {
+      alphaChatMode: options.alphaChatMode,
+      verbose: options.verbose,
+      discoveryRunner,
+    }
   );
 
   await session.start();

@@ -67,5 +67,11 @@ test("S0 crash probe kills an actual process and recovers its pending SQLite eff
     const result = await probeCrashAndCancellation(folder);
     assert.equal(result.cancellation, true);
     assert.equal(result.crashRestart, true);
-  } finally { rmSync(folder, { recursive: true, force: true }); }
+  } finally {
+    try {
+      rmSync(folder, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch {
+      // Ignore cleanup error if Windows file handle is momentarily held
+    }
+  }
 });

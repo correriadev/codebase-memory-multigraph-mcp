@@ -97,6 +97,7 @@ export interface CycleExecutionResult {
   iterationsRun: number;
   effects: EffectRecord[];
   pauseReason?: string;
+  failureReason?: string;
 }
 
 export interface OrchestratorTelemetryQuery {
@@ -171,6 +172,7 @@ export class CycleOrchestrator {
     let promoted = false;
     let terminationReason: TerminationReason | null = null;
     let pauseReason: string | undefined;
+    let failureReason: string | undefined;
     const failures: { failureClass: string; at: number }[] = [];
 
     const invokeWithTimeout = async (
@@ -231,6 +233,7 @@ export class CycleOrchestrator {
 
       // Verificação do timeout global do ciclo (C03)
       if (performance.now() - cycleStartTime >= cycleTimeoutMs) {
+        failureReason = `Cycle timeout exceeded (${request.policy.cycleTimeoutSeconds}s)`;
         terminationReason = "BUDGET_EXHAUSTED";
         break;
       }
@@ -243,6 +246,7 @@ export class CycleOrchestrator {
         request.policy.builderReservation
       );
       if (!builderRes.success || !builderRes.reservationId) {
+        failureReason = "Budget exhausted for builder reservation";
         terminationReason = "BUDGET_EXHAUSTED";
         break;
       }
@@ -273,6 +277,7 @@ export class CycleOrchestrator {
           costUsd: null,
           status: "UNKNOWN",
         });
+        failureReason = err?.message || String(err);
         terminationReason = request.signal?.aborted ? "CANCELLED" : "FAILED";
         break;
       }
@@ -286,6 +291,7 @@ export class CycleOrchestrator {
         status: builderOutput.usage && builderOutput.costUsd !== null ? "MEASURED" : "UNKNOWN",
       });
       if (builderOutput.error || !builderOutput.usage || builderOutput.costUsd === null || !builderOutput.artifactContent) {
+        failureReason = builderOutput.error || (!builderOutput.artifactContent ? "Builder did not return an artifact" : "Missing usage/cost metrics");
         terminationReason = request.signal?.aborted ? "CANCELLED" : "FAILED";
         break;
       }
@@ -296,6 +302,7 @@ export class CycleOrchestrator {
         currentLedger.totalCostUsd >= request.policy.cycleMonetaryCapUsd ||
         performance.now() - cycleStartTime >= cycleTimeoutMs
       ) {
+        failureReason = currentLedger.totalCostUsd >= request.policy.cycleMonetaryCapUsd ? `Cycle monetary cap exceeded ($${currentLedger.totalCostUsd.toFixed(4)} USD)` : "Cycle timeout exceeded";
         terminationReason = "BUDGET_EXHAUSTED";
         break;
       }
@@ -320,6 +327,11 @@ export class CycleOrchestrator {
 
           if (decision.action === "REJECT" || request.signal?.aborted) {
             terminationReason = request.signal?.aborted ? "CANCELLED" : "REJECTED";
+            if (decision.action === "REJECT") {
+              failureReason = "Operator rejected Stage 1 proposal";
+            } else if (request.signal?.aborted) {
+              failureReason = "Cycle cancelled by operator signal";
+            }
             break;
           }
 
@@ -642,12 +654,16 @@ export class CycleOrchestrator {
         }
         if (i === request.policy.maxIterations) {
           terminationReason = "REJECTED";
+          failureReason = failureReason || advOutput.reasons || "Adversarial verification rejected candidate at max iterations";
         }
       }
     }
 
     if (!terminationReason && !pauseReason) {
       terminationReason = promoted ? "ACCEPTED" : "REJECTED";
+      if (!promoted && !failureReason) {
+        failureReason = "Cycle did not reach candidate promotion";
+      }
     }
 
     if (pauseReason) this.journal.transitionRun(runId, { state: "PAUSED", phase: "AWAITING_DECISION" });
@@ -666,6 +682,7 @@ export class CycleOrchestrator {
       iterationsRun: iteration,
       effects: this.journal.getEffects(runId),
       pauseReason,
+      failureReason,
     };
   }
 

@@ -79,7 +79,8 @@ export class CodexAgentRunner implements AgentRunner {
     writeFileSync(schemaPath, JSON.stringify(schema));
     const channel = await openAgentChannel(this.workspace.tools, (name, args) => this.workspace.callTool(name, args, options));
     const gateway = fileURLToPath(new URL("./agent-gateway.ts", import.meta.url));
-    const mcpConfig = `{cbm={command=${JSON.stringify(process.execPath)},args=[${JSON.stringify(gateway)}],required=true,env={CBM_AGENT_CHANNEL=${JSON.stringify(channel.address)},CBM_AGENT_TOKEN=${JSON.stringify(channel.token)}}}`;
+    const nodeExec = process.execPath.replace(/\\/g, "/");
+    const gatewayPath = gateway.replace(/\\/g, "/");
     const args = [...this.config.args ?? [], "exec", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--ephemeral",
       "--sandbox", "read-only", "--model", this.config.model, "--json", "--color", "never", "--cd", directory,
       "--output-schema", schemaPath, "-c", 'approval_policy="never"', "-c", 'web_search="disabled"',
@@ -87,7 +88,11 @@ export class CodexAgentRunner implements AgentRunner {
       "-c", "features.multi_agent=false", "-c", "features.hooks=false", "-c", "features.memories=false",
       "-c", "features.computer_use=false", "-c", "features.browser_use=false", "-c", "features.image_generation=false",
       "-c", "features.unified_exec=false", "-c", "features.code_mode=false", "-c", "features.code_mode_host=false",
-      "-c", `mcp_servers=${mcpConfig}`];
+      "-c", `mcp_servers.cbm.command='${nodeExec}'`,
+      "-c", `mcp_servers.cbm.args=['${gatewayPath}']`,
+      "-c", "mcp_servers.cbm.required=true",
+      "-c", `mcp_servers.cbm.env.CBM_AGENT_CHANNEL='${channel.address}'`,
+      "-c", `mcp_servers.cbm.env.CBM_AGENT_TOKEN='${channel.token}'`];
 
     if (this.config.effort) {
       args.push("-c", `model_reasoning_effort="${this.config.effort}"`);
@@ -161,6 +166,111 @@ export class CodexAgentRunner implements AgentRunner {
       if (!sessionId && sessionPromise) sessionId = await sessionPromise.catch(() => undefined);
       try { if (sessionId) await this.workspace.closeSession(sessionId, abnormal); }
       finally { await channel.close(); rmSync(directory, { recursive: true, force: true }); }
+    }
+  }
+
+  async converse(
+    messages: Array<{ role: string; content: string }>,
+    signal?: AbortSignal
+  ): Promise<{ text: string; proposal?: any }> {
+    await this.inspectHost(signal);
+    const directory = mkdtempSync(path.join(tmpdir(), "cbm-codex-disc-"));
+    const schemaPath = path.join(directory, "discovery.schema.json");
+    const schema = {
+      type: "object",
+      properties: {
+        message: { type: "string", description: "Mensagem ou perguntas de alinhamento para o operador" },
+        proposal: {
+          type: ["object", "null"],
+          description: "Proposta PBB quando convergida, ou null se ainda estiver clarificando",
+          properties: {
+            problem: { type: "string" },
+            targets: { type: "array", items: { type: "string" } },
+            acceptanceCriteria: { type: "array", items: { type: "string" } },
+          },
+          required: ["problem", "targets", "acceptanceCriteria"],
+          additionalProperties: false,
+        },
+      },
+      required: ["message", "proposal"],
+      additionalProperties: false,
+    };
+    writeFileSync(schemaPath, JSON.stringify(schema));
+
+    const promptText = messages.map((m) => `[${m.role.toUpperCase()}]: ${m.content}`).join("\n\n") +
+      "\n\nVocê é o CBM Discovery Engine. Conduza o alinhamento conversacional com o operador. Se os requisitos e alvos estiverem claros, retorne a proposta PBB completa. Se houver ambiguidade, faça perguntas de clarificação em 'message' e omita 'proposal'.";
+
+    const args = [
+      ...this.config.args ?? [],
+      "exec",
+      "--ignore-user-config",
+      "--ignore-rules",
+      "--skip-git-repo-check",
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--model",
+      this.config.model,
+      "--json",
+      "--color",
+      "never",
+      "--cd",
+      directory,
+      "--output-schema",
+      schemaPath,
+      "-c",
+      'approval_policy="never"',
+      "-c",
+      'web_search="disabled"',
+      "-c",
+      "features.shell_tool=false",
+    ];
+
+    if (this.config.effort) {
+      args.push("-c", `model_reasoning_effort="${this.config.effort}"`);
+    }
+
+    args.push("-");
+
+    try {
+      const result = await executeAgentProcess({
+        command: this.config.command,
+        args,
+        cwd: directory,
+        inputPrompt: promptText,
+        timeoutSeconds: 60,
+        signal,
+      });
+
+      if (result.exitCode !== 0 || !result.stdout) {
+        return { text: "Não foi possível obter resposta do discovery runner." };
+      }
+
+      let parsedMessage = "";
+      let proposal: any;
+      const lines = result.stdout.trim().split("\n");
+      for (const line of lines) {
+        try {
+          const item = JSON.parse(line);
+          if (item?.type === "item.completed" && item?.item?.type === "agent_message" && item?.item?.text) {
+            const parsed = JSON.parse(item.item.text);
+            parsedMessage = parsed.message || "";
+            if (parsed.proposal && Array.isArray(parsed.proposal.targets)) {
+              proposal = parsed.proposal;
+            }
+          }
+        } catch {
+          // ignora linhas não-JSON
+        }
+      }
+
+      return { text: parsedMessage || result.stdout, proposal };
+    } finally {
+      try {
+        rmSync(directory, { recursive: true, force: true });
+      } catch {
+        // ignora erro de limpeza no Windows
+      }
     }
   }
 }

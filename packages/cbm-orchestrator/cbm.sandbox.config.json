@@ -10,12 +10,12 @@
     "workspace": "C:\\Users\\User\\Documents\\codebase-memory-multigraph-mcp",
     "targets": [
       {
-        "path": "packages/cbm-orchestrator/src/cli.ts",
-        "symbol": "main"
+        "path": "packages/cbm-orchestrator/test/helpers/sandbox-target.ts",
+        "symbol": "solve"
       }
     ],
     "poles": [
-      "main"
+      "solve"
     ]
   },
   "codex": {

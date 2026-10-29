@@ -52,6 +52,64 @@ export function readConfiguration(file: string): OrchestratorConfig {
   return config;
 }
 
+export function createDefaultConfiguration(workspacePath: string = process.cwd()): OrchestratorConfig {
+  const ws = path.resolve(workspacePath);
+  const stateDir = path.join(ws, ".cbm-orchestrator");
+  mkdirSync(stateDir, { recursive: true });
+
+  let targetFile = "README.md";
+  const candidates = ["package.json", "README.md", "src/cli.ts", "src/index.ts", "index.ts", "index.js"];
+  const found = candidates.find((c) => existsSync(path.join(ws, c)));
+  if (found) {
+    targetFile = found;
+  } else {
+    targetFile = ".cbm-target";
+    const targetAbs = path.join(ws, targetFile);
+    if (!existsSync(targetAbs)) {
+      writeFileSync(targetAbs, "// cbm target\n", "utf8");
+    }
+  }
+
+  return {
+    backend: {
+      command: "codebase-memory-mcp",
+    },
+    knowledge: {
+      project: path.basename(ws),
+      workspace: ws,
+      targets: [{ path: targetFile, symbol: "main" }],
+      poles: ["main"],
+    },
+    codex: {
+      command: "codex",
+      model: "gpt-6.1-sol",
+      rates: {
+        inputPerMillion: 1.5,
+        cachedPerMillion: 0.375,
+        outputPerMillion: 6.0,
+        revision: "openai-2026",
+      },
+      verification: {
+        command: "npm",
+        args: ["test"],
+      },
+      evidenceDirectory: path.join(stateDir, "evidence"),
+    },
+    policy: {
+      cycleTokenCap: 60000,
+      builderReservation: 20000,
+      adversarialReservation: 10000,
+      maxIterations: 2,
+      agentTimeoutSeconds: 180,
+      cycleTimeoutSeconds: 900,
+      cycleMonetaryCapUsd: 2.0,
+      breakerFailureThreshold: 3,
+      breakerWindowSeconds: 600,
+    },
+    stateDirectory: stateDir,
+  };
+}
+
 export class OrchestratorApplication {
   readonly config: OrchestratorConfig;
   readonly digest: string;
@@ -61,7 +119,7 @@ export class OrchestratorApplication {
     this.digest = configurationDigest(config);
   }
 
-  private connection(): { client: StdioMcpClient; backend: CbmBackend } {
+  private connection(overrideKnowledge?: KnowledgeConfig): { client: StdioMcpClient; backend: CbmBackend } {
     const backendCmd: ProcessCommand = {
       ...this.config.backend,
       env: {
@@ -71,7 +129,13 @@ export class OrchestratorApplication {
       },
     };
     const client = new StdioMcpClient(backendCmd, 15_000);
-    return { client, backend: new CbmBackend(client, this.config.knowledge) };
+    try {
+      const backend = new CbmBackend(client, overrideKnowledge || this.config.knowledge);
+      return { client, backend };
+    } catch (err) {
+      client.close();
+      throw err;
+    }
   }
 
   async probe(): Promise<unknown> {
@@ -88,7 +152,9 @@ export class OrchestratorApplication {
     options?: {
       shouldPause?: () => boolean;
       onPause?: (context: PauseContext) => Promise<OperatorDecision>;
-    }
+    },
+    runTargets?: WorkspaceTarget[],
+    enrichedPrompt?: string
   ): Promise<unknown> {
     if (typeof objective !== "string" || !objective.trim()) throw new Error("A nonempty objective is required");
     if (objective.length > 32_000) throw new Error("Objective exceeds 32000 characters");
@@ -111,7 +177,13 @@ export class OrchestratorApplication {
     let recoveryRequired = false;
     try {
       writeFileSync(lock, JSON.stringify({ pid: process.pid, operationId, startedAt: new Date().toISOString() }));
-      const conn = this.connection();
+      const activeTargets = runTargets && runTargets.length > 0 ? runTargets : this.config.knowledge.targets;
+      const activeKnowledge: KnowledgeConfig = {
+        ...this.config.knowledge,
+        targets: activeTargets,
+        poles: activeTargets.map((t) => t.symbol),
+      };
+      const conn = this.connection(activeKnowledge);
       client = conn.client;
       backend = conn.backend;
       await backend.connect();
@@ -126,10 +198,10 @@ export class OrchestratorApplication {
         projectId: this.config.knowledge.project,
         horizonId,
         objective,
-        builderPrompt: objective,
+        builderPrompt: enrichedPrompt || objective,
         policy: this.config.policy,
         signal: controller.signal,
-        builderIntentScope: this.config.knowledge.targets.map((target) => ({ path: target.path, operation: "write" })),
+        builderIntentScope: activeTargets.map((target) => ({ path: target.path, operation: "write" })),
         onStage1Proposal,
         shouldPause: options?.shouldPause,
         onPause: options?.onPause,

@@ -14,11 +14,31 @@ if (input.includes("FIXTURE_NO_USAGE")) {
   process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "{}" } }) + "\n");
   process.exit(0);
 }
-const mcpConfig = args.find((value) => value.startsWith("mcp_servers="))!;
-const envValue = (name: string) => JSON.parse(mcpConfig.match(new RegExp(`${name}=("(?:[^"\\\\]|\\\\.)*")`))![1]);
-const gatewayPath = JSON.parse(mcpConfig.match(/args=\[("(?:[^"\\]|\\.)*")\]/)![1]);
+let gatewayPath = "";
+let channelAddress = "";
+let channelToken = "";
+
+const mcpConfig = args.find((value) => value.startsWith("mcp_servers="));
+if (mcpConfig) {
+  channelAddress = JSON.parse(mcpConfig.match(/CBM_AGENT_CHANNEL=("(?:[^"\\]|\\.)*")/)![1]);
+  channelToken = JSON.parse(mcpConfig.match(/CBM_AGENT_TOKEN=("(?:[^"\\]|\\.)*")/)![1]);
+  gatewayPath = JSON.parse(mcpConfig.match(/args=\[("(?:[^"\\]|\\.)*")\]/)![1]);
+} else {
+  const argsArg = args.find((value) => value.startsWith("mcp_servers.cbm.args=")) || "";
+  const matchArgs = argsArg.match(/mcp_servers\.cbm\.args=\['([^']+)'\]/);
+  gatewayPath = matchArgs ? matchArgs[1] : "";
+
+  const chArg = args.find((value) => value.startsWith("mcp_servers.cbm.env.CBM_AGENT_CHANNEL=")) || "";
+  const matchCh = chArg.match(/mcp_servers\.cbm\.env\.CBM_AGENT_CHANNEL='([^']+)'/);
+  channelAddress = matchCh ? matchCh[1] : "";
+
+  const tokArg = args.find((value) => value.startsWith("mcp_servers.cbm.env.CBM_AGENT_TOKEN=")) || "";
+  const matchTok = tokArg.match(/mcp_servers\.cbm\.env\.CBM_AGENT_TOKEN='([^']+)'/);
+  channelToken = matchTok ? matchTok[1] : "";
+}
+
 const gateway = new StdioMcpClient({ command: process.execPath, args: [gatewayPath],
-  env: { CBM_AGENT_CHANNEL: envValue("CBM_AGENT_CHANNEL"), CBM_AGENT_TOKEN: envValue("CBM_AGENT_TOKEN") } });
+  env: { CBM_AGENT_CHANNEL: channelAddress, CBM_AGENT_TOKEN: channelToken } });
 try {
   await gateway.initialize();
   const tools = await gateway.listTools();

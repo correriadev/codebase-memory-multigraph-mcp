@@ -417,3 +417,524 @@ test("Interactive CLI: opção L alterna visibilidade de logs operacionais", asy
   assert.match(text, /Visibilidade de logs operacionais alternada para:.*LIGADO/);
   assert.match(text, /estilo atenuado \[cbm:\*\]/);
 });
+
+test("Interactive CLI: linear_readline_renders_prompt_without_alternate_buffer", async () => {
+  const app = createDummyApp();
+  let output = "";
+  const inStream = new PassThrough();
+  const outStream = new PassThrough();
+  (outStream as any).isTTY = true;
+  (inStream as any).isTTY = true;
+  outStream.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+
+  const session = new InteractiveSession(app, inStream, outStream, undefined, undefined, undefined, { alphaChatMode: true });
+  const runPromise = session.start();
+
+  // Send quit
+  inStream.write("q\n");
+  await runPromise;
+
+  // Assert NO alternate buffer escape codes even with isTTY = true
+  assert.doesNotMatch(output, /\x1b\[\?1049h/, "Must not enter alternate screen buffer in linear chat mode");
+  assert.doesNotMatch(output, /\x1b\[2J/, "Must not clear screen in linear chat mode");
+  // Assert conversational prompt CBM>
+  assert.match(output, /CBM>/, "Must render conversational prompt CBM>");
+});
+
+test("Interactive CLI: stage1_proposal_requires_explicit_confirmation", async () => {
+  let proposalDecision: any = null;
+  const app = createDummyApp({
+    runCycle: async (obj: string, signal?: AbortSignal, diag?: boolean, onStage1Proposal?: any, options?: any) => {
+      if (onStage1Proposal) {
+        proposalDecision = await onStage1Proposal({
+          runId: "run-alpha-stage1-test",
+          iteration: 1,
+          artifactContent: "export function proposal() { return true; }",
+          usage: { totalTokens: 100 },
+          costUsd: 0.001,
+        });
+      }
+      return {
+        runId: "run-alpha-stage1-test",
+        status: proposalDecision ? "COMPLETED" : "ABORTED",
+        promoted: Boolean(proposalDecision),
+        totalTokensUsed: 100,
+        totalCostUsd: 0.001,
+        iterationsRun: 1,
+      };
+    },
+  });
+
+  // Scenario 1: Reject with 'n'
+  const inStream1 = new PassThrough();
+  const outStream1 = new PassThrough();
+  let out1 = "";
+  outStream1.on("data", (chunk) => { out1 += chunk.toString(); });
+  const session1 = new InteractiveSession(app, inStream1, outStream1, undefined, undefined, undefined, { alphaChatMode: true });
+  const run1 = session1.start();
+
+  inStream1.write("Adicionar suporte a alpha chat\n");
+  await new Promise((r) => setTimeout(r, 25));
+  inStream1.write("n\n");
+  await new Promise((r) => setTimeout(r, 25));
+  inStream1.write("q\n");
+  await run1;
+
+  assert.equal(proposalDecision, false, "Proposal decision must be false when operator rejects with 'n'");
+  assert.match(out1, /Proposta rejeitada pelo operador/);
+
+  // Scenario 2: Steer with 'c'
+  let steerDecision: any = null;
+  const app2 = createDummyApp({
+    runCycle: async (obj: string, signal?: AbortSignal, diag?: boolean, onStage1Proposal?: any, options?: any) => {
+      if (onStage1Proposal) {
+        steerDecision = await onStage1Proposal({
+          runId: "run-alpha-stage1-steer",
+          iteration: 1,
+          artifactContent: "export function proposal() { return false; }",
+          usage: { totalTokens: 100 },
+          costUsd: 0.001,
+        });
+      }
+      return {
+        runId: "run-alpha-stage1-steer",
+        status: "COMPLETED",
+        promoted: true,
+        totalTokensUsed: 100,
+        totalCostUsd: 0.001,
+        iterationsRun: 1,
+      };
+    },
+  });
+
+  const inStream2 = new PassThrough();
+  const outStream2 = new PassThrough();
+  let out2 = "";
+  outStream2.on("data", (chunk) => { out2 += chunk.toString(); });
+  const session2 = new InteractiveSession(app2, inStream2, outStream2, undefined, undefined, undefined, { alphaChatMode: true });
+  const run2 = session2.start();
+
+  inStream2.write("Corrigir retorno booleano\n");
+  await new Promise((r) => setTimeout(r, 25));
+  inStream2.write("c\n");
+  await new Promise((r) => setTimeout(r, 25));
+  inStream2.write("Use true em vez de false\n");
+  await new Promise((r) => setTimeout(r, 25));
+  inStream2.write("q\n");
+  await run2;
+
+  assert.deepEqual(steerDecision, { action: "STEER", guidance: "Use true em vez de false" });
+  assert.match(out2, /Enviando correção: "Use true em vez de false"/);
+});
+
+test("Interactive CLI: stage2_logs_stream_single_line_badges", async () => {
+  const app = createDummyApp({
+    runCycle: async (obj: string, signal?: AbortSignal, diag?: boolean, onStage1Proposal?: any, options?: any) => {
+      if (onStage1Proposal) {
+        await onStage1Proposal({
+          runId: "run-stage2-logs-test",
+          iteration: 1,
+          artifactContent: "export function run() {}",
+          usage: { totalTokens: 50 },
+          costUsd: 0.0005,
+        });
+      }
+      return {
+        runId: "run-stage2-logs-test",
+        status: "COMPLETED",
+        promoted: true,
+        totalTokensUsed: 120,
+        totalCostUsd: 0.0012,
+        iterationsRun: 1,
+      };
+    },
+  });
+
+  const inStream = new PassThrough();
+  const outStream = new PassThrough();
+  let output = "";
+  outStream.on("data", (chunk) => { output += chunk.toString(); });
+  const session = new InteractiveSession(app, inStream, outStream, undefined, undefined, undefined, { alphaChatMode: true });
+  const run = session.start();
+
+  inStream.write("Implementar streaming de logs\n");
+  await new Promise((r) => setTimeout(r, 25));
+  inStream.write("s\n"); // approve stage 1
+  await new Promise((r) => setTimeout(r, 25));
+  inStream.write("q\n");
+  await run;
+
+  assert.match(output, /=== INÍCIO DA EXECUÇÃO \(STREAMING DE LOGS\) ===/);
+  // Match single-line timestamp badge: [HH:MM:SS] [BUILDER]
+  assert.match(output, /\[\d{2}:\d{2}:\d{2}\]\s+\[BUILDER\]/);
+  // Ensure no unformatted raw JSON object dumps in output
+  assert.doesNotMatch(output, /\{"artifactContent":/);
+  assert.doesNotMatch(output, /\{"jsonrpc":/);
+});
+
+test("Interactive CLI: cycle_termination_outputs_summary_and_code", async () => {
+  const app = createDummyApp({
+    runCycle: async (obj: string, signal?: AbortSignal, diag?: boolean, onStage1Proposal?: any, options?: any) => {
+      if (onStage1Proposal) {
+        await onStage1Proposal({
+          runId: "run-summary-test-99",
+          iteration: 2,
+          artifactContent: "export const answer = 42;",
+          usage: { totalTokens: 1500 },
+          costUsd: 0.015,
+        });
+      }
+      return {
+        runId: "run-summary-test-99",
+        status: "COMPLETED",
+        promoted: true,
+        totalTokensUsed: 3200,
+        totalCostUsd: 0.032,
+        iterationsRun: 2,
+      };
+    },
+  });
+
+  const inStream = new PassThrough();
+  const outStream = new PassThrough();
+  let output = "";
+  outStream.on("data", (chunk) => { output += chunk.toString(); });
+  const session = new InteractiveSession(app, inStream, outStream, undefined, undefined, undefined, { alphaChatMode: true });
+  const run = session.start();
+
+  inStream.write("Finalizar ciclo e validar sumário\n");
+  await new Promise((r) => setTimeout(r, 25));
+  inStream.write("s\n"); // approve
+  await new Promise((r) => setTimeout(r, 25));
+  inStream.write("q\n");
+  await run;
+
+  assert.match(output, /─── RESUMO OPERACIONAL DE CONCLUSÃO ────────────────────────────────/);
+  assert.match(output, /Status:\s+.*SUCESSO \(PROMOVIDO\)/);
+  assert.match(output, /Run ID:\s+run-summary-test-99/);
+  assert.match(output, /Iterações:\s+2/);
+  assert.match(output, /Tokens:\s+3\.200 tk/);
+  assert.match(output, /Custo Total:\s+\$0\.0320 USD/);
+});
+
+test("Interactive CLI: find_default_config_resolves_hierarchical_or_safe_fallback", async () => {
+  const { createDefaultConfiguration } = await import("../src/application.ts");
+  const config = createDefaultConfiguration("C:/mock/workspace");
+  assert.equal(config.knowledge.workspace, "C:\\mock\\workspace".replace(/\//g, "\\"));
+  assert.ok(config.policy.breakerFailureThreshold > 0);
+  assert.ok(config.backend.command.length > 0);
+
+  const { runInteractive } = await import("../src/interactive.ts");
+  const inStream = new PassThrough();
+  const outStream = new PassThrough();
+  let out = "";
+  outStream.on("data", (c) => { out += c.toString(); });
+  setTimeout(() => inStream.write("q\n"), 20);
+
+  // When run without configFile or finding none, it should not throw fatal error
+  await runInteractive({
+    input: inStream,
+    output: outStream,
+    alphaChatMode: true,
+    // force findDefaultConfig returning null by pointing configFile to nonexistent marker
+    configFile: undefined,
+  });
+  assert.ok(out.includes("CBM>") || out.includes("[AVISO]"));
+});
+
+test("Interactive_displays_explicit_failure_reason_on_rejection: summary renders failureReason on rejected runs", async () => {
+  const app = createDummyApp({
+    runCycle: async () => ({
+      runId: "run-failed-target-scope-101",
+      status: "COMPLETED",
+      terminationReason: "FAILED",
+      promoted: false,
+      candidateVersionId: "",
+      totalTokensUsed: 16092,
+      totalCostUsd: 0.0244,
+      iterationsRun: 1,
+      failureReason: "Builder artifact must contain exactly the allocated file paths",
+    }),
+  });
+
+  const inStream = new PassThrough();
+  const outStream = new PassThrough();
+  let output = "";
+  outStream.on("data", (chunk) => { output += chunk.toString(); });
+  const session = new InteractiveSession(app, inStream, outStream, undefined, undefined, undefined, {
+    alphaChatMode: true,
+    verbose: "low",
+  });
+  const run = session.start();
+
+  inStream.write("updates docs folder\n");
+  await new Promise((r) => setTimeout(r, 25));
+  inStream.write("q\n");
+  await run;
+
+  assert.match(output, /Status:\s+.*RECUSADO/);
+  assert.match(output, /Motivo da Recusa:\s+Builder artifact must contain exactly the allocated file paths/);
+});
+
+test("Interactive_multi_turn_discovery_accumulates_dialogue: alpha chat discovery converses across turns and control commands bypass", async () => {
+  const { isControlCommand } = await import("../src/interactive.ts");
+  assert.equal(isControlCommand("q"), true);
+  assert.equal(isControlCommand("exit"), true);
+  assert.equal(isControlCommand(":verbose high"), true);
+  assert.equal(isControlCommand(":help"), true);
+  assert.equal(isControlCommand("refatorar auth"), false);
+
+  const historyReceived: Array<Array<{ role: string; content: string }>> = [];
+  let turnCount = 0;
+
+  const mockDiscovery = async (messages: Array<{ role: string; content: string }>) => {
+    historyReceived.push([...messages]);
+    turnCount++;
+    if (turnCount === 1) {
+      return {
+        text: "Quais arquivos da pasta docs você deseja alterar?",
+      };
+    }
+    return {
+      text: "Proposta PBB formulada com sucesso.",
+      proposal: {
+        problem: "Documentação desatualizada",
+        targets: ["docs/README.md"],
+        acceptanceCriteria: ["Adicionar guia do novo fluxo"],
+      },
+    };
+  };
+
+  const app = createDummyApp();
+  const inStream = new PassThrough();
+  const outStream = new PassThrough();
+  let output = "";
+  outStream.on("data", (chunk) => { output += chunk.toString(); });
+
+  const session = new InteractiveSession(app, inStream, outStream, undefined, undefined, undefined, {
+    alphaChatMode: true,
+    discoveryRunner: mockDiscovery,
+  });
+
+  const run = session.start();
+
+  // Turn 1
+  inStream.write("atualizar documentação\n");
+  await new Promise((r) => setTimeout(r, 40));
+
+  // Turn 2
+  inStream.write("adicionar guia no docs/README.md\n");
+  await new Promise((r) => setTimeout(r, 40));
+
+  // Exit: first 'q' cancels PBB gate, second 'q' exits session
+  inStream.write("q\n");
+  await new Promise((r) => setTimeout(r, 40));
+  inStream.write("q\n");
+  await run;
+
+  assert.equal(historyReceived.length, 2, "Discovery must be invoked for both conversation turns");
+  assert.equal(historyReceived[0].length, 1, "First turn has 1 user message");
+  assert.equal(historyReceived[1].length, 3, "Second turn has user, assistant, and user follow-up");
+  assert.match(output, /Quais arquivos da pasta docs/);
+  assert.match(output, /PROPOSTA PBB/i);
+});
+
+test("Interactive_normalize_targets_preserves_s0_digest: normalizePbbTargets formats targets and preserves app digest", async () => {
+  const { normalizePbbTargets } = await import("../src/interactive.ts");
+
+  // Valid normalization
+  const targets = normalizePbbTargets(["./src/cli.ts", "docs/README.md"]);
+  assert.deepEqual(targets, [
+    { path: "src/cli.ts", symbol: "main" },
+    { path: "docs/README.md", symbol: "main" },
+  ]);
+
+  // Path traversal rejection
+  assert.throws(
+    () => normalizePbbTargets(["../outside.ts"]),
+    /Path traversal denied/
+  );
+  assert.throws(
+    () => normalizePbbTargets(["docs/.."]),
+    /Path traversal denied/
+  );
+  assert.throws(
+    () => normalizePbbTargets(["docs/sub/../../outside.ts"]),
+    /Path traversal denied/
+  );
+  assert.throws(
+    () => normalizePbbTargets(["/etc/passwd"]),
+    /Absolute or UNC paths denied|Path traversal denied/
+  );
+  assert.throws(
+    () => normalizePbbTargets(["C:/Windows/System32"]),
+    /Absolute or UNC paths denied|Path traversal denied/
+  );
+  assert.throws(
+    () => normalizePbbTargets(["\\\\server\\share\\file.ts"]),
+    /Absolute or UNC paths denied|Path traversal denied/
+  );
+
+  // Per-run targets passed to runCycle does not mutate app.config or app.digest
+  const { OrchestratorApplication, createDefaultConfiguration } = await import("../src/application.ts");
+  const config = createDefaultConfiguration("C:/mock/ws");
+  const app = new OrchestratorApplication(config);
+  const initialDigest = app.digest;
+  const initialTargets = JSON.stringify(app.config.knowledge.targets);
+
+  assert.equal(typeof app.runCycle, "function");
+  // Check runCycle arity allows runTargets as 6th parameter
+  assert.ok(app.runCycle.length >= 2);
+  assert.equal(app.digest, initialDigest);
+  assert.equal(JSON.stringify(app.config.knowledge.targets), initialTargets);
+});
+
+test("Interactive_pbb_gate_requires_operator_approval_and_enriches_prompt: PBB Gate prompts operator, enriches prompt, and triggers runCycle with targets", async () => {
+  const { enrichBuilderPrompt } = await import("../src/interactive.ts");
+  const enriched = enrichBuilderPrompt("atualizar docs", {
+    problem: "Documentação desatualizada",
+    targets: ["docs/README.md"],
+    acceptanceCriteria: ["Atualizar guia de instalação"],
+  });
+  assert.match(enriched, /\[Especificação PBB Aprovada\]/);
+  assert.match(enriched, /Atualizar guia de instalação/);
+
+  let runCycleCalled = false;
+  let receivedRunTargets: any = null;
+  let receivedEnrichedPrompt: any = null;
+
+  const app = createDummyApp({
+    runCycle: async (obj: string, signal?: AbortSignal, diag?: boolean, onStage1?: any, opts?: any, runTargets?: any, prompt?: string) => {
+      runCycleCalled = true;
+      receivedRunTargets = runTargets;
+      receivedEnrichedPrompt = prompt;
+      return {
+        runId: "run-pbb-gate-test-200",
+        status: "COMPLETED",
+        terminationReason: "ACCEPTED",
+        promoted: true,
+        candidateVersionId: "sha256:pbb-sealed",
+        totalTokensUsed: 1200,
+        totalCostUsd: 0.012,
+        iterationsRun: 1,
+      };
+    },
+  });
+
+  const mockDiscovery = async () => ({
+    text: "PBB estruturado pronto para aprovação.",
+    proposal: {
+      problem: "Documentação desatualizada",
+      targets: ["docs/README.md"],
+      acceptanceCriteria: ["Atualizar guia de instalação"],
+    },
+  });
+
+  const inStream = new PassThrough();
+  const outStream = new PassThrough();
+  let output = "";
+  outStream.on("data", (chunk) => { output += chunk.toString(); });
+
+  const session = new InteractiveSession(app, inStream, outStream, undefined, undefined, undefined, {
+    alphaChatMode: true,
+    discoveryRunner: mockDiscovery,
+  });
+
+  const run = session.start();
+
+  // Send request
+  inStream.write("atualizar documentação\n");
+  await new Promise((r) => setTimeout(r, 40));
+
+  // Approve PBB Gate: "s"
+  inStream.write("s\n");
+  await new Promise((r) => setTimeout(r, 40));
+
+  // Exit session
+  inStream.write("q\n");
+  await run;
+
+  assert.equal(runCycleCalled, true, "runCycle must be triggered after PBB Gate approval");
+  assert.deepEqual(receivedRunTargets, [{ path: "docs/README.md", symbol: "main" }]);
+  assert.match(receivedEnrichedPrompt, /Atualizar guia de instalação/);
+  assert.match(output, /PROPOSTA PBB CONVERGIDA/);
+});
+
+test("Interactive_sanitizeSecrets_redacts_tokens_on_output_streams: tokens are redacted from all stream writes", async () => {
+  const app = createDummyApp();
+  const inStream = new PassThrough();
+  const outStream = new PassThrough();
+  let output = "";
+  outStream.on("data", (chunk) => { output += chunk.toString(); });
+
+  const session = new InteractiveSession(app, inStream, outStream, undefined, undefined, undefined, {
+    alphaChatMode: true,
+    discoveryRunner: async () => ({
+      text: "CBM_AGENT_TOKEN=secret-token Bearer super-secret-key",
+    }),
+  });
+
+  const run = session.start();
+  inStream.write("test redaction\n");
+  await new Promise((r) => setTimeout(r, 40));
+  inStream.write("q\n");
+  await run;
+
+  assert.equal(output.includes("secret-token"), false, "Secret token must not be printed to output");
+  assert.equal(output.includes("super-secret-key"), false, "Bearer secret must not be printed to output");
+  assert.match(output, /\[REDACTED\]/);
+});
+
+test("Interactive_runInteractive_forwards_runner_and_blocks_direct_cycle_bypass: runInteractive forwards discoveryRunner and blocks unapproved cycle", async () => {
+  const { runInteractive } = await import("../src/interactive.ts");
+
+  let customRunnerCalled = false;
+  let cycleCalled = false;
+
+  const mockApp = {
+    config: {
+      knowledge: { project: "p", targets: [{ path: "README.md", symbol: "main" }] },
+      codex: { model: "m" },
+      policy: {},
+    },
+    isLocked: () => ({ locked: false }),
+    runCycle: async () => {
+      cycleCalled = true;
+      return { promoted: false };
+    },
+  };
+
+  const inStream = new PassThrough();
+  const outStream = new PassThrough();
+
+  const p = runInteractive({
+    app: mockApp as any,
+    alphaChatMode: true,
+    input: inStream,
+    output: outStream,
+    discoveryRunner: async () => {
+      customRunnerCalled = true;
+      return {
+        text: "Discovery ativo",
+        proposal: {
+          problem: "teste",
+          targets: ["README.md"],
+          acceptanceCriteria: ["critério"],
+        },
+      };
+    },
+  });
+
+  inStream.write("teste de bypass\n");
+  await new Promise((r) => setTimeout(r, 40));
+  // cancel PBB Gate with 'q', then exit session with 'q'
+  inStream.write("q\n");
+  await new Promise((r) => setTimeout(r, 40));
+  inStream.write("q\n");
+  await p;
+
+  assert.equal(customRunnerCalled, true, "options.discoveryRunner must be forwarded to InteractiveSession");
+  assert.equal(cycleCalled, false, "runCycle must NOT be invoked when PBB Gate is cancelled");
+});

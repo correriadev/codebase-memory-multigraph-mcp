@@ -251,6 +251,7 @@ test("S1 Orchestrator: transição para AWAITING_PLANNING e rejeição da propos
   const result = await orchestrator.executeCycle(req);
   assert.equal(result.status, "COMPLETED");
   assert.equal(result.terminationReason, "REJECTED");
+  assert.equal(result.failureReason, "Operator rejected Stage 1 proposal");
   assert.equal(result.promoted, false);
   assert.equal(stage1ProposalReceived, true, "onStage1Proposal deve ter sido invocado");
 
@@ -420,6 +421,72 @@ test("S1 Orchestrator: pausa sob demanda com decisão de abortar pelo operador",
   assert.equal(result.terminationReason, "REJECTED");
   assert.equal(result.promoted, false);
   assert.equal(pauseCount, 1);
+
+  orchestrator.close();
+});
+
+test("S1 Orchestrator: sigint_pauses_execution_and_prompts_operator", async () => {
+  const dbPath = getTempDbPath();
+  const mockCbm: CbmClientMock = {
+    async callTool(tool) {
+      if (tool === "index_status") return { graphGeneration: 1, baselineDigest: "digest-sigint", rulesRevision: "r1", coverageRevision: "c1" };
+      if (tool === "promote_horizon") return { success: true, promoted: true };
+      return { success: true };
+    },
+  };
+
+  const capturedPrompts: string[] = [];
+  const runner = new SimulatedAgentRunner();
+  const origInvoke = runner.invokeAgent.bind(runner);
+  runner.invokeAgent = async (opts) => {
+    capturedPrompts.push(opts.prompt);
+    return origInvoke(opts);
+  };
+
+  const orchestrator = new CycleOrchestrator(dbPath, mockCbm, runner);
+  const approval = new Journal(dbPath);
+  approval.recordS0Approval("proj-sigint-pause", "fixture-only");
+  approval.close();
+
+  let pauseSimulated = false;
+  let pauseObserved = false;
+
+  const req: StartCycleRequest = {
+    projectId: "proj-sigint-pause",
+    horizonId: "horizon-sigint-pause",
+    objective: "Implementar com pausa via SIGINT",
+    policy: {
+      cycleTokenCap: 60000,
+      builderReservation: 10000,
+      adversarialReservation: 5000,
+      maxIterations: 2,
+      agentTimeoutSeconds: 60,
+      cycleTimeoutSeconds: 300,
+      cycleMonetaryCapUsd: 1.0,
+    },
+    builderPrompt: "Prompt inicial",
+    builderIntentScope: [{ path: "src/sample.ts", operation: "write" }],
+    shouldPause: () => {
+      if (!pauseSimulated) {
+        pauseSimulated = true;
+        return true;
+      }
+      return false;
+    },
+    onPause: async (ctx) => {
+      pauseObserved = true;
+      assert.ok(ctx.phase, "PauseContext must have active phase");
+      return { action: "STEER", guidance: "Instrução de steering após SIGINT" };
+    },
+  };
+
+  const result = await orchestrator.executeCycle(req);
+  assert.equal(result.status, "COMPLETED");
+  assert.equal(pauseObserved, true, "onPause deve ter sido acionado pelo evento de pausa");
+  assert.ok(
+    capturedPrompts.some((p) => p.includes("Instrução de steering após SIGINT")),
+    "A instrução de correção deve ser injetada no próximo prompt do Builder"
+  );
 
   orchestrator.close();
 });
